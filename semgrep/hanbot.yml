@@ -1,0 +1,123 @@
+# HanBot's own conventions as Semgrep rules: what AGENTS.md, .claude/rules/ and the code-review
+# rules ask for, checked mechanically instead of by a reviewer reading for it.
+# An intentional exception carries `# nosemgrep: <rule-id>` with the reason on the same line.
+rules:
+  - id: hanbot-claude-only-via-sdk
+    message: >-
+      Claude in HanBot bills to the Max subscription through the Agent SDK, and
+      app/services/claude_sdk.py is the only way in. A direct Anthropic client or ChatAnthropic
+      uses the paid Messages API.
+    severity: ERROR
+    languages: [python]
+    paths:
+      exclude: ["**/services/claude_sdk.py", "**/tests/**"]
+    pattern-either:
+      - pattern: import anthropic
+      - pattern: from anthropic import $X
+      - pattern: from langchain_anthropic import $X
+      - pattern: init_chat_model("=~/^anthropic:/", ...)
+
+  - id: hanbot-structlog-only
+    message: Use structlog (`logger = structlog.get_logger(__name__)`), not the stdlib logging module (code-standards.md).
+    severity: WARNING
+    languages: [python]
+    paths:
+      exclude: ["**/core/logging.py", "**/tests/**"]
+    pattern: logging.getLogger(...)
+
+  - id: hanbot-no-print
+    message: Production code logs through structlog; print() goes nowhere searchable.
+    severity: WARNING
+    languages: [python]
+    paths:
+      exclude: ["**/tests/**", "**/__main__.py"]
+    pattern: print(...)
+
+  - id: hanbot-logs-and-carries-on
+    message: >-
+      A broad except that logs and continues hid a 3-day diabetes_monitor bug
+      (code-standards.md). Re-raise, or name the accepted reason (observability-only,
+      retry, degraded mode, documented UX tradeoff) and mark it `# nosemgrep`.
+    severity: WARNING
+    languages: [python]
+    paths:
+      exclude: ["**/tests/**"]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              try:
+                  ...
+              except Exception:
+                  ...
+          - pattern: |
+              try:
+                  ...
+              except Exception as $E:
+                  ...
+          - pattern: |
+              try:
+                  ...
+              except BaseException:
+                  ...
+      - pattern-not: |
+          try:
+              ...
+          except $T:
+              ...
+              raise
+      - pattern-not: |
+          try:
+              ...
+          except $T as $E:
+              ...
+              raise
+      - pattern-not: |
+          try:
+              ...
+          except $T as $E:
+              ...
+              raise $X from $E
+
+  - id: hanbot-nested-import
+    message: Imports go at the top of the file, even for deferred resources; the import is cheap, only the call matters.
+    severity: INFO
+    languages: [python]
+    paths:
+      exclude: ["**/tests/**"]
+    patterns:
+      - pattern-inside: |
+          def $F(...):
+              ...
+      - pattern-either:
+          - pattern: import $X
+          - pattern: from $X import $Y
+
+  - id: hanbot-naive-datetime
+    message: A naive datetime has no zone; use datetime.now(UTC) (or ZoneInfo("America/New_York") for display).
+    severity: WARNING
+    languages: [python]
+    paths:
+      exclude: ["**/tests/**"]
+    pattern-either:
+      - pattern: datetime.utcnow()
+      - pattern: datetime.datetime.utcnow()
+      - pattern: datetime.now()
+      - pattern: datetime.datetime.now()
+
+  - id: hanbot-shadow-writes-real-alerts
+    message: The shadow lane records into its own tables only; it never writes family_alerts or the escalation's tables (danger-path-shadow.md).
+    severity: ERROR
+    languages: [python]
+    paths:
+      include: ["**/diabetes_monitor/shadow*.py"]
+    pattern-regex: (?i)(insert\s+into|update)\s+(family_alerts|danger_escalation\w*)\b(?!_shadow)
+
+  - id: hanbot-ui-console-log
+    message: console.log left in UI code ships to every browser.
+    severity: INFO
+    languages: [typescript]
+    paths:
+      # src/lib/log.ts is the server-side logger: one JSON line on stdout for Promtail, imported
+      # only by server-only modules.
+      exclude: ["**/*.test.ts", "**/*.test.tsx", "**/src/lib/log.ts"]
+    pattern: console.log(...)

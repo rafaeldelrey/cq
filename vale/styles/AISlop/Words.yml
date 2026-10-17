@@ -1,0 +1,34 @@
+# Words and phrases that mark AI-generated prose. "harness" is left out: it's a real term here
+# (the Claude harness, experiment harnesses). Trial: research/code_quality_landscape/trial.md.
+extends: existence
+message: "AI-prose tell: '%s'"
+level: warning
+ignorecase: true
+tokens:
+  - delve
+  - delves
+  - robust
+  - seamless(ly)?
+  - leverag(e|es|ing)
+  - comprehensive
+  - cutting-edge
+  - game-changer
+  - tapestry
+  - testament to
+  - in today's
+  - it's worth noting
+  - it is worth noting
+  - it's important to note
+  - rest assured
+  - meticulous(ly)?
+  - streamline[ds]?
+  - empower(s|ing)?
+  - elevate[ds]?
+  - unlock(s|ing)?
+  - plethora
+  - myriad
+  - navigat(e|ing) the
+  - in conclusion
+  - ever-evolving
+  - holistic
+  - synerg(y|ies)

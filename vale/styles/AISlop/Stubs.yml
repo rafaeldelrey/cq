@@ -1,0 +1,13 @@
+# Language that marks unfinished or simulated work left in code or docs.
+extends: existence
+message: "Stub or placeholder language: '%s'"
+level: error
+ignorecase: true
+tokens:
+  - in a real implementation
+  - for now,? we
+  - placeholder (implementation|logic|value)
+  - this is a simplified
+  - simplified version
+  - left as an exercise
+  - 'TODO: implement'

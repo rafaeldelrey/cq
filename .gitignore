@@ -1,0 +1,7 @@
+# Everything a run produces stays on this machine (Rafael, 2026-10-10): the per-commit history,
+# the run folders with raw output, reports and dashboards, and temporary worktrees.
+history/
+runs/
+.venv/
+dagu/.env-*
+!dagu/.env-*.example

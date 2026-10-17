@@ -1,0 +1,59 @@
+# Rules for test code, run by the semgrep collector over each app's tests (the production rules in
+# ../hanbot.yml never look at tests). AGENTS.md → Code Review Rules flags "tests that only assert
+# that mocks were called" as P1: such a test passes whatever the code computes.
+rules:
+  - id: hanbot-test-only-asserts-mocks
+    message: >-
+      This test's only checks are mock-call assertions (assert_called*, assert_awaited*, …): it
+      proves the code called something, not that it produced the right result. Assert on the
+      outcome too: a return value, a stored row, the message that would be sent. (Asserting a
+      mock was NOT called is a fair check that a side effect didn't happen, so it isn't flagged.)
+    severity: WARNING
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              def $TEST(...):
+                  ...
+          - pattern: |
+              async def $TEST(...):
+                  ...
+      - metavariable-regex:
+          metavariable: $TEST
+          regex: ^test_
+      - pattern-either:
+          - pattern: |
+              def $TEST(...):
+                  ...
+                  $MOCK.$CHECK(...)
+                  ...
+          - pattern: |
+              async def $TEST(...):
+                  ...
+                  $MOCK.$CHECK(...)
+                  ...
+      - metavariable-regex:
+          metavariable: $CHECK
+          regex: ^assert_(called|awaited|any_call|has_calls|has_awaits|any_await)
+      - pattern-not: |
+          def $TEST(...):
+              ...
+              assert $COND
+              ...
+      - pattern-not: |
+          async def $TEST(...):
+              ...
+              assert $COND
+              ...
+      - pattern-not: |
+          def $TEST(...):
+              ...
+              with pytest.raises(...):
+                  ...
+              ...
+      - pattern-not: |
+          async def $TEST(...):
+              ...
+              with pytest.raises(...):
+                  ...
+              ...

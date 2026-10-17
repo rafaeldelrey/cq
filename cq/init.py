@@ -124,8 +124,9 @@ def add_plugin(settings: Settings, *, skills: str | None, assume_yes: bool) -> N
         return
     found = plugin.installed(claude, settings.repo_root)
     here = {"project", "local"} & set(found)
-    # Installed for the user still leaves room for an explicit --skills project: the team install.
-    if found and (skills != "project" or here):
+    # An explicit --skills project is the team install: only a project install (the committed
+    # .claude/settings.json) already gives it; a user or local one (settings.local.json) doesn't.
+    if found and (skills != "project" or "project" in found):
         where = "for this repo" if here else "for you"
         print(f"\ncq's Claude Code plugin is already installed {where}.")
         return

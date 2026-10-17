@@ -275,3 +275,14 @@ def test_a_missing_git_leaves_the_folder_as_the_repo(tmp_path: Path, monkeypatch
     monkeypatch.setattr(plugin.subprocess, "run", missing)
     assert plugin.capture(["git", "rev-parse", "--show-toplevel"], tmp_path) is None
     assert plugin.repo_root_of(tmp_path) == tmp_path
+
+
+def test_skills_project_installs_over_a_local_install(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # local scope is settings.local.json, not committed: the team still doesn't have it.
+    local = {"id": "cq@cq", "scope": "local", "version": "0.2.0", "projectPath": str(repo)}
+    fake = use(monkeypatch, FakeClaude(installed=[local]))
+    init.add_plugin(load_settings(repo), skills="project", assume_yes=False)
+    assert fake.calls == [[*MARKETPLACE_ADD, "project"], [*INSTALL, "project"]]
+    fake.calls.clear()
+    init.add_plugin(load_settings(repo), skills=None, assume_yes=True)  # no explicit project: already here
+    assert fake.calls == []

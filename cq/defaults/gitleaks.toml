@@ -1,0 +1,7 @@
+# cq's default secrets-scanner config (betterleaks reads gitleaks' format): gitleaks' own rules.
+# A repo replaces it with its own .gitleaks.toml (or `gitleaks_config` in [tool.cq]), where
+# allowlists for findings checked by hand belong. Changing the config invalidates the cached
+# history scan, so the next run re-scans every commit.
+
+[extend]
+useDefault = true

@@ -1,9 +1,8 @@
 """Secrets committed to git: betterleaks for the tree and the history, trufflehog for which are live.
 
-- **betterleaks** (gitleaks' successor, same author, reads the same config: code_quality/gitleaks.toml)
-  scans the tracked tree and every commit. It found two MongoDB connection strings gitleaks missed
-  (#284 trial). Only tracked content is scanned: the tree comes from ``git archive HEAD``, so
-  gitignored files like .env-agents-server are never read. Reports are written with ``--redact``
+- **betterleaks** (gitleaks' successor, same author, reads the same config: the repo's, or cq's default)
+  scans the tracked tree and every commit. Only tracked content is scanned: the tree comes from ``git archive HEAD``, so
+  gitignored files like .env are never read. Reports are written with ``--redact``
   to a temporary folder and deleted; only rule, file, line, commit and date are kept.
   The history scan is cached per commit (``betterleaks-history-<config hash>-<head>``; the old
   gitleaks cache is not reused) and the next run scans only the commits since.
@@ -22,33 +21,33 @@ import tempfile
 from io import BytesIO
 from pathlib import Path
 
-from cq.config import PROJECT_DIR, RUNS_DIR
+from cq.config import DEFAULTS_DIR
 from cq.context import Context
 from cq.proc import ToolError, require, run
+from cq.toolconfig import gitleaks_config
 
 KINDS = ("repo",)
 
-CACHE_DIR = RUNS_DIR / "_cache"
-CONFIG = PROJECT_DIR / "gitleaks.toml"
+DEFAULT_CONFIG = DEFAULTS_DIR / "gitleaks.toml"
 
 
-def config_hash() -> str:
+def config_hash(config: Path = DEFAULT_CONFIG) -> str:
     """Short hash of the rules: a cached history scan is only reused under the same config and the
     same betterleaks, whose built-in rules (``useDefault = true``) change with the binary."""
-    version = run(["betterleaks", "version"], PROJECT_DIR).strip()
-    return hashlib.sha256(CONFIG.read_bytes() + version.encode()).hexdigest()[:8]
+    version = run(["betterleaks", "version"], config.parent).strip()
+    return hashlib.sha256(config.read_bytes() + version.encode()).hexdigest()[:8]
 
 
-def betterleaks(args: list[str], cwd: Path) -> list[dict]:
+def betterleaks(args: list[str], cwd: Path, config: Path = DEFAULT_CONFIG) -> list[dict]:
     """One betterleaks scan, as slim findings.
 
     The report goes to a temporary folder and is deleted: ``--redact`` hides the secret itself, but
-    the matched line around it can still say too much, and run folders are served on the LAN.
+    the matched line around it can still say too much, and run folders may be served to others.
     """
     with tempfile.TemporaryDirectory(prefix="cq-secrets-") as tmp:
         report = Path(tmp) / "report.json"
         run(
-            ["betterleaks", *args, "--config", str(CONFIG), "--redact", "--no-banner", "--exit-code", "0",
+            ["betterleaks", *args, "--config", str(config), "--redact", "--no-banner", "--exit-code", "0",
              "--report-format", "json", "--report-path", str(report)],
             cwd,
             secret_output=True,
@@ -74,7 +73,7 @@ def scan_tree(ctx: Context) -> list[dict]:
     with tempfile.TemporaryDirectory() as tmp:
         with tarfile.open(fileobj=BytesIO(archive)) as tar:
             tar.extractall(tmp, filter="data")
-        found = betterleaks(["dir", tmp], Path(tmp))
+        found = betterleaks(["dir", tmp], Path(tmp), gitleaks_config(ctx.settings))
     # Findings name the extracted files by their temp path (/private/var/… or /var/…); keep the repo part.
     marker = f"/{Path(tmp).name}/"
     for f in found:
@@ -85,8 +84,11 @@ def scan_tree(ctx: Context) -> list[dict]:
 def scan_history(ctx: Context) -> list[dict]:
     """Every commit reachable from HEAD, reusing the cached result for the commits already scanned."""
     head = run(["git", "rev-parse", "HEAD"], ctx.checkout).strip()
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cached = sorted(CACHE_DIR.glob(f"betterleaks-history-{config_hash()}-*.json"), key=lambda p: p.stat().st_mtime)
+    config = gitleaks_config(ctx.settings)
+    cache_dir = ctx.settings.runs_dir / "_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = config_hash(config)
+    cached = sorted(cache_dir.glob(f"betterleaks-history-{key}-*.json"), key=lambda p: p.stat().st_mtime)
     base: dict | None = None
     for path in reversed(cached):
         data = json.loads(path.read_text())
@@ -100,10 +102,10 @@ def scan_history(ctx: Context) -> list[dict]:
     if base and base["head"] == head:
         found: list[dict] = []
     else:
-        found = betterleaks(["git", ".", *log_opts], ctx.checkout)
+        found = betterleaks(["git", ".", *log_opts], ctx.checkout, config)
     merged = {f["fingerprint"]: f for f in [*(base["findings"] if base else []), *found]}
     findings = sorted(merged.values(), key=lambda f: (f["date"], f["file"]))
-    (CACHE_DIR / f"betterleaks-history-{config_hash()}-{head[:12]}.json").write_text(
+    (cache_dir / f"betterleaks-history-{key}-{head[:12]}.json").write_text(
         json.dumps({"head": head, "findings": findings})
     )
     return findings

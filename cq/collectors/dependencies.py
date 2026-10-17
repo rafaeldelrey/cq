@@ -8,8 +8,9 @@ used in production code.
 
 import json
 
+from cq.config import PINS
 from cq.context import Context
-from cq.proc import run, uv_app
+from cq.proc import has_dev_extra, run, uv_app
 
 KINDS = ("python", "typescript")
 
@@ -38,12 +39,14 @@ def collect_python(ctx: Context) -> dict:
     """deptry over the app, with the app's own pyproject declaring the dependencies."""
     out = ctx.raw_dir / "deptry.json"
     # Inside the app's own environment: deptry maps import names to distributions (sklearn →
-    # scikit-learn) from the installed metadata. The dev extra is dev-only, not unused.
+    # scikit-learn) from the installed metadata. A dev extra is dev-only, not unused; deptry reads a
+    # dev dependency group as dev-only by itself.
     first_party = [arg for name in first_party_packages(ctx) for arg in ("--known-first-party", name)]
     ignores = ["--per-rule-ignores", ",".join(ctx.target.deptry_ignore)] if ctx.target.deptry_ignore else []
+    dev_extra = ["--pep621-dev-dependency-groups", "dev"] if has_dev_extra(ctx.app_dir) else []
     run(
-        uv_app("deptry", ".", "--json-output", str(out), "--pep621-dev-dependency-groups", "dev", *first_party, *ignores,
-               overlay=("deptry==0.25.1",)),
+        uv_app(ctx.app_dir, "deptry", ".", "--json-output", str(out), *dev_extra, *first_party, *ignores,
+               overlay=(PINS["deptry"],)),
         ctx.app_dir,
         ok_codes=(0, 1),
     )  # fmt: skip

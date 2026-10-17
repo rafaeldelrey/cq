@@ -1,10 +1,12 @@
 [project]
-name = "code-quality"
+name = "cq"
 version = "0.1.0"
-description = "Periodic code-quality snapshots of HanBot's apps, stored as history, reported as trends"
+description = "Code-quality snapshots of a repository, stored as history and reported as trends, plus a PR gate"
+readme = "README.md"
 requires-python = ">=3.12"
 # Pinned: a snapshot is only comparable with the last one when the measuring tools are the same.
-# Bumping one of these is a measurement change; say so in the commit and expect a step in the trend.
+# Bumping one of these is a measurement change: say so in the changelog, and expect a step in the
+# trend. The tools outside this environment are pinned in cq/config.py (PINS).
 dependencies = [
     "radon==6.0.1",
     "vulture==2.16",
@@ -15,142 +17,23 @@ dependencies = [
     "deptry==0.25.1",
     "import-linter==2.15",
 ]
-# Outside this environment: jscpd and knip (npx, versions below), mutmut (overlaid on each app's
-# own environment, pinned in cq/collectors/mutation.py), gitleaks (system binary: brew install gitleaks).
+
+[project.scripts]
+cq = "cq.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.4", "ruff>=0.12", "pyright>=1.1.403"]
+dev = ["pytest>=8.4", "pytest-cov>=5", "ruff>=0.12", "pyright>=1.1.403"]
 
-[tool.uv]
-package = false
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
 
-# ─── What gets measured ──────────────────────────────────────────────────────────────────────
-# ruff, pyright, pytest and coverage run inside each app with the app's own pyproject (the same
-# config scripts/check.sh gates on). The tools below run from this project, with the config in
-# this file, so measuring never touches apps/.
-[tool.code_quality]
-jscpd = "jscpd@4.0.5"  # run with npx; duplication for Python and TypeScript alike
-knip = "knip@6.41.0"    # run with npx; unused files, exports and dependencies in the UI
-# #284: the AI-slop and gate tools. qlty is a binary (GitHub release, attestation-checked); its plugin
-# versions and smell thresholds are pinned in the repo's .qlty/qlty.toml.
-qlty = "0.654.0"
-aislop = "aislop@0.18.1"
-pyscn = "pyscn==1.32.4"
-fallow = "fallow@3.33.1"
-cspell = "cspell@10.3.6"
-complexity_limit = 15  # the CC limit of scripts/complexity_gate.py
-cognitive_limit = 15   # complexipy's default
-# shellcheck: tracked *.sh under these roots (vendored repos/ and exploratory research/, exp/ left out)
-shell_roots = ["scripts", "apps", "stacks", "code_quality", "tools", "claude_agents"]
-# lychee (offline): broken links to files in the repo. wiki/log.md is frozen history, its old paths stay.
-link_paths = ["wiki", "AGENTS.md", "README.md", "code_quality", ".claude/rules", ".claude/skills", "claude_agents", "apps/agents_server/README.md"]
-link_exclude = ["wiki/log.md", "code_quality/runs", "code_quality/.venv", "node_modules"]
+[tool.hatch.build.targets.wheel]
+packages = ["cq"]
 
-# ─── The PR gate (run.py --gate, cq/gate.py, #284) ──────────────────────────────────────────
-# What a branch adds over its base. "warn": report on the job page and exit 0. "block": exit 1
-# when a blocking finding is new or a tool didn't run. It goes to "block" after 10 gated PRs (or a
-# week, whichever is later) and Rafael's yes.
-[tool.code_quality.gate]
-mode = "warn"
-# Every new error blocks; these "tool:rule" patterns make new warnings block too. The rest is reported.
-block = [
-    "secrets:*",            # a key committed on the branch (betterleaks)
-    "aislop:ai-slop/*",     # swallowed errors, stubs, narrating comments, double type assertions
-    "vale:Stubs",           # stub language: "in a real implementation", "placeholder logic"
-    "semgrep:hanbot-*",     # the house rules (code_quality/semgrep/), mock-only tests included
-    "qlty:zizmor:*",        # unpinned actions, persisted credentials in workflows
-    "qlty:shellcheck:*",
-    "qlty:hadolint:*",
-    "qlty:osv-scanner:*",   # a dependency with a known vulnerability
-    "smells:*",             # parameters, returns, nesting, boolean logic, copied blocks over threshold
-    "pyscn:*",              # renamed copy-paste in Python
-    "ratchet:*",            # suppressions, cognitive complexity, import contracts, deptry, vulnerabilities
-    "docstrings:missing-docstring",  # a function, class or module the branch adds or changes, without one
-]
-
-[[tool.code_quality.targets]]
-name = "agents_server"
-image = "rafaeldelrey/hanbot:agents-server-latest"  # Trivy scans the pushed image
-kind = "python"
-root = "apps/agents_server"
-former_roots = ["agents_server"]  # before #130 (2026-09-19) grouped the apps under apps/
-source = ["app"]
-tests = true
-# Mutation testing is slow, so it covers the danger path's decision code first.
-# uvicorn is started from the command line (Dockerfile), never imported. langchain-openai is
-# loaded by init_chat_model("openai:…") at runtime, and langsmith by LangChain's env-based tracing.
-deptry_ignore = ["DEP002=uvicorn", "DEP002=langchain-openai", "DEP002=langsmith"]
-mutation_paths = [
-    "app/services/diabetes_monitor/flags.py",
-    "app/agents/danger_predictor/nodes/potential_danger_gate.py",
-]
-# The tests that exercise those files. The whole suite also works but is slower, and one test
-# (test_run_records) fails under mutmut's instrumentation.
-mutation_tests = [
-    "tests/services/test_diabetes_monitor_flags.py",
-    "tests/services/test_diabetes_monitor_runner.py",
-    "tests/services/test_diabetes_monitor_alerts.py",
-    "tests/services/test_diabetes_monitor_shadow.py",
-    "tests/agents/test_danger_predictor.py",
-]
-
-# claude_sub_proxy moved to the homelab repo on 2026-10-10 (#217); its history stays in history/.
-
-[[tool.code_quality.targets]]
-name = "ns_sync"
-image = "rafaeldelrey/hanbot:ns-sync-latest"  # Trivy scans the pushed image
-kind = "python"
-root = "apps/ns_sync"
-former_roots = ["ns-sync"]  # before #130 (2026-09-19) grouped the apps under apps/
-source = ["ns_to_influx.py"]
-tests = false  # no tests yet (#188)
-
-[[tool.code_quality.targets]]
-name = "hanbot_ui"
-image = "rafaeldelrey/hanbot:hanbot-ui-latest"  # Trivy scans the pushed image
-kind = "typescript"
-root = "apps/hanbot_ui"
-former_roots = ["hanbot_ui"]  # before #130 (2026-09-19) grouped the apps under apps/
-source = ["src"]
-tests = true
-
-# The repository as a whole: secrets in the tracked tree and in the git history.
-[[tool.code_quality.targets]]
-name = "repo"
-kind = "repo"
-root = "."
-source = ["."]
-tests = false
-
-# ─── Tool configuration (read with --config / -c pointing at this file) ───────────────────────
-[tool.vulture]
-min_confidence = 60
-# FastAPI routes, LangChain tools and pytest fixtures are called by their framework, not by name.
-ignore_decorators = [
-    "@router.*",
-    "@app.*",
-    "@*.get",
-    "@*.post",
-    "@*.put",
-    "@*.patch",
-    "@*.delete",
-    "@tool",
-    "@field_validator",
-    "@model_validator",
-    "@validator",
-    "@pytest.fixture",
-]
-# Read by a framework through attribute lookup.
-ignore_names = ["handle_tool_error", "model_config", "model_post_init", "lifespan", "cls"]
-
-[tool.interrogate]
-ignore-init-method = true
-ignore-init-module = true
-ignore-magic = true
-ignore-nested-functions = true
-ignore-private = false
-fail-under = 0
-exclude = ["tests"]
+[tool.hatch.build.targets.wheel.force-include]
+# Dot-files hatch would otherwise leave out of the wheel.
+"cq/defaults/vale/.vale.ini" = "cq/defaults/vale/.vale.ini"
 
 # ─── This project's own checks ───────────────────────────────────────────────────────────────
 [tool.ruff]
@@ -169,8 +52,17 @@ ignore = [
 "tests/*" = ["S101"]
 
 [tool.pyright]
-include = ["cq", "server", "tests", "run.py", "report.py", "backfill.py"]
+include = ["cq", "tests"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+
+[tool.coverage.run]
+branch = true
+source = ["cq"]
+
+[tool.coverage.report]
+fail_under = 85

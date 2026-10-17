@@ -1,6 +1,6 @@
-"""Docstring coverage (interrogate), with this project's [tool.interrogate] config.
+"""Docstring coverage (interrogate), with the app's [tool.interrogate], or cq's default.
 
-code-standards.md asks for docstrings on functions; this tracks how much of the code has them,
+This tracks how much of the code has them,
 and lists each function, class or module without one (``items``), with the lines it spans up to
 the next symbol, so the PR gate can tell a changed function from an untouched one.
 """
@@ -11,9 +11,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 from cq.collectors.size import python_files
-from cq.config import PYPROJECT
 from cq.context import Context
-from cq.proc import ToolError, run
+from cq.proc import ToolError, own, run
+from cq.toolconfig import interrogate_config
 
 KINDS = ("python",)
 
@@ -83,7 +83,18 @@ def worst_first(items: list[dict]) -> list[dict]:
 def collect(ctx: Context) -> dict:
     """interrogate -vv prints a per-file table and a TOTAL row (total, missed, covered, %)."""
     paths = [str(p) for p in ctx.sources]
-    out = run(["interrogate", "-vv", "--config", str(PYPROJECT), "--no-color", *paths], ctx.checkout, ok_codes=(0, 1))
+    out = run(
+        [
+            own("interrogate"),
+            "-vv",
+            "--config",
+            str(interrogate_config(ctx.settings, ctx.target)),
+            "--no-color",
+            *paths,
+        ],
+        ctx.checkout,
+        ok_codes=(0, 1),
+    )
     (ctx.raw_dir / "interrogate.txt").write_text(out)
     m = TOTAL.search(out)
     if not m:

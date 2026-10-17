@@ -1,7 +1,6 @@
 """Shell scripts (shellcheck) and GitHub workflows (actionlint, zizmor) across the repository.
 
-scripts/check.sh is the merge gate itself, and the deploy and backup scripts run against
-production; neither has tests. shellcheck catches the quoting, word-splitting and exit-code bugs
+Shell scripts often run the checks, deploys and backups, and rarely have tests. shellcheck catches the quoting, word-splitting and exit-code bugs
 that bite shell. Only git-tracked scripts under ``shell_roots`` are checked (not vendored code).
 actionlint checks the workflows' syntax; zizmor (through qlty) their security: actions not pinned
 to a commit, credentials left in the workspace, script injection.
@@ -21,8 +20,16 @@ SHELLCHECK_LEVELS = ("error", "warning", "info", "style")
 
 def tracked_scripts(ctx: Context) -> list[str]:
     """Repo-relative paths of the tracked ``*.sh`` files under the configured roots."""
-    # :(glob) makes ** match zero directories too, so scripts/check.sh is included, not only scripts/x/y.sh.
-    out = run(["git", "ls-files", "--", *(f":(glob){root}/**/*.sh" for root in ctx.settings.shell_roots)], ctx.checkout)
+    # :(glob) makes ** match zero directories too, so scripts/a.sh is included, not only scripts/x/y.sh.
+    out = run(
+        [
+            "git",
+            "ls-files",
+            "--",
+            *(":(glob)**/*.sh" if root in (".", "") else f":(glob){root}/**/*.sh" for root in ctx.settings.shell_roots),
+        ],
+        ctx.checkout,
+    )
     return sorted({line for line in out.splitlines() if line})
 
 

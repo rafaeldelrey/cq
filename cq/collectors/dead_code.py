@@ -1,4 +1,4 @@
-"""Unused code (vulture), with the ignores in this project's [tool.vulture].
+"""Unused code (vulture), with the app's [tool.vulture], or cq's default ignores.
 
 vulture guesses: 100% confidence (unused import, variable, unreachable code) is almost always
 real; 60% (an unused function or class attribute) is often a framework reading it by name.
@@ -7,9 +7,9 @@ real; 60% (an unused function or class attribute) is often a framework reading i
 
 import re
 
-from cq.config import PYPROJECT
 from cq.context import Context
-from cq.proc import run
+from cq.proc import own, run
+from cq.toolconfig import vulture_config, vulture_whitelist
 
 KINDS = ("python",)
 
@@ -40,7 +40,10 @@ def parse(output: str, ctx: Context) -> list[dict]:
 def collect(ctx: Context) -> dict:
     """vulture exits 3 when it finds dead code; that is a measurement, not a failure."""
     paths = [str(p) for p in ctx.sources]
-    out = run(["vulture", *paths, "--config", str(PYPROJECT), "--exclude", "tests"], ctx.checkout, ok_codes=(0, 3))
+    whitelist = vulture_whitelist(ctx.settings, ctx.target)
+    paths += [str(whitelist)] if whitelist else []
+    config = vulture_config(ctx.settings, ctx.target)
+    out = run([own("vulture"), *paths, "--config", str(config), "--exclude", "tests"], ctx.checkout, ok_codes=(0, 3))
     (ctx.raw_dir / "vulture.txt").write_text(out)
     items = parse(out, ctx)
     by_type: dict[str, int] = {}

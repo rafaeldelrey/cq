@@ -1,25 +1,19 @@
-"""Cyclomatic complexity per function, measured exactly as scripts/complexity_gate.py measures it.
+"""Cyclomatic complexity per function, measured exactly as ``cq complexity check`` measures it.
 
-The gate's own ``measure_source`` is loaded from the repo (not the checkout being measured), so a
-snapshot of an old commit is counted with today's rules and stays comparable.
+The gate's ``measure_source`` is cq's own, not the checkout's, so a snapshot of an old commit is
+counted with today's rules and stays comparable.
 """
 
-import importlib.util
 import json
 from statistics import mean
 
 from radon.complexity import cc_rank
 
+from cq import complexity_gate
 from cq.collectors.size import python_files
-from cq.config import REPO_ROOT
 from cq.context import Context
 
 KINDS = ("python",)
-
-_spec = importlib.util.spec_from_file_location("complexity_gate", REPO_ROOT / "scripts" / "complexity_gate.py")
-assert _spec and _spec.loader  # noqa: S101 - the gate is part of this repo; a missing file is a broken checkout
-complexity_gate = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(complexity_gate)
 
 
 def measure(ctx: Context) -> dict[str, int]:
@@ -33,12 +27,13 @@ def measure(ctx: Context) -> dict[str, int]:
 
 
 def baseline_entries(ctx: Context) -> int:
-    """Grandfathered functions of this target in the checkout's .complexity-baseline.json."""
-    path = ctx.checkout / ".complexity-baseline.json"
+    """Grandfathered functions of this target in the checkout's complexity baseline."""
+    path = ctx.checkout / ctx.settings.complexity_baseline
     if not path.exists():
         return 0
     functions = json.loads(path.read_text())["functions"]
-    return sum(1 for key in functions if key.startswith(ctx.target.root_in(ctx.checkout) + "/"))
+    root = ctx.target.root_in(ctx.checkout)
+    return sum(1 for key in functions if root in (".", "") or key.startswith(f"{root}/"))
 
 
 def collect(ctx: Context) -> dict:

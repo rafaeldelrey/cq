@@ -111,8 +111,14 @@ def test_dashboard(tmp_path: Path) -> None:
     run_dir.mkdir()
     (run_dir / "app").mkdir()
     (run_dir / "app" / "ruff.json").write_text("[]")
-    page = dashboard.build(history, history[-1], run_dir, "## Verdict\n- **Worse:** coverage `-1%`\n</script>")
-    assert "<title>HanBot Code Quality</title>" in page[:300]
+    page = dashboard.build(
+        history,
+        history[-1],
+        run_dir,
+        "## Verdict\n- **Worse:** coverage `-1%`\n</script>",
+        title="Acme & co code quality",
+    )
+    assert "<title>Acme &amp; co code quality</title>" in page[:300]  # the repo's name, escaped
     assert "/*__DATA__*/" not in page
     payload = page.split('<script id="data" type="application/json">', 1)[1].split("</script>", 1)[0]
     data = json.loads(payload)

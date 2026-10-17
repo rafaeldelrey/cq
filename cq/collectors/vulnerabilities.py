@@ -7,7 +7,7 @@ dependencies only (``--omit=dev``): what ships in the image.
 import json
 
 from cq.context import Context
-from cq.proc import ToolError, run
+from cq.proc import ToolError, own, run
 
 KINDS = ("python", "typescript")
 
@@ -27,7 +27,7 @@ def collect_python(ctx: Context) -> dict:
     )
     out = ctx.raw_dir / "pip-audit.json"
     run(
-        ["pip-audit", "-r", str(req), "--no-deps", "--disable-pip", "-f", "json", "-o", str(out)],
+        [own("pip-audit"), "-r", str(req), "--no-deps", "--disable-pip", "-f", "json", "-o", str(out)],
         ctx.checkout,
         ok_codes=(0, 1),
     )

@@ -1,4 +1,4 @@
-"""The PR gate (`run.py --gate`): what a branch adds, judged against its base (#284).
+"""The PR gate (`cq gate`): what a branch adds, judged against its base.
 
 Four sources of findings, each one new on the branch by construction:
 
@@ -13,7 +13,7 @@ Four sources of findings, each one new on the branch by construction:
   function over the limit, none over it growing), broken import contracts, deptry issues, and
   critical or high vulnerabilities when a lockfile changed.
 
-The mode and the blocking list live in ``[tool.code_quality.gate]``. In ``warn`` the gate always
+The mode and the blocking list live in the settings' ``gate`` table. In ``warn`` the gate always
 exits 0, whatever it finds and whichever tool failed. In ``block`` it exits 1 when a blocking finding is
 new or a tool did not run (a blind spot is not a pass). A crash of the gate itself (git, a bug) is
 not a finding: it fails the job in either mode, to be fixed. actionlint is not a qlty plugin here;
@@ -32,11 +32,12 @@ from pathlib import Path
 from cq import qlty
 from cq.collectors import secrets
 from cq.collectors.vale import EXTENSIONS
-from cq.config import REPO_ROOT, RUNS_DIR, GateSettings, Settings, Target
+from cq.config import GateSettings, Settings, Target, ensure_data_dir
 from cq.context import Context
 from cq.findings import Finding, from_snapshot, make, mark_new, write_jsonl
 from cq.proc import ToolError
 from cq.runner import git, snapshot
+from cq.toolconfig import gitleaks_config
 
 COMPARED = ("aislop", "vale", "pyscn", "fallow", "semgrep", "docstrings")
 # A symbol without a docstring counts when the branch adds it or changes a line in it; an untouched
@@ -111,18 +112,15 @@ def affected(targets: tuple[Target, ...], changed: list[str]) -> list[str]:
     """The targets the branch touches; the repo target (vale) when a doc or a source file changed."""
     names = []
     for t in targets:
-        if t.kind == "repo":
-            hit = any(f.endswith(EXTENSIONS) for f in changed)
-        else:
-            hit = any(f.startswith(f"{t.root}/") for f in changed)
-        if hit:
+        repo_hit = t.kind == "repo" and any(f.endswith(EXTENSIONS) for f in changed)
+        if repo_hit or (t.kind != "repo" and any(t.owns(f) for f in changed)):
             names.append(t.name)
     return names
 
 
 def lock_changed(targets: tuple[Target, ...], changed: list[str]) -> set[str]:
     """The targets whose lockfile the branch changed: only they get the vulnerability ratchet."""
-    return {t.name for t in targets if t.kind != "repo" and any(f"{t.root}/{lock}" in changed for lock in LOCKFILES)}
+    return {t.name for t in targets if t.kind != "repo" and any(t.repo_path(lock) in changed for lock in LOCKFILES)}
 
 
 def line_level(ctx: Context, base_sha: str) -> list[Finding]:
@@ -143,9 +141,11 @@ def line_level(ctx: Context, base_sha: str) -> list[Finding]:
     return found
 
 
-def branch_secrets(base_sha: str) -> list[Finding]:
+def branch_secrets(settings: Settings, base_sha: str) -> list[Finding]:
     """betterleaks over the branch's own commits; only rule, file, line and commit are kept."""
-    rows = secrets.betterleaks(["git", ".", f"--log-opts={base_sha}..HEAD"], REPO_ROOT)
+    rows = secrets.betterleaks(
+        ["git", ".", f"--log-opts={base_sha}..HEAD"], settings.repo_root, gitleaks_config(settings)
+    )
     return [
         make(
             "repo",
@@ -370,14 +370,15 @@ def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: 
     changed, touched, renames = diff_status(base_sha)
     names = affected(settings.targets, touched)  # a deletion can break a contract or a dependency
     locks = lock_changed(settings.targets, touched)  # a deleted lockfile is a change too
-    out_dir = RUNS_DIR / f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}_gate_{head_short}"
+    out_dir = settings.runs_dir / f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}_gate_{head_short}"
+    ensure_data_dir(settings)
     out_dir.mkdir(parents=True)
     repo = next(t for t in settings.targets if t.kind == "repo")
-    ctx = Context(target=repo, checkout=REPO_ROOT, raw_dir=out_dir, settings=settings)
+    ctx = Context(target=repo, checkout=settings.repo_root, raw_dir=out_dir, settings=settings)
 
     errors: dict[str, str] = {}
     found = attempt("qlty", errors, line_level, ctx, base_sha) + attempt(
-        "betterleaks", errors, branch_secrets, base_sha
+        "betterleaks", errors, branch_secrets, settings, base_sha
     )
     if names:
         tools = [*COMPARED, *RATCHETS, *(["vulnerabilities"] if locks else [])]

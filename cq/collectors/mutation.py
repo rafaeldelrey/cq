@@ -13,21 +13,22 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from cq.config import PINS
 from cq.context import Context
 from cq.proc import run, uv_app
 
 KINDS = ("python",)
 
 COPY_IGNORE = shutil.ignore_patterns(
-    ".venv", "mutants", "__pycache__", ".pytest_cache", "htmlcov", ".coverage*", "node_modules"
+    ".venv", "mutants", "__pycache__", ".pytest_cache", "htmlcov", ".coverage*", "node_modules", ".git", ".cq"
 )
 RESULT = re.compile(r"^\s*(?P<name>\S+__mutmut_\d+): (?P<status>.+)$")
 SHOW_LIMIT = 25
 
 
-def mutmut(*args: str) -> list[str]:
+def mutmut(workspace: Path, *args: str) -> list[str]:
     """mutmut overlaid on the app's own dev environment (it needs the app's deps to run its tests)."""
-    return uv_app("mutmut", *args, overlay=("mutmut==3.8.0",))
+    return uv_app(workspace, "mutmut", *args, overlay=(PINS["mutmut"],))
 
 
 def configure(workspace: Path, paths: list[str], tests: list[str] | None = None) -> None:
@@ -56,13 +57,13 @@ def collect(ctx: Context) -> dict:
         workspace = Path(tmp) / ctx.target.name
         shutil.copytree(ctx.app_dir, workspace, ignore=COPY_IGNORE)
         configure(workspace, paths, list(ctx.target.mutation_tests))
-        log = run(mutmut("run", "--max-children", "6"), workspace, ok_codes=(0, 1))
+        log = run(mutmut(workspace, "run", "--max-children", "6"), workspace, ok_codes=(0, 1))
         (ctx.raw_dir / "mutmut-run.txt").write_text(log[-20000:])
-        results = run(mutmut("results", "--all", "true"), workspace)
+        results = run(mutmut(workspace, "results", "--all", "true"), workspace)
         (ctx.raw_dir / "mutmut-results.txt").write_text(results)
         statuses = {m["name"]: m["status"].strip() for m in map(RESULT.match, results.splitlines()) if m}
         survivors = [n for n, s in statuses.items() if s == "survived"]
-        diffs = {n: run(mutmut("show", n), workspace).strip() for n in survivors[:SHOW_LIMIT]}
+        diffs = {n: run(mutmut(workspace, "show", n), workspace).strip() for n in survivors[:SHOW_LIMIT]}
     counts: dict[str, int] = {}
     for status in statuses.values():
         counts[status] = counts.get(status, 0) + 1

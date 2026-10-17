@@ -1,8 +1,7 @@
 """pyscn: Python structure, in particular renamed copy-paste (type-2 and type-3 clones).
 
 jscpd only matches identical token runs; pyscn also finds a block copied and renamed, the way an
-AI agent re-creates a helper instead of reusing it (the trial, #284, found the memory_triager and
-message_triager triage nodes at 84% similarity). It also reports import cycles and classes with
+AI agent re-creates a helper instead of reusing it. It also reports import cycles and classes with
 high coupling or low cohesion. Its dead-code and complexity overlap vulture and radon, so only the
 structure measures are kept here.
 """
@@ -26,7 +25,7 @@ def collect(ctx: Context) -> dict:
     data = parse_json(out, "pyscn")
     summary = data["summary"]
     pairs = [
-        p for p in data.get("clone", {}).get("clone_pairs", [])
+        p for p in (data.get("clone") or {}).get("clone_pairs") or []  # null when pyscn finds no clones
         if (p["clone1"].get("line_count") or 0) >= MIN_LINES and "/tests/" not in p["clone1"]["location"]["file_path"]
     ]  # fmt: skip
     pairs.sort(key=lambda p: (-(p["clone1"].get("line_count") or 0), -p.get("similarity", 0)))

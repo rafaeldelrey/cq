@@ -1,0 +1,9 @@
+# cq's default interrogate config, used when the measured app has no [tool.interrogate] of its own.
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-nested-functions = true
+ignore-private = false
+fail-under = 0
+exclude = ["tests"]

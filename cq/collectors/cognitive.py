@@ -8,7 +8,7 @@ import json
 from statistics import mean
 
 from cq.context import Context
-from cq.proc import ToolError, run
+from cq.proc import ToolError, own, run
 
 KINDS = ("python",)
 
@@ -18,7 +18,18 @@ def collect(ctx: Context) -> dict:
     out_file = ctx.raw_dir / "complexipy.json"
     paths = [str(p) for p in ctx.sources]
     run(
-        ["complexipy", *paths, "--exclude", "tests", "--output-format", "json", "--output", str(out_file), "-q", "-i"],
+        [
+            own("complexipy"),
+            *paths,
+            "--exclude",
+            "tests",
+            "--output-format",
+            "json",
+            "--output",
+            str(out_file),
+            "-q",
+            "-i",
+        ],
         ctx.checkout,
         ok_codes=(0, 1),  # 1: some function is over complexipy's limit — still a measurement
     )

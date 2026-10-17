@@ -110,9 +110,14 @@ def markdown_to_html(md: str) -> str:
 
 
 def build(
-    history: list[dict], snap: dict, run_dir: Path, analysis_md: str | None = None, found: list[dict] | None = None
+    history: list[dict],
+    snap: dict,
+    run_dir: Path,
+    analysis_md: str | None = None,
+    found: list[dict] | None = None,
+    title: str = "Code quality",
 ) -> str:
-    """The dashboard page for the run whose snapshot is ``snap``."""
+    """The dashboard page for the run whose snapshot is ``snap``, headed ``title``."""
     points = [series_point(s) for s in history_until(history, snap)]
     data = {
         "metrics": [
@@ -125,4 +130,5 @@ def build(
         "findings": found or [],
     }
     payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
-    return TEMPLATE.read_text().replace("/*__DATA__*/{}", payload)
+    page = TEMPLATE.read_text().replace("__TITLE__", html.escape(title))
+    return page.replace("/*__DATA__*/{}", payload)

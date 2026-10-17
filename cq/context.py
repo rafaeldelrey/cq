@@ -43,8 +43,8 @@ class Context:
         is the app directory unless the collector says otherwise.
         """
         p = Path(path)
-        if not p.is_absolute():
-            p = ((base or self.app_dir) / p).resolve()
+        # Resolved either way, so a checkout reached through a symlink still matches the tool's path.
+        p = ((base or self.app_dir) / p).resolve() if not p.is_absolute() else p.resolve()
         try:
             return p.relative_to(self.checkout.resolve()).as_posix()
         except ValueError:
@@ -57,7 +57,7 @@ class Context:
     def fingerprint(self, file: str, line: int | None) -> str:
         """A short hash of a finding's source line: who it is, whatever lines shift above it.
 
-        A hash, not the text, so nothing the line says lands in the LAN-served run folder.
+        A hash, not the text, so nothing the line says lands in a run folder that may be served to others.
         """
         lines = _lines(self.checkout / file)
         text = lines[line - 1].strip() if line and 0 < line <= len(lines) else ""

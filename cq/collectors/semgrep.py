@@ -1,12 +1,11 @@
-"""Semgrep: HanBot's own conventions (code_quality/semgrep/*.yml) plus the registry's rulesets.
+"""Semgrep: the repo's house rules plus the registry's rulesets.
 
-The registry rules (p/python; p/typescript and p/react for the UI) need network to fetch. The
-house rules encode AGENTS.md and .claude/rules/: Claude only through claude_sdk.py, structlog
-only, no broad except that logs and carries on, no nested imports, no naive datetimes, the
-shadow lane never writing real alerts.
+The house rules are a folder of rule files (cq/toolconfig.py): the repo's own, or cq's defaults
+(no print, no broad except that logs and carries on, no nested imports, no naive datetimes). The
+registry rules (p/python; p/typescript and p/react for the UI) need network to fetch.
 
-A second scan runs the test rules (code_quality/semgrep/tests/) over the app's tests, e.g. a test
-whose only checks are mock-call assertions (AGENTS.md → Code Review Rules, P1).
+A second scan runs the folder's test rules (``tests/*.yml``) over the app's tests, e.g. a test whose
+only checks are mock-call assertions.
 """
 
 import json
@@ -15,18 +14,30 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from cq.config import PROJECT_DIR
 from cq.context import Context
-from cq.proc import run
+from cq.proc import own, run
+from cq.toolconfig import semgrep_rules
 
 KINDS = ("python", "typescript")
 
-RULES_DIR = PROJECT_DIR / "semgrep"
-PRODUCTION_RULES = RULES_DIR / "hanbot.yml"
-TEST_RULES = RULES_DIR / "tests"
 REGISTRY = {"python": ["p/python"], "typescript": ["p/typescript", "p/react"]}
 SEVERITY = {"ERROR": "error", "WARNING": "warning", "INFO": "info"}
 BROAD_EXCEPT = re.compile(r"^\s*except\s*\(?\s*(Base)?Exception\b")
+RULE_ID = re.compile(r"^\s*-\s*id:\s*(\S+)", re.MULTILINE)
+# Rules matched by the end of their id, whatever prefix a repo gives its house rules.
+LOGS_AND_CARRIES_ON = "logs-and-carries-on"
+MOCK_ONLY_TESTS = "test-only-asserts-mocks"
+
+
+def rule_files(folder: Path) -> list[Path]:
+    """The rule files directly in a folder (its tests/ subfolder holds the test rules)."""
+    return sorted(p for p in folder.glob("*.y*ml") if p.is_file())
+
+
+def house_rule_ids(folder: Path) -> set[str]:
+    """Every rule id the house-rule files define, production and test rules alike."""
+    files = [*rule_files(folder), *rule_files(folder / "tests")]
+    return {m for f in files for m in RULE_ID.findall(f.read_text())}
 
 
 def documented_catch(path: Path, start: int, end: int) -> bool:
@@ -40,7 +51,7 @@ def scan(ctx: Context, configs: list[str], paths: list[str], out_file: Path, exc
     """One semgrep scan; its results as items (documented broad catches dropped)."""
     args = [arg for c in configs for arg in ("--config", c)] + [arg for e in excludes for arg in ("--exclude", e)]
     run(
-        ["semgrep", "scan", *args, "--metrics", "off", "--json", "-q", "-o", str(out_file), *paths],
+        [own("semgrep"), "scan", *args, "--metrics", "off", "--json", "-q", "-o", str(out_file), *paths],
         ctx.checkout,
         ok_codes=(0, 1),
     )
@@ -49,7 +60,7 @@ def scan(ctx: Context, configs: list[str], paths: list[str], out_file: Path, exc
     for r in data["results"]:
         rule = r["check_id"].rsplit(".", 1)[-1]
         path = ctx.checkout / r["path"] if not Path(r["path"]).is_absolute() else Path(r["path"])
-        if rule == "hanbot-logs-and-carries-on" and documented_catch(path, r["start"]["line"], r["end"]["line"]):
+        if rule.endswith(LOGS_AND_CARRIES_ON) and documented_catch(path, r["start"]["line"], r["end"]["line"]):
             continue
         items.append(
             {
@@ -63,7 +74,7 @@ def scan(ctx: Context, configs: list[str], paths: list[str], out_file: Path, exc
     return [*items, *({"scan_error": e.get("message", "")[:200]} for e in data.get("errors", []))]
 
 
-def scan_tests(ctx: Context, tests_dir: Path) -> list[dict]:
+def scan_tests(ctx: Context, tests_dir: Path, rules: list[Path]) -> list[dict]:
     """The test rules over the app's tests.
 
     Semgrep's built-in ignore list skips any folder named ``tests``, even one given as the target,
@@ -72,7 +83,7 @@ def scan_tests(ctx: Context, tests_dir: Path) -> list[dict]:
     with tempfile.TemporaryDirectory(prefix="cq-semgrep-tests-") as tmp:
         suite = Path(tmp) / "suite"
         shutil.copytree(tests_dir, suite, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        found = scan(ctx, [str(TEST_RULES)], [str(suite)], ctx.raw_dir / "semgrep-tests.json", [])
+        found = scan(ctx, [str(r) for r in rules], [str(suite)], ctx.raw_dir / "semgrep-tests.json", [])
         prefix = str(suite.resolve())
         for item in found:
             if "file" in item:
@@ -85,17 +96,20 @@ def scan_tests(ctx: Context, tests_dir: Path) -> list[dict]:
 
 def collect(ctx: Context) -> dict:
     """Production rules over the production paths; test rules over the app's tests."""
+    folder = semgrep_rules(ctx.settings)
     found = scan(
         ctx,
-        [str(PRODUCTION_RULES), *REGISTRY[ctx.target.kind]],
+        [*(str(r) for r in rule_files(folder)), *REGISTRY[ctx.target.kind]],
         [str(p) for p in ctx.sources],
         ctx.raw_dir / "semgrep.json",
         ["tests", "*.test.ts", "*.test.tsx"],
     )
     tests_dir = ctx.app_dir / "tests"
-    if ctx.target.kind == "python" and tests_dir.is_dir():
-        found += scan_tests(ctx, tests_dir)
+    test_rules = rule_files(folder / "tests")
+    if ctx.target.kind == "python" and tests_dir.is_dir() and test_rules:
+        found += scan_tests(ctx, tests_dir, test_rules)
     items = [i for i in found if "scan_error" not in i]
+    house = house_rule_ids(folder)
     by_rule: dict[str, int] = {}
     for item in items:
         by_rule[item["code"]] = by_rule.get(item["code"], 0) + 1
@@ -103,8 +117,8 @@ def collect(ctx: Context) -> dict:
         "findings": len(items),
         "errors": sum(1 for i in items if i["severity"] == "error"),
         "warnings": sum(1 for i in items if i["severity"] == "warning"),
-        "house_rules": sum(1 for i in items if i["code"].startswith("hanbot-")),
-        "mock_only_tests": by_rule.get("hanbot-test-only-asserts-mocks", 0),
+        "house_rules": sum(1 for i in items if i["code"] in house),
+        "mock_only_tests": sum(n for rule, n in by_rule.items() if rule.endswith(MOCK_ONLY_TESTS)),
         "scan_errors": len(found) - len(items),
         "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
         "items": ctx.with_fingerprints(

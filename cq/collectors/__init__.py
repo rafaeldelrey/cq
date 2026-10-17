@@ -62,7 +62,7 @@ COLLECTORS = {
     "freshness": freshness,
     "scripts": scripts,
     "links": links,
-    # #284: AI-slop and structure tools (qlty's radarlint and smells, aislop, pyscn, fallow, vale, cspell)
+    # AI-slop and structure tools (qlty's radarlint and smells, aislop, pyscn, fallow, vale, cspell)
     "radarlint": radarlint,
     "smells": smells,
     "aislop": aislop,

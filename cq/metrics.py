@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from cq.config import HISTORY_DIR
-
 
 @dataclass(frozen=True)
 class Metric:
@@ -111,7 +109,7 @@ METRICS: tuple[Metric, ...] = (
 )
 
 
-def load_history(history_dir: Path = HISTORY_DIR) -> list[dict]:
+def load_history(history_dir: Path) -> list[dict]:
     """Every stored snapshot, oldest commit first."""
     snaps = [json.loads(p.read_text()) for p in history_dir.glob("*.json")]
     return sorted(snaps, key=lambda s: (s["commit_date"], s["run_at"]))

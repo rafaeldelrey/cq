@@ -5,6 +5,7 @@ planted-slop branch is in the PR's Tests section.
 """
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 
@@ -12,7 +13,7 @@ import pytest
 
 from cq import gate, qlty
 from cq.collectors import docstrings, secrets
-from cq.config import GateSettings, Settings, Target, load_gate
+from cq.config import GateSettings, Settings, Target, load_gate, load_settings
 from cq.context import Context
 from cq.proc import ToolError
 
@@ -102,8 +103,8 @@ def test_line_level_keeps_checks_and_the_smells_on_changed_lines(monkeypatch: py
 def test_branch_secrets_are_errors_without_values(monkeypatch: pytest.MonkeyPatch) -> None:
     rows = [{"rule": "generic-api-key", "file": "a.py", "line": 7, "commit": "abc1234", "date": "2026-10-14"}]
     calls: list[list[str]] = []
-    monkeypatch.setattr(secrets, "betterleaks", lambda args, cwd: calls.append(args) or rows)
-    found = gate.branch_secrets("base")
+    monkeypatch.setattr(secrets, "betterleaks", lambda args, cwd, config: calls.append(args) or rows)
+    found = gate.branch_secrets(SETTINGS, "base")
     assert calls[0][-1] == "--log-opts=base..HEAD"
     assert (found[0]["rule"], found[0]["severity"], found[0]["line"]) == ("in-branch-generic-api-key", "error", 7)
 
@@ -200,11 +201,16 @@ def test_blocking_list() -> None:
 
 def test_load_gate_refuses_an_unknown_mode(tmp_path: Path) -> None:
     pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text('[tool.code_quality.gate]\nmode = "strict"\n')
+    pyproject.write_text('[tool.cq.gate]\nmode = "strict"\n')
     with pytest.raises(ValueError, match="warn or block"):
-        load_gate(pyproject)
-    pyproject.write_text('[tool.code_quality.gate]\nblock = ["smells:*"]\n')
-    assert load_gate(pyproject) == GateSettings(mode="warn", block=("smells:*",))
+        load_gate(load_settings(tmp_path))
+    pyproject.write_text('[tool.cq.gate]\nblock = ["smells:*"]\n')
+    assert load_gate(load_settings(tmp_path)) == GateSettings(mode="warn", block=("smells:*",))
+
+
+def test_load_gate_reads_cq_toml_at_its_top_level(tmp_path: Path) -> None:
+    (tmp_path / "cq.toml").write_text('[gate]\nmode = "block"\n')
+    assert load_gate(load_settings(tmp_path)).mode == "block"
 
 
 def test_a_tool_error_is_recorded_not_raised() -> None:
@@ -217,13 +223,13 @@ def test_a_tool_error_is_recorded_not_raised() -> None:
     assert errors == {"qlty": "qlty 0.600.0 installed"}
 
 
-def fake_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, found: list[dict]) -> None:
-    """run_gate over stubbed git, line level, secrets and snapshots."""
+def fake_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, found: list[dict]) -> Settings:
+    """run_gate over stubbed git, line level, secrets and snapshots; the settings write under tmp_path."""
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123"}
     monkeypatch.setattr(gate, "git", lambda *a: answers.get(a[:1], ""))
-    monkeypatch.setattr(gate, "RUNS_DIR", tmp_path)
     monkeypatch.setattr(gate, "line_level", lambda ctx, base: found)
-    monkeypatch.setattr(gate, "branch_secrets", lambda base: [])
+    monkeypatch.setattr(gate, "branch_secrets", lambda settings, base: [])
+    return replace(SETTINGS, repo_root=tmp_path, data_dir=tmp_path / ".cq")
 
 
 SETTINGS = Settings(targets=TARGETS, jscpd="j", knip="k", complexity_limit=15, cognitive_limit=15)
@@ -235,26 +241,27 @@ FINDING = {"target": "repo", "tool": "smells", "rule": "function-parameters", "s
 def test_exit_code_by_mode(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: Literal["warn", "block"], report_only: bool, code: int
 ) -> None:
-    fake_run(monkeypatch, tmp_path, [FINDING])
+    settings = fake_run(monkeypatch, tmp_path, [FINDING])
     summary_file = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
     gate_settings = GateSettings(mode=mode, block=("smells:*",))
-    assert gate.run_gate(SETTINGS, gate_settings, "origin/main", report_only=report_only) == code
+    assert gate.run_gate(settings, gate_settings, "origin/main", report_only=report_only) == code
     assert "**1 blocking**" in summary_file.read_text()
-    out_dir = next(tmp_path.glob("*_gate_head123"))
+    out_dir = next(settings.runs_dir.glob("*_gate_head123"))
     row = json.loads((out_dir / "gate-findings.jsonl").read_text())
     assert (row["new"], row["blocking"]) == (True, True)
 
 
 def test_a_clean_branch_passes_in_block_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    fake_run(monkeypatch, tmp_path, [])
+    settings = fake_run(monkeypatch, tmp_path, [])
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
-    assert gate.run_gate(SETTINGS, GateSettings(mode="block"), "origin/main") == 0
-    assert "Nothing new" in next(tmp_path.glob("*_gate_*/gate.md")).read_text()
+    assert gate.run_gate(settings, GateSettings(mode="block"), "origin/main") == 0
+    assert "Nothing new" in next(settings.runs_dir.glob("*_gate_*/gate.md")).read_text()
+    assert (settings.data_dir / ".gitignore").read_text().endswith("*\n")  # a new data folder ignores itself
 
 
 def test_a_tool_that_did_not_run_fails_block_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    fake_run(monkeypatch, tmp_path, [])
+    settings = fake_run(monkeypatch, tmp_path, [])
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123", ("diff",): "M\tapps/app/app/a.py"}
     monkeypatch.setattr(gate, "git", lambda *a: answers.get(a[:1], ""))
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
@@ -263,8 +270,8 @@ def test_a_tool_that_did_not_run_fails_block_mode(monkeypatch: pytest.MonkeyPatc
         snap({"app": {"semgrep": {"scan_errors": 1}}}),
     ])  # fmt: skip
     monkeypatch.setattr(gate, "snapshot", lambda *a, **k: next(snapshots))
-    assert gate.run_gate(SETTINGS, GateSettings(mode="block"), "origin/main") == 1
-    text = next(tmp_path.glob("*_gate_*/gate.md")).read_text()
+    assert gate.run_gate(settings, GateSettings(mode="block"), "origin/main") == 1
+    text = next(settings.runs_dir.glob("*_gate_*/gate.md")).read_text()
     assert "app.aislop" in text and "base: app.semgrep" in text
 
 
@@ -286,6 +293,12 @@ def test_diff_status_keeps_deletions_and_renames_apart(monkeypatch: pytest.Monke
     assert renames == {"apps/app/app/old.py": "apps/app/app/new.py"}
     # a branch that only deletes an app file still measures the app
     assert "app" in gate.affected(TARGETS, ["apps/app/app/gone.py"])
+
+
+def test_an_app_at_the_repo_root_is_touched_by_any_change() -> None:
+    root_app = Target(name="acme", kind="python", root=".", source=("src",), tests=True)
+    assert gate.affected((root_app, REPO), ["src/acme/pricing.py"]) == ["acme", "repo"]
+    assert gate.lock_changed((root_app, REPO), ["uv.lock"]) == {"acme"}
 
 
 def test_a_renamed_file_keeps_its_findings_old() -> None:

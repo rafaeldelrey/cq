@@ -1,10 +1,12 @@
 """Take one snapshot: every collector on every target, at HEAD or at a past commit."""
 
+import hashlib
 import importlib.metadata
 import json
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 import traceback
@@ -14,20 +16,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from cq.collectors import COLLECTORS
-from cq.config import HISTORY_DIR, REPO_ROOT, RUNS_DIR, SCHEMA_VERSION, Settings, Target
+from cq.config import PINS, SCHEMA_VERSION, Settings, Target, ensure_data_dir
 from cq.context import Context
 from cq.proc import log, log_to, run
+from cq.toolconfig import used_configs
 
 PINNED_TOOLS = ("radon", "vulture", "interrogate", "complexipy", "semgrep", "pip-audit", "deptry", "import-linter")
 
 
-def git(*args: str, cwd: Path = REPO_ROOT) -> str:
-    """A git command's stdout, stripped."""
-    return run(["git", *args], cwd).strip()
+def git(*args: str, cwd: Path | None = None) -> str:
+    """A git command's stdout, stripped; in the current directory (the measured repo) by default."""
+    return run(["git", *args], cwd or Path.cwd()).strip()
 
 
 # System binaries: recorded rather than pinned (Homebrew upgrades them), with the flag that prints
-# the version. qlty is pinned in pyproject and checked by its collectors; recorded here too.
+# the version. qlty is pinned by the cq release and checked by its collectors; recorded here too.
 BINARIES = {"betterleaks": "version", "trufflehog": "--version", "vale": "--version", "qlty": "--version"}
 
 
@@ -51,9 +54,9 @@ def qlty_plugin_versions(checkout: Path) -> dict[str, str]:
 
 def tool_versions(settings: Settings, checkout: Path) -> dict[str, str]:
     """Every measuring tool's version for this snapshot: a change in one explains a step in the trend."""
-    pinned = {t: importlib.metadata.version(t) for t in PINNED_TOOLS}
+    pinned = {"cq": importlib.metadata.version("cq")} | {t: importlib.metadata.version(t) for t in PINNED_TOOLS}
     specs = {
-        "jscpd": settings.jscpd, "knip": settings.knip, "mutmut": "3.8.0", "qlty (pinned)": settings.qlty,
+        "jscpd": settings.jscpd, "knip": settings.knip, "mutmut": PINS["mutmut"], "qlty (pinned)": settings.qlty,
         "aislop": settings.aislop, "pyscn": settings.pyscn, "fallow": settings.fallow, "cspell": settings.cspell,
     }  # fmt: skip
     binaries = {tool: binary_version(tool, flag) for tool, flag in BINARIES.items()}
@@ -62,41 +65,57 @@ def tool_versions(settings: Settings, checkout: Path) -> dict[str, str]:
 
 def commit_info(rev: str, settings: Settings) -> dict:
     """The commit a snapshot measures, and whether the measured paths had uncommitted changes."""
-    sha = git("rev-parse", rev)
+    root = settings.repo_root
+    sha = git("rev-parse", rev, cwd=root)
     info = {
         "commit": sha,
         "short": sha[:7],
-        "commit_date": git("show", "-s", "--format=%cI", sha),
-        "subject": git("show", "-s", "--format=%s", sha),
+        "commit_date": git("show", "-s", "--format=%cI", sha, cwd=root),
+        "subject": git("show", "-s", "--format=%s", sha, cwd=root),
         "dirty": False,
     }
     if rev == "HEAD":
         roots = [t.root for t in settings.targets if t.kind != "repo"]  # the code measured, not the whole repo
-        info["dirty"] = bool(git("status", "--porcelain", "--", *roots))
+        # cq's own output never makes the code dirty, wherever its data folder is.
+        produced = [
+            f":(exclude){p.relative_to(root)}"
+            for p in (settings.history_dir, settings.runs_dir)
+            if p.is_relative_to(root)
+        ]
+        info["dirty"] = bool(git("status", "--porcelain", "--", *roots, *produced, cwd=root)) if roots else False
     return info
 
 
+def worktrees_dir(settings: Settings) -> Path:
+    """Where old commits are checked out: outside the repo, so no tool run at its root walks into them."""
+    key = hashlib.sha256(str(settings.repo_root).encode()).hexdigest()[:10]
+    # Resolved: macOS's temp folder is behind a symlink (/var → /private/var), and tool output names
+    # the resolved path, which must match the checkout's for paths to come out repo-relative.
+    return Path(tempfile.gettempdir()).resolve() / "cq-worktrees" / key
+
+
 @contextmanager
-def checkout_at(rev: str) -> Iterator[Path]:
+def checkout_at(rev: str, settings: Settings) -> Iterator[Path]:
     """The repo itself for HEAD; otherwise a temporary detached worktree, removed afterwards."""
+    root = settings.repo_root
     if rev == "HEAD":
-        yield REPO_ROOT
+        yield root
         return
-    path = RUNS_DIR / "_worktrees" / git("rev-parse", "--short", rev)
+    path = worktrees_dir(settings) / git("rev-parse", "--short", rev, cwd=root)
     if path.exists():
-        git("worktree", "remove", "--force", str(path))
+        git("worktree", "remove", "--force", str(path), cwd=root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    git("worktree", "add", "--detach", "--force", str(path), rev)
+    git("worktree", "add", "--detach", "--force", str(path), rev, cwd=root)
     try:
         yield path
     finally:
-        git("worktree", "remove", "--force", str(path))
+        git("worktree", "remove", "--force", str(path), cwd=root)
 
 
-def prepare(target: Target, checkout: Path) -> None:
+def prepare(target: Target, checkout: Path, settings: Settings) -> None:
     """Install the UI's node_modules in a worktree (the repo's own are assumed installed)."""
     app = target.app_dir(checkout)
-    if target.kind == "typescript" and checkout != REPO_ROOT and not (app / "node_modules").exists():
+    if target.kind == "typescript" and checkout != settings.repo_root and not (app / "node_modules").exists():
         run(["npm", "ci", "--no-audit", "--no-fund"], app)
 
 
@@ -147,21 +166,23 @@ def snapshot(
         "run_at": run_at.isoformat(timespec="seconds"),
         **info,
         "partial": bool(targets or tools),
-        "tool_versions": tool_versions(settings, REPO_ROOT),
+        "tool_versions": tool_versions(settings, settings.repo_root),
+        "configs": used_configs(settings),
         "targets": {},
         "errors": {},
     }
-    say = RunLog(RUNS_DIR / run_id / "run.log")
+    ensure_data_dir(settings)
+    say = RunLog(settings.runs_dir / run_id / "run.log")
     say(f"run {run_id}: {info['short']} {info['subject'][:80]}")
-    with checkout_at(rev) as checkout:
+    with checkout_at(rev, settings) as checkout:
         for target in settings.targets:
             if targets and target.name not in targets:
                 continue
             if not target.app_dir(checkout).exists() or not target.source_paths(checkout):
                 snap["errors"][target.name] = "not present at this commit"
                 continue
-            prepare(target, checkout)
-            raw_dir = RUNS_DIR / run_id / target.name
+            prepare(target, checkout, settings)
+            raw_dir = settings.runs_dir / run_id / target.name
             raw_dir.mkdir(parents=True, exist_ok=True)
             ctx = Context(target=target, checkout=checkout, raw_dir=raw_dir, settings=settings, full=full)
             measured: dict = {}
@@ -180,45 +201,45 @@ def snapshot(
     return snap
 
 
-def history_path(snap: dict) -> Path:
+def history_path(snap: dict, settings: Settings) -> Path:
     """One file per measured commit: re-measuring a commit replaces its file, so trends stay one point per commit."""
     day = snap["commit_date"][:10]
     suffix = "-dirty" if snap["dirty"] else ""
-    return HISTORY_DIR / f"{day}_{snap['short']}{suffix}.json"
+    return settings.history_dir / f"{day}_{snap['short']}{suffix}.json"
 
 
-def save(snap: dict, *, to_history: bool) -> list[Path]:
+def save(snap: dict, settings: Settings, *, to_history: bool) -> list[Path]:
     """Write the snapshot under runs/<run_id>/ and, for a complete run, into history/."""
     paths = []
-    raw = RUNS_DIR / snap["run_id"] / "snapshot.json"
+    raw = settings.runs_dir / snap["run_id"] / "snapshot.json"
     raw.parent.mkdir(parents=True, exist_ok=True)
     raw.write_text(json.dumps(snap, indent=1) + "\n")
     paths.append(raw)
     if to_history:
-        HISTORY_DIR.mkdir(exist_ok=True)
-        dest = history_path(snap)
+        settings.history_dir.mkdir(parents=True, exist_ok=True)
+        dest = history_path(snap, settings)
         dest.write_text(json.dumps(snap, indent=1) + "\n")
         paths.append(dest)
     return paths
 
 
-def first_parent_commits(since: str, every_days: int, branch: str = "main") -> list[str]:
+def first_parent_commits(since: str, every_days: int, cwd: Path, branch: str = "main") -> list[str]:
     """The last commit on ``branch`` (first parent) before each step from ``since`` to now."""
     start = datetime.fromisoformat(since).replace(tzinfo=UTC)
     now = datetime.now(UTC)
     shas: list[str] = []
     step = start
     while step < now:
-        sha = git("rev-list", "--first-parent", "-1", f"--before={step.isoformat()}", branch)
+        sha = git("rev-list", "--first-parent", "-1", f"--before={step.isoformat()}", branch, cwd=cwd)
         if sha and sha not in shas:
             shas.append(sha)
         step = datetime.fromtimestamp(step.timestamp() + every_days * 86400, UTC)
     return shas
 
 
-def cleanup_worktrees() -> None:
+def cleanup_worktrees(settings: Settings) -> None:
     """Remove worktrees a crashed run left behind."""
-    root = RUNS_DIR / "_worktrees"
+    root = worktrees_dir(settings)
     if root.exists():
         shutil.rmtree(root)
-    subprocess.run(["git", "worktree", "prune"], cwd=REPO_ROOT, check=False)
+    subprocess.run(["git", "worktree", "prune"], cwd=settings.repo_root, check=False)

@@ -1,8 +1,8 @@
-# Rules for test code, run by the semgrep collector over each app's tests (the production rules in
-# ../hanbot.yml never look at tests). AGENTS.md → Code Review Rules flags "tests that only assert
-# that mocks were called" as P1: such a test passes whatever the code computes.
+# Rules for test code, run by the semgrep collector over each target's tests (the production rules
+# in ../cq.yml never look at tests). A test that only asserts that mocks were called passes
+# whatever the code computes.
 rules:
-  - id: hanbot-test-only-asserts-mocks
+  - id: cq-test-only-asserts-mocks
     message: >-
       This test's only checks are mock-call assertions (assert_called*, assert_awaited*, …): it
       proves the code called something, not that it produced the right result. Assert on the

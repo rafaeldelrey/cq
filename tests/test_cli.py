@@ -223,3 +223,14 @@ def test_a_measurement_change_is_flagged_above_the_numbers(repo: Path, capsys: p
     assert "cspell config changed (cspell.json)" in report
     assert report.index("Measurement changed") < report.index("## Since the previous snapshot")
     assert "cspell config changed" in (run_dir / "dashboard.html").read_text()
+
+
+def test_the_latest_run_is_the_last_written_not_the_last_named(tmp_path: Path) -> None:
+    for name in (
+        "20261017T071548Z_ffffff0",
+        "20261017T071548Z_0000000",
+    ):  # same second, the later run's sha sorts first
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "snapshot.json").write_text("{}")
+    assert latest_run(tmp_path) == tmp_path / "20261017T071548Z_0000000"
+    assert latest_run(tmp_path / "none") is None

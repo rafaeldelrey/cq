@@ -12,9 +12,12 @@ from cq.metrics import load_history
 
 
 def latest_run(runs_dir: Path) -> Path | None:
-    """The newest run folder that holds a snapshot."""
-    runs = sorted(p.parent for p in runs_dir.glob("*/snapshot.json"))
-    return runs[-1] if runs else None
+    """The run folder whose snapshot was written last.
+
+    By write time, not name: two runs in the same second sort by commit sha, not by when they ran.
+    """
+    snapshots = sorted(runs_dir.glob("*/snapshot.json"), key=lambda p: (p.stat().st_mtime_ns, p.parent.name))
+    return snapshots[-1].parent if snapshots else None
 
 
 def write_reports(

@@ -33,10 +33,13 @@ def first_party_packages(ctx: Context) -> list[str]:
             names.append(path.stem)
         elif (path / "__init__.py").exists():
             names.append(path.name)
+        elif path.name == "src":  # a container: its packages and its direct modules are what imports name
+            names.extend(c.name for c in sorted(path.iterdir()) if c.is_dir() and has_python(c))
+            names.extend(f.stem for f in sorted(path.glob("*.py")))
         else:
-            inner = [c.name for c in sorted(path.iterdir()) if c.is_dir() and has_python(c)]
+            inner = [c.name for c in sorted(path.iterdir()) if (c / "__init__.py").exists()]
             # A folder of modules with no package inside is itself a namespace package (acme/core.py).
-            names.extend(inner or ([path.name] if any(path.glob("*.py")) else []))
+            names.extend(inner or ([path.name] if has_python(path) else []))
     return names
 
 

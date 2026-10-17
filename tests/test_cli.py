@@ -8,7 +8,7 @@ import pytest
 
 from cq import cli, complexity_gate, runner
 from cq.backfill import commits_to_measure
-from cq.config import load_settings
+from cq.config import Target, load_settings
 from cq.report import latest_run
 
 PRICING = '''"""Pricing."""
@@ -284,3 +284,26 @@ def test_backfill_refuses_a_step_under_a_day(repo: Path, capsys: pytest.CaptureF
     assert "--every must be at least 1" in capsys.readouterr().err
     with pytest.raises(ValueError, match="at least a day apart"):
         runner.first_parent_commits("2026-01-01", -1, repo)
+
+
+@pytest.mark.parametrize(
+    ("lock", "first"),
+    [("pnpm-lock.yaml", "pnpm"), ("yarn.lock", "yarn"), ("package-lock.json", "npm ci"), (None, "npm install")],
+)
+def test_a_worktree_installs_with_the_apps_own_package_manager(tmp_path: Path, lock: str | None, first: str) -> None:
+    if lock:
+        (tmp_path / lock).write_text("")
+    assert " ".join(runner.install_command(tmp_path)).startswith(first)
+
+
+def test_a_failed_install_loses_only_that_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ui = Target(name="ui", kind="typescript", root="ui", source=("src",), tests=False)
+    (tmp_path / "old" / "ui").mkdir(parents=True)
+    settings = load_settings(tmp_path)
+
+    def fail(cmd: list[str], cwd: Path) -> str:
+        raise runner.ToolError("pnpm: command not found")
+
+    monkeypatch.setattr(runner, "run", fail)
+    assert runner.prepare(ui, tmp_path / "old", settings) == "dependency install failed: pnpm: command not found"
+    assert runner.prepare(ui, settings.repo_root, settings) is None  # the repo's own node_modules are assumed

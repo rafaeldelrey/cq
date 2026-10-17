@@ -18,7 +18,7 @@ from pathlib import Path
 from cq.collectors import COLLECTORS
 from cq.config import PINS, SCHEMA_VERSION, Settings, Target, ensure_data_dir
 from cq.context import Context
-from cq.proc import log, log_to, run
+from cq.proc import ToolError, log, log_to, run
 from cq.toolconfig import used_configs
 
 PINNED_TOOLS = ("radon", "vulture", "interrogate", "complexipy", "semgrep", "pip-audit", "deptry", "import-linter")
@@ -112,11 +112,33 @@ def checkout_at(rev: str, settings: Settings) -> Iterator[Path]:
         git("worktree", "remove", "--force", str(path), cwd=root)
 
 
-def prepare(target: Target, checkout: Path, settings: Settings) -> None:
-    """Install the UI's node_modules in a worktree (the repo's own are assumed installed)."""
+# The frozen install for each lockfile; an app with none gets a plain npm install.
+INSTALLS = (
+    ("pnpm-lock.yaml", ["pnpm", "install", "--frozen-lockfile"]),
+    ("yarn.lock", ["yarn", "install", "--frozen-lockfile"]),
+    ("package-lock.json", ["npm", "ci", "--no-audit", "--no-fund"]),
+)
+
+
+def install_command(app: Path) -> list[str]:
+    """The package manager's frozen install for this app, chosen by its lockfile."""
+    return next((cmd for lock, cmd in INSTALLS if (app / lock).exists()), ["npm", "install", "--no-audit", "--no-fund"])
+
+
+def prepare(target: Target, checkout: Path, settings: Settings) -> str | None:
+    """Install the UI's node_modules in a worktree (the repo's own are assumed installed).
+
+    Returns the error when the install fails, so that target is recorded as not measured and the
+    other targets still are.
+    """
     app = target.app_dir(checkout)
-    if target.kind == "typescript" and checkout != settings.repo_root and not (app / "node_modules").exists():
-        run(["npm", "ci", "--no-audit", "--no-fund"], app)
+    if target.kind != "typescript" or checkout == settings.repo_root or (app / "node_modules").exists():
+        return None
+    try:
+        run(install_command(app), app)
+    except ToolError as exc:  # intentional degraded mode: one app's install must not lose the others
+        return f"dependency install failed: {exc}"[:2000]
+    return None
 
 
 class RunLog:
@@ -181,7 +203,9 @@ def snapshot(
             if not target.app_dir(checkout).exists() or not target.source_paths(checkout):
                 snap["errors"][target.name] = "not present at this commit"
                 continue
-            prepare(target, checkout, settings)
+            if install_error := prepare(target, checkout, settings):
+                snap["errors"][target.name] = install_error
+                continue
             raw_dir = settings.runs_dir / run_id / target.name
             raw_dir.mkdir(parents=True, exist_ok=True)
             ctx = Context(target=target, checkout=checkout, raw_dir=raw_dir, settings=settings, full=full)

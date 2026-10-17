@@ -353,6 +353,7 @@ def _suppressions(t: str, d: dict) -> Iterator[Finding]:
 
 
 def _containers(t: str, d: dict) -> Iterator[Finding]:
+    """hadolint's Dockerfile findings, and the image's high and critical vulnerabilities from Trivy."""
     # aislop-ignore-next-line ai-slop/python-chained-dict-get -- stored snapshots, older ones included, may lack this part
     for i in d.get("dockerfile", {}).get("items", []):
         yield make(
@@ -394,6 +395,7 @@ def _freshness(t: str, d: dict) -> Iterator[Finding]:
 
 
 def _scripts(t: str, d: dict) -> Iterator[Finding]:
+    """shellcheck, actionlint and zizmor findings."""
     levels = {"error": "error", "warning": "warning"}
     # aislop-ignore-next-line ai-slop/python-chained-dict-get -- stored snapshots, older ones included, may lack this part
     for i in d.get("shell", {}).get("items", []):

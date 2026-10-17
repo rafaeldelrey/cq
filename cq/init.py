@@ -108,7 +108,10 @@ def ask_scope() -> str:
     if not sys.stdin.isatty():
         print("[u/p/s] s (not a terminal: pass --skills user|project|none)")
         return "none"
-    return ANSWERS.get(input("[u/p/s] ").strip().lower()[:1], "none")
+    answer = input("[u/p/s] ").strip().lower()[:1]
+    if answer not in ANSWERS:
+        print(f"{answer or 'No answer'}: not u, p or s, so skipped.")
+    return ANSWERS.get(answer, "none")
 
 
 def add_plugin(settings: Settings, *, skills: str | None, assume_yes: bool) -> None:
@@ -120,13 +123,15 @@ def add_plugin(settings: Settings, *, skills: str | None, assume_yes: bool) -> N
         )
         return
     found = plugin.installed(claude, settings.repo_root)
-    if found:
-        where = "for you" if "user" in found else "for this repo"
+    here = {"project", "local"} & set(found)
+    # Installed for the user still leaves room for an explicit --skills project: the team install.
+    if found and (skills != "project" or here):
+        where = "for this repo" if here else "for you"
         print(f"\ncq's Claude Code plugin is already installed {where}.")
         return
     choice = skills or ("user" if assume_yes else ask_scope())
     if choice == "none":
-        print("Skipped the Claude Code plugin: `cq init` offers it again.")
+        print("Skipped the Claude Code plugin; run `cq init` again to install it.")
         return
     scope: plugin.Scope = "project" if choice == "project" else "user"
     if not plugin.install(claude, scope, settings.repo_root):

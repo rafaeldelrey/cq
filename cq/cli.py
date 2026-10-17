@@ -151,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
     """Parse the command line and run one command."""
     args = parser().parse_args(argv)
     if args.command == "doctor":
-        return doctor()
+        return doctor(args.repo.resolve())
     if args.command == "setup":
         return setup(assume_yes=args.yes)
     repo = args.repo.resolve()

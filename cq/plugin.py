@@ -35,7 +35,11 @@ def capture(cmd: list[str], cwd: Path) -> str | None:
 def call(cmd: list[str], cwd: Path) -> int:
     """Run a command with its output going straight to the terminal, as it would by hand."""
     sys.stdout.flush()  # what cq printed so far comes first, even through a pipe
-    return subprocess.run(cmd, cwd=cwd, check=False).returncode
+    try:
+        return subprocess.run(cmd, cwd=cwd, check=False, timeout=600).returncode
+    except subprocess.TimeoutExpired:  # a clone or download that stalled: that step failed, init goes on
+        print(f"{' '.join(cmd[:3])} timed out after 10 minutes.")
+        return 1
 
 
 def installed(claude: str, repo_root: Path) -> dict[str, str]:
@@ -47,12 +51,12 @@ def installed(claude: str, repo_root: Path) -> dict[str, str]:
     out = capture([claude, "plugin", "list", "--json"], repo_root)
     try:
         rows = json.loads(out) if out else []
-    except json.JSONDecodeError:
+    except json.JSONDecodeError:  # output claude didn't mean as JSON: treated as "can't tell"
         return {}
     found: dict[str, str] = {}
     here = repo_root.resolve()
     for row in rows if isinstance(rows, list) else []:
-        if row.get("id") != PLUGIN:
+        if not isinstance(row, dict) or row.get("id") != PLUGIN:
             continue
         scope = row.get("scope", "")
         project = row.get("projectPath")
@@ -74,14 +78,19 @@ def install(claude: str, scope: Scope, repo_root: Path) -> bool:
     return all(call(cmd, repo_root) == 0 for cmd in commands(claude, scope))
 
 
-def status(repo_root: Path) -> tuple[bool, str, str]:
-    """For doctor: (installed, what was found, the fix)."""
+def repo_root_of(folder: Path) -> Path:
+    """The git repo ``folder`` is in (a project install is keyed by the repo's root), or the folder."""
+    top = capture(["git", "rev-parse", "--show-toplevel"], folder)
+    return Path(top.strip()) if top else folder
+
+
+def status(folder: Path) -> tuple[bool, str, str]:
+    """For doctor, run anywhere in a repo: (installed, what was found, the fix)."""
     claude = claude_cli()
     if claude is None:
         return False, "Claude Code not installed", "in Claude Code: " + PASTE.replace("\n", ", then ")
-    found = installed(claude, repo_root)
+    found = installed(claude, repo_root_of(folder))
     if not found:
         return False, "not installed", "cq init"
-    where = ", ".join(f"{scope}" for scope in sorted(found))
-    version = next(iter(found.values()))
-    return True, f"{PLUGIN} {version} ({where})", ""
+    where = ", ".join(f"{scope} {version}" for scope, version in sorted(found.items()))
+    return True, f"{PLUGIN} ({where})", ""

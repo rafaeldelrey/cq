@@ -85,15 +85,18 @@ def check(tool: Tool) -> Check:
 PLUGIN_LABEL = "claude plugin"
 
 
-def plugin_line(width: int) -> str:
-    """cq's Claude Code plugin, for the repo doctor runs in: optional, never a failure."""
-    ok, found, fix = plugin.status(Path.cwd())
+def plugin_line(width: int, folder: Path) -> str:
+    """cq's Claude Code plugin, for the repo ``folder`` is in: optional, never a failure."""
+    ok, found, fix = plugin.status(folder)
     line = f"{'ok ' if ok else '-- '} {PLUGIN_LABEL:<{width}}  {found}"
     return f"{line}\n      for /code-quality and /setup-cq: {fix}" if fix else line
 
 
-def doctor() -> int:
-    """Print every tool's state; exit 1 when a required one is missing or qlty is off its pin."""
+def doctor(folder: Path | None = None) -> int:
+    """Print every tool's state; exit 1 when a required one is missing or qlty is off its pin.
+
+    ``folder`` (default: the current one) is the repo the plugin line is about.
+    """
     checks = [check(t) for t in TOOLS]
     width = max(len(PLUGIN_LABEL), *(len(t.name) for t in TOOLS))
     for c in checks:
@@ -103,7 +106,7 @@ def doctor() -> int:
             state = f"{state} (cq pins {PINS['qlty']})"
         line = f"{mark} {c.tool.name:<{width}}  {state}"
         print(f"{line}\n      for {c.tool.needed_for}: {c.fix}" if c.fix else line)
-    print(plugin_line(width))
+    print(plugin_line(width, folder or Path.cwd()))
     missing = [c for c in checks if not c.ok and not c.tool.optional]
     if missing:
         print(f"\n{len(missing)} required tool(s) missing or off their pin: `cq setup` installs them.")

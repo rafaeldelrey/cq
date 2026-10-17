@@ -29,7 +29,7 @@ from cq.collectors import COLLECTORS
 from cq.config import Settings, load_gate, load_settings
 from cq.doctor import doctor, setup
 from cq.gate import run_gate
-from cq.init import init
+from cq.init import SKILLS_CHOICES, init
 from cq.report import latest_run, write_reports
 from cq.runner import git, save, snapshot
 
@@ -80,6 +80,11 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="which measuring tools are installed")
     for name, text in (("setup", "install the missing tools"), ("init", "set this repo up for cq")):
         sub.add_parser(name, help=text).add_argument("--yes", action="store_true", help="answer yes to every question")
+    sub.choices["init"].add_argument(
+        "--skills",
+        choices=SKILLS_CHOICES,
+        help="install cq's Claude Code plugin for the user or this project, or not, without asking (--yes: user)",
+    )
     return p
 
 
@@ -157,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     config = repo / args.config if args.config and not args.config.is_absolute() else args.config
     settings = load_settings(repo, config)
     if args.command == "init":
-        return init(settings, assume_yes=args.yes)
+        return init(settings, assume_yes=args.yes, skills=args.skills)
     if args.command == "run":
         return cmd_run(settings, args)
     if args.command == "gate":

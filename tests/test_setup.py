@@ -157,7 +157,7 @@ def test_init_adds_tool_cq_to_pyproject_and_qlty_config(tmp_path: Path, capsys: 
     assert [t.name for t in settings.targets] == ["acme", "repo"]  # still detected
     assert (tmp_path / ".qlty" / "qlty.toml").read_text() == (DEFAULTS_DIR / "qlty.toml").read_text()
     out = capsys.readouterr().out
-    assert "/plugin install cq@cq" in out
+    assert "/plugin install cq@cq" in out  # no claude here: the lines to paste in Claude Code
     # A second init changes nothing.
     before = (tmp_path / "pyproject.toml").read_text()
     init.init(settings, assume_yes=True)

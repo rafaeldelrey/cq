@@ -15,6 +15,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from cq import plugin
 from cq.config import PINS
 from cq.proc import run
 
@@ -81,10 +82,20 @@ def check(tool: Tool) -> Check:
     return Check(tool, found, bool(found), "" if found else f"brew install {tool.formula}")
 
 
+PLUGIN_LABEL = "claude plugin"
+
+
+def plugin_line(width: int) -> str:
+    """cq's Claude Code plugin, for the repo doctor runs in: optional, never a failure."""
+    ok, found, fix = plugin.status(Path.cwd())
+    line = f"{'ok ' if ok else '-- '} {PLUGIN_LABEL:<{width}}  {found}"
+    return f"{line}\n      for /code-quality and /setup-cq: {fix}" if fix else line
+
+
 def doctor() -> int:
     """Print every tool's state; exit 1 when a required one is missing or qlty is off its pin."""
     checks = [check(t) for t in TOOLS]
-    width = max(len(t.name) for t in TOOLS)
+    width = max(len(PLUGIN_LABEL), *(len(t.name) for t in TOOLS))
     for c in checks:
         mark = "ok " if c.ok else ("-- " if c.tool.optional else "XX ")
         state = c.found or "not installed"
@@ -92,6 +103,7 @@ def doctor() -> int:
             state = f"{state} (cq pins {PINS['qlty']})"
         line = f"{mark} {c.tool.name:<{width}}  {state}"
         print(f"{line}\n      for {c.tool.needed_for}: {c.fix}" if c.fix else line)
+    print(plugin_line(width))
     missing = [c for c in checks if not c.ok and not c.tool.optional]
     if missing:
         print(f"\n{len(missing)} required tool(s) missing or off their pin: `cq setup` installs them.")

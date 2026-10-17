@@ -24,10 +24,12 @@ def claude_cli() -> str | None:
 
 
 def capture(cmd: list[str], cwd: Path) -> str | None:
-    """A command's stdout, or None when it failed or hung (the caller then knows nothing)."""
+    """A command's stdout, or None when it failed, hung or isn't installed (the caller then knows nothing)."""
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False, timeout=60)
     except subprocess.TimeoutExpired:  # a claude that prompts or hangs: treated as "can't tell"
+        return None
+    except FileNotFoundError:  # the command isn't installed (git, on a fresh machine): "can't tell"
         return None
     return proc.stdout if proc.returncode == 0 else None
 

@@ -33,7 +33,8 @@ analysis.
 
 ```bash
 uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.2.0
-cq doctor && cq setup        # the measuring tools
+cq doctor                    # which measuring tools are missing
+cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
 cq run                       # the first snapshot; open the dashboard.html it prints
 ```

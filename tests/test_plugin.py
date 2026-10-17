@@ -264,3 +264,14 @@ def test_cq_doctor_reports_the_plugin_for_the_repo_given(
     monkeypatch.chdir(tmp_path)
     assert cli.main(["--repo", str(repo), "doctor"]) == 0
     assert seen == [repo.resolve()]
+
+
+def test_a_missing_git_leaves_the_folder_as_the_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.undo()  # the conftest guard off: subprocess itself is faked here, nothing runs
+
+    def missing(*args: object, **kwargs: object) -> None:
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(plugin.subprocess, "run", missing)
+    assert plugin.capture(["git", "rev-parse", "--show-toplevel"], tmp_path) is None
+    assert plugin.repo_root_of(tmp_path) == tmp_path

@@ -3,10 +3,13 @@
 Nothing here is required: in a repo with a pyproject.toml at its root, ``cq run`` detects its
 targets without any setting. ``init`` adds what a repo keeps for good: a starter ``[tool.cq]`` (or
 ``cq.toml``) with the gate, and qlty's config, without which the qlty-based tools report an error.
+It also offers cq's Claude Code plugin, for the user or for the repo.
 """
 
 import shutil
+import sys
 
+from cq import plugin
 from cq.config import CONFIG_FILE, DEFAULTS_DIR, Settings, find_config
 from cq.doctor import confirm
 
@@ -25,7 +28,8 @@ BLOCK = (
     "ratchet:*",
     "docstrings:missing-docstring",
 )
-PLUGIN_INSTALL = "/plugin marketplace add rafaeldelrey/cq\n/plugin install cq@cq"
+SKILLS_CHOICES = ("user", "project", "none")
+ANSWERS = {"u": "user", "p": "project", "s": "none"}
 
 
 def starter(prefix: str) -> str:
@@ -88,13 +92,64 @@ def add_qlty(settings: Settings, *, assume_yes: bool) -> None:
     print("Wrote .qlty/qlty.toml.")
 
 
-def init(settings: Settings, *, assume_yes: bool = False) -> int:
-    """Describe the repo, then offer the settings and qlty's config; print the plugin's install line."""
+SCOPE_NOTES: tuple[tuple[str, plugin.Scope, str], ...] = (
+    ("u", "user", "just you, in every repo; nothing written here"),
+    ("p", "project", "this repo: writes .claude/settings.json, commit it and the team gets it"),
+)
+
+
+def ask_scope() -> str:
+    """Where to install the plugin: user, project or none; none without a terminal to ask on."""
+    print("\nInstall the cq skills for Claude Code (/code-quality, /setup-cq)?")
+    for key, scope, note in SCOPE_NOTES:
+        runs = " && ".join(" ".join(cmd) for cmd in plugin.commands("claude", scope))
+        print(f"  {key}  {note}\n       runs: {runs}")
+    print("  s  skip")
+    if not sys.stdin.isatty():
+        print("[u/p/s] s (not a terminal: pass --skills user|project|none)")
+        return "none"
+    answer = input("[u/p/s] ").strip().lower()[:1]
+    if answer not in ANSWERS:
+        print(f"{answer or 'No answer'}: not u, p or s, so skipped.")
+    return ANSWERS.get(answer, "none")
+
+
+def add_plugin(settings: Settings, *, skills: str | None, assume_yes: bool) -> None:
+    """Offer cq's Claude Code plugin, unless it's already installed for this repo or the user."""
+    claude = plugin.claude_cli()
+    if claude is None:
+        print(
+            f"\nThe cq skills come as a Claude Code plugin. Claude Code isn't on the PATH here; in Claude Code:\n{plugin.PASTE}"
+        )
+        return
+    found = plugin.installed(claude, settings.repo_root)
+    here = {"project", "local"} & set(found)
+    # An explicit --skills project is the team install: only a project install (the committed
+    # .claude/settings.json) already gives it; a user or local one (settings.local.json) doesn't.
+    if found and (skills != "project" or "project" in found):
+        where = "for this repo" if here else "for you"
+        print(f"\ncq's Claude Code plugin is already installed {where}.")
+        return
+    choice = skills or ("user" if assume_yes else ask_scope())
+    if choice == "none":
+        print("Skipped the Claude Code plugin; run `cq init` again to install it.")
+        return
+    scope: plugin.Scope = "project" if choice == "project" else "user"
+    if not plugin.install(claude, scope, settings.repo_root):
+        print(f"The plugin wasn't installed (see claude's output above). In Claude Code instead:\n{plugin.PASTE}")
+        return
+    if scope == "project":
+        print("Installed for this repo: commit .claude/settings.json, and the team gets the skills.")
+    else:
+        print("Installed for you: /code-quality and /setup-cq work in every repo.")
+
+
+def init(settings: Settings, *, assume_yes: bool = False, skills: str | None = None) -> int:
+    """Describe the repo, then offer the settings, qlty's config and the Claude Code plugin."""
     describe(settings)
     print()
     add_settings(settings, assume_yes=assume_yes)
     add_qlty(settings, assume_yes=assume_yes)
-    print(f"\nThe /code-quality and /setup-cq skills come as a Claude Code plugin. In Claude Code:\n{PLUGIN_INSTALL}")
-    print("A team gets it by enabling the plugin in the repo's .claude/settings.json.")
+    add_plugin(settings, skills=skills, assume_yes=assume_yes)
     print("\nNext: `cq doctor`, then `cq run`.")
     return 0

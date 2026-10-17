@@ -4,6 +4,26 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.2.0] - 2026-10-17
+
+### Added
+
+- `cq init` offers cq's Claude Code plugin (`/code-quality`, `/setup-cq`): just you (user scope),
+  this repo (project scope, written to `.claude/settings.json` for the team), or skip. It runs
+  `claude plugin marketplace add` then `claude plugin install` at the chosen scope. It doesn't ask
+  when the plugin is already installed for the user or for this repo, and without Claude Code it
+  prints the lines to paste. `--skills user|project|none` answers without asking; `--yes` alone
+  means user.
+- `cq doctor` reports the plugin as an optional `claude plugin` line.
+- The README opens with two quick starts: from Claude Code (`/setup-cq`) and from the terminal.
+
+### Changed
+
+- `/setup-cq` passes `--skills` to `cq init`, and offers the project install so the team gets the
+  skills.
+
+No measurement changed: snapshots from 0.1.0 and 0.2.0 compare directly.
+
 ## [0.1.0] - 2026-10-17
 
 First release, extracted from angel-monitor's `code_quality/` (angel-monitor#391).

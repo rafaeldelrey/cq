@@ -14,7 +14,7 @@ let them commit.
 Check with `cq --version` (or `command -v cq`). If it is missing:
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.1.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.2.0
 ```
 
 Use the newest release tag (`git ls-remote --tags git@github.com:rafaeldelrey/cq.git`): a tag pins
@@ -35,7 +35,7 @@ collectors skip when a repo has no Dockerfile or image.
 ## 3. The repo
 
 Run `cq init` without `--yes` first if the user wants to answer each question in the terminal;
-otherwise describe what it will do and run `cq init --yes` after their yes:
+otherwise describe what it will do and run it with the answers they chose:
 
 - **Settings:** a starter `[tool.cq]` in `pyproject.toml` (or `cq.toml` when there is none) with
   the PR gate in `warn` mode. Targets stay detected: a `pyproject.toml` at the root is one Python
@@ -43,6 +43,12 @@ otherwise describe what it will do and run `cq init --yes` after their yes:
   entries: ask the user for each app's root, kind and production folders.
 - **qlty's config:** `.qlty/qlty.toml`, cq's default, when the repo has none. Without it the
   qlty-based tools (radarlint, smells, workflow security, the gate's line checks) report an error.
+- **This plugin:** it is already installed (this skill is running), for the user or for the repo.
+  `cq init` says which. If it is installed only for the user, ask whether the team should get it
+  too. On a yes, pass `--skills project`: that writes the repo's `.claude/settings.json`, which the
+  user commits. Otherwise pass `--skills none`.
+
+So the usual run is `cq init --yes --skills none` (or `--skills project`).
 
 Then point out the repo's own configs cq will read if they exist, and offer to add the ones that
 matter for this repo: a `cspell.json` with its technical terms, a `.gitleaks.toml` allowlist for
@@ -59,5 +65,5 @@ error from `runs/<run>/<target>/<tool>.log`. Then offer `/code-quality report` f
 - In CI, the gate is `cq gate --base origin/main` after installing cq and the tools. Its summary
   goes to the job summary on GitHub Actions. It stays in `warn` mode until the team agrees to
   `block`.
-- Colleagues get these skills by enabling the plugin in the repo's `.claude/settings.json`; offer
-  to add it.
+- Colleagues get these skills from the repo's `.claude/settings.json` once the plugin is installed
+  for the project (step 3). They need read access to `rafaeldelrey/cq`.

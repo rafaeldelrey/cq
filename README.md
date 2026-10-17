@@ -14,6 +14,33 @@ are always comparable:
   shell scripts and GitHub workflows, broken doc links.
 - **AI slop:** radarlint, qlty smells, aislop, pyscn, fallow, vale, cspell.
 
+## Quick start
+
+Two ways in; both end with the same setup.
+
+**From Claude Code.** Claude installs cq, its tools and the repo's setup, and asks you before each step:
+
+```
+/plugin marketplace add rafaeldelrey/cq
+/plugin install cq@cq
+/setup-cq
+```
+
+Run `/setup-cq` in the repo you want to measure. Then use `/code-quality` for a snapshot and an
+analysis.
+
+**From the terminal:**
+
+```bash
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.2.0
+cq doctor                    # which measuring tools are missing
+cq setup                     # installs them, asking first
+cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
+cq run                       # the first snapshot; open the dashboard.html it prints
+```
+
+The steps below explain each of these.
+
 **Contents:**
 1. [Set up your machine](#1-set-up-your-machine) (once)
 2. [Set up a repository](#2-set-up-a-repository) (once per repo)
@@ -44,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.1.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.2.0
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -108,9 +135,19 @@ Data: /Users/you/work/my-repo/.cq (history/ and runs/, never committed)
 2. **qlty's config.** It writes `.qlty/qlty.toml` when the repo has none. Without that file the
    qlty-based tools don't run: radarlint, smells, workflow security and the gate's line checks
    report an error saying "run `cq init`".
+3. **The Claude Code plugin** (the `/code-quality` and `/setup-cq` skills). It shows the two
+   `claude` commands for each choice, then asks:
+   - **u, just you:** installed for your user, in every repo, with nothing written to this one;
+   - **p, this repo:** written to the repo's `.claude/settings.json`; commit it, and everyone who
+     opens the repo in Claude Code gets the skills;
+   - **s, skip.**
 
-Run `cq init --yes` to accept both without the questions. Then commit what it changed: those
-files are the repo's, not cq's.
+   It doesn't ask when the plugin is already installed for you or for this repo. Without Claude
+   Code on the machine, it prints the two lines to paste into Claude Code instead.
+
+`cq init --yes` accepts all three without the questions, installing the plugin for you only.
+`--skills user|project|none` picks the plugin's answer. Then commit what init changed: those files
+are the repo's, not cq's.
 
 **What counts as the app.** cq detects one Python app at the root. Its production code is the
 first of these that holds Python files:
@@ -214,7 +251,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.1.0"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.2.0"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -230,12 +267,15 @@ of the repo the job runs in. Keep the gate in `warn` mode until the team trusts 
 
 ## 6. Use it from Claude Code
 
-This repo is also a Claude Code plugin. In Claude Code:
+This repo is also a Claude Code plugin. `cq init` offers to install it ([step 2](#2-set-up-a-repository)),
+or, in Claude Code:
 
 ```
 /plugin marketplace add rafaeldelrey/cq
 /plugin install cq@cq
 ```
+
+`cq doctor` shows whether it's installed, and for whom (`claude plugin` line, optional).
 
 - **`/setup-cq`** walks a repo through steps 1 and 2: it installs cq, then runs `cq doctor`,
   `cq setup` and `cq init`, asking first, and takes the first snapshot.
@@ -243,7 +283,9 @@ This repo is also a Claude Code plugin. In Claude Code:
   that caused it, writes an analysis onto the dashboard, and ranks what to fix next.
   `/code-quality report`, `/code-quality backfill <since>` and `/code-quality gate` work too.
 
-To give a whole team the skills, enable the plugin in the repo's `.claude/settings.json`.
+To give a whole team the skills, install the plugin for the project: `cq init --skills project`,
+or `claude plugin install cq@cq --scope project`. Commit the `.claude/settings.json` it writes.
+Teammates need read access to `rafaeldelrey/cq`.
 
 ---
 
@@ -347,6 +389,8 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 | `target names must be unique` | two targets share a name; `repo` is taken by the repo-wide target |
 | numbers jumped with no code change | check the report's "Measurement changed" section: a tool version or a config moved |
 | the first run is slow | npx, uvx and qlty fetch their tools on first use; later runs are faster |
+| `The plugin wasn't installed` during `cq init` | read claude's output above it. Usually ssh access to `rafaeldelrey/cq` is missing; the two `/plugin` lines it prints work from Claude Code too |
+| `/code-quality` isn't found in Claude Code | `cq doctor` shows where the plugin is installed; start a new Claude Code session after installing |
 
 ---
 
@@ -354,13 +398,13 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.2.0    # move to another tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.3.0    # move to another tag
 uv tool uninstall cq                                                # remove it
 ```
 
 `uv tool upgrade cq` keeps the tag you installed, so move between versions with
 `install --force` at the new tag. A new version can pin newer measuring tools. The first snapshot
-after an upgrade then flags the change ("cq: 0.1.0 → 0.2.0"), and [CHANGELOG.md](CHANGELOG.md)
+after an upgrade then flags the change ("cq: 0.2.0 → 0.3.0"), and [CHANGELOG.md](CHANGELOG.md)
 says which numbers can move. To remove a repo's data, delete its `.cq/` folder.
 
 ---

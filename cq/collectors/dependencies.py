@@ -8,8 +8,9 @@ used in production code.
 
 import json
 
+from cq.config import PINS, has_python
 from cq.context import Context
-from cq.proc import run, uv_app
+from cq.proc import has_dev_extra, run, uv_app
 
 KINDS = ("python", "typescript")
 
@@ -22,15 +23,23 @@ DEPTRY_LABELS = {
 
 
 def first_party_packages(ctx: Context) -> list[str]:
-    """The app's own top-level packages: a source dir that is a package, or the packages inside a src/ dir."""
+    """The app's own top-level packages: a source dir that is a package, or the packages inside a src/ dir.
+
+    Namespace packages (no ``__init__.py``) count too: a folder of Python files is a package by name.
+    """
     names = []
     for path in ctx.sources:
         if path.is_file():
             names.append(path.stem)
         elif (path / "__init__.py").exists():
             names.append(path.name)
+        elif path.name == "src":  # a container: its packages and its direct modules are what imports name
+            names.extend(c.name for c in sorted(path.iterdir()) if c.is_dir() and has_python(c))
+            names.extend(f.stem for f in sorted(path.glob("*.py")))
         else:
-            names.extend(child.name for child in path.iterdir() if (child / "__init__.py").exists())
+            inner = [c.name for c in sorted(path.iterdir()) if (c / "__init__.py").exists()]
+            # A folder of modules with no package inside is itself a namespace package (acme/core.py).
+            names.extend(inner or ([path.name] if has_python(path) else []))
     return names
 
 
@@ -38,12 +47,14 @@ def collect_python(ctx: Context) -> dict:
     """deptry over the app, with the app's own pyproject declaring the dependencies."""
     out = ctx.raw_dir / "deptry.json"
     # Inside the app's own environment: deptry maps import names to distributions (sklearn →
-    # scikit-learn) from the installed metadata. The dev extra is dev-only, not unused.
+    # scikit-learn) from the installed metadata. A dev extra is dev-only, not unused; deptry reads a
+    # dev dependency group as dev-only by itself.
     first_party = [arg for name in first_party_packages(ctx) for arg in ("--known-first-party", name)]
     ignores = ["--per-rule-ignores", ",".join(ctx.target.deptry_ignore)] if ctx.target.deptry_ignore else []
+    dev_extra = ["--pep621-dev-dependency-groups", "dev"] if has_dev_extra(ctx.app_dir) else []
     run(
-        uv_app("deptry", ".", "--json-output", str(out), "--pep621-dev-dependency-groups", "dev", *first_party, *ignores,
-               overlay=("deptry==0.25.1",)),
+        uv_app(ctx.app_dir, "deptry", ".", "--json-output", str(out), *dev_extra, *first_party, *ignores,
+               overlay=(PINS["deptry"],)),
         ctx.app_dir,
         ok_codes=(0, 1),
     )  # fmt: skip

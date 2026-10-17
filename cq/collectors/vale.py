@@ -1,6 +1,6 @@
 """vale with the AISlop style: AI-written prose and stub language in docs, comments and docstrings.
 
-The style (code_quality/vale/styles/AISlop) flags the words and phrases that give AI prose away
+The style (cq's AISlop, unless the repo has its own .vale.ini) flags the words and phrases that give AI prose away
 ("delve", "seamless", "it's worth noting") as warnings, and stub language ("in a real
 implementation", "placeholder logic") as errors. It runs on the docs lychee checks (`link_paths`)
 and on the production code of every app, where vale reads only comments and docstrings.
@@ -9,16 +9,13 @@ and on the production code of every app, where vale reads only comments and docs
 import os
 from pathlib import Path
 
-from cq.config import PROJECT_DIR
 from cq.context import Context
 from cq.proc import ToolError, parse_json, require, run
+from cq.toolconfig import vale_config
 
 KINDS = ("repo",)
 
-CONFIG = PROJECT_DIR / "vale" / ".vale.ini"
 SEVERITY = {"error": "error", "warning": "warning", "suggestion": "info"}
-# This project's own style, code and tests are made of the flagged words; they'd only flag themselves.
-SELF_PATHS = ("code_quality/vale/", "code_quality/cq/", "code_quality/tests/")
 
 
 EXTENSIONS = (".md", ".py", ".ts", ".tsx")
@@ -32,7 +29,10 @@ def skipped(rel: str, skip: tuple[str, ...]) -> bool:
 
 def files(ctx: Context, roots: list[str]) -> list[str]:
     """The files vale reads under the roots, with excluded folders pruned before vale ever sees them."""
-    skip = tuple(s.rstrip("/") for s in (*ctx.settings.link_exclude, *SELF_PATHS))
+    repo = ctx.settings.repo_root
+    produced = (ctx.settings.history_dir, ctx.settings.runs_dir)  # cq's own output, not the repo's prose
+    own = [p.relative_to(repo).as_posix() for p in produced if p.is_relative_to(repo)]
+    skip = tuple(s.rstrip("/") for s in (*ctx.settings.link_exclude, *own))
     found = []
     for root in roots:
         if (ctx.checkout / root).is_file():
@@ -63,7 +63,11 @@ def collect(ctx: Context) -> dict:
     targets = paths(ctx)
     if not targets:  # vale with no paths would read stdin
         raise ToolError("vale: no files to check (link_paths and the apps' sources are all excluded or missing)")
-    out = run(["vale", "--config", str(CONFIG), "--output", "JSON", *targets], ctx.checkout, ok_codes=(0, 1))
+    out = run(
+        ["vale", "--config", str(vale_config(ctx.settings)), "--output", "JSON", *targets],
+        ctx.checkout,
+        ok_codes=(0, 1),
+    )
     (ctx.raw_dir / "vale.json").write_text(out)
     data = parse_json(out or "{}", "vale")
     if isinstance(data, dict) and "Code" in data:  # vale's own error object (a broken style)

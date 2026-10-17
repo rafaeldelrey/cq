@@ -1,4 +1,4 @@
-"""Type errors with the app's own pyright config (app and tests, as scripts/check.sh runs it)."""
+"""Type errors with the app's own pyright config (app and tests, as the app's own checks run it)."""
 
 import json
 

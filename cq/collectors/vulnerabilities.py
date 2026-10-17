@@ -7,7 +7,7 @@ dependencies only (``--omit=dev``): what ships in the image.
 import json
 
 from cq.context import Context
-from cq.proc import ToolError, run
+from cq.proc import ToolError, own, run
 
 KINDS = ("python", "typescript")
 
@@ -27,7 +27,7 @@ def collect_python(ctx: Context) -> dict:
     )
     out = ctx.raw_dir / "pip-audit.json"
     run(
-        ["pip-audit", "-r", str(req), "--no-deps", "--disable-pip", "-f", "json", "-o", str(out)],
+        [own("pip-audit"), "-r", str(req), "--no-deps", "--disable-pip", "-f", "json", "-o", str(out)],
         ctx.checkout,
         ok_codes=(0, 1),
     )
@@ -50,7 +50,15 @@ def collect_python(ctx: Context) -> dict:
 
 
 def collect_typescript(ctx: Context) -> dict:
-    """npm audit of the production dependency tree."""
+    """npm audit of the production dependency tree.
+
+    npm audit reads package-lock.json. A pnpm or Yarn app has none, and cq doesn't audit through
+    those managers yet, so the app is reported as skipped, with why, rather than as audited or failed.
+    """
+    if not (ctx.app_dir / "package-lock.json").exists():
+        other = next((lock for lock in ("pnpm-lock.yaml", "yarn.lock") if (ctx.app_dir / lock).exists()), None)
+        if other:
+            return {"skipped": f"{other}: cq audits npm projects only (npm audit needs package-lock.json)"}
     out = run(["npm", "audit", "--json", "--omit=dev"], ctx.app_dir, ok_codes=(0, 1))
     (ctx.raw_dir / "npm-audit.json").write_text(out)
     data = json.loads(out)

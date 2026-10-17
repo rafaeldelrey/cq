@@ -1,8 +1,9 @@
 """Running qlty and reading its SARIF, shared by the radarlint, smells and scripts collectors.
 
 qlty reads the repo's own `.qlty/qlty.toml`, where the plugin versions and the smell thresholds are
-pinned, so the nightly trend and the PR gate measure with the same rules. The CLI version is pinned
-in this project's pyproject (`qlty = "..."`): another version is a tool error, not a silent change.
+pinned, so the nightly trend and the PR gate measure with the same rules (`cq init` writes cq's
+default when the repo has none). The CLI version is pinned by the cq release (cq/config.py PINS):
+another version is a tool error, not a silent change.
 """
 
 import json
@@ -11,9 +12,9 @@ import shutil
 from fnmatch import fnmatch
 from pathlib import Path
 
-from cq.config import REPO_ROOT
 from cq.context import Context
 from cq.proc import ToolError, run
+from cq.toolconfig import qlty_config
 
 # Test files: qlty's own test_patterns don't apply to explicit paths, so they are dropped here.
 TEST_PATTERNS = ("*/tests/*", "*/test/*", "*.test.*", "*.spec.*", "*/test_*.py", "*_test.py")
@@ -26,20 +27,28 @@ VERSION = re.compile(r"qlty (\S+)")
 def check_version(ctx: Context) -> None:
     """Fail loudly when qlty is missing or not the pinned version."""
     if shutil.which("qlty") is None:
-        raise ToolError("qlty is not installed (see code_quality/README.md: GitHub release + attestation)")
+        raise ToolError("qlty is not installed: `cq setup` installs it (GitHub release, checksum + attestation)")
     match = VERSION.search(run(["qlty", "--version"], ctx.checkout))
     found = match.group(1) if match else "unknown"
     if found != ctx.settings.qlty:
-        raise ToolError(f"qlty {found} installed, {ctx.settings.qlty} pinned in code_quality/pyproject.toml")
+        raise ToolError(
+            f"qlty {found} installed, {ctx.settings.qlty} pinned by this cq release: `cq setup` installs it"
+        )
+    if qlty_config(ctx.settings) is None:
+        raise ToolError("the repo has no .qlty/qlty.toml: `cq init` writes cq's default")
 
 
-def use_current_config(checkout: Path, source: Path = REPO_ROOT) -> None:
+def use_current_config(checkout: Path, source: Path) -> None:
     """Put the current `.qlty/` config into the checkout, so every revision is measured alike."""
     if checkout.resolve() == source.resolve():
         return
     for name in CONFIG_FILES:
         src, dst = source / ".qlty" / name, checkout / ".qlty" / name
         dst.parent.mkdir(parents=True, exist_ok=True)
+        if not src.exists():  # configs/ is optional (cq init writes only qlty.toml): mirror its absence
+            if dst.is_dir():
+                shutil.rmtree(dst)
+            continue
         if src.is_dir():
             if dst.exists():
                 shutil.rmtree(dst)  # a mirror: files today's config dropped go too
@@ -78,7 +87,7 @@ def results(sarif: dict) -> list[dict]:
 def run_sarif(ctx: Context, args: list[str], name: str) -> list[dict]:
     """One qlty command with ``--sarif`` over repo-relative paths; the raw SARIF goes to the run folder."""
     check_version(ctx)
-    use_current_config(ctx.checkout)
+    use_current_config(ctx.checkout, ctx.settings.repo_root)
     out = run(["qlty", *args, "--sarif"], ctx.checkout, ok_codes=(0, 1))
     (ctx.raw_dir / f"{name}.sarif").write_text(out)
     try:

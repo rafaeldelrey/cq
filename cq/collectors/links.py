@@ -1,9 +1,9 @@
-"""Broken links in the docs (lychee, offline): the wiki, AGENTS.md, READMEs and rules.
+"""Broken links in the docs (lychee, offline): the paths in ``link_paths``.
 
-Agents maintain the wiki and cross-link it heavily; a renamed or deleted file leaves links that
-point nowhere, and an agent reading the wiki then follows a dead end. Offline mode checks links
-to files and anchors in the repository only (deterministic, no network); web links are not
-checked. wiki/log.md is excluded: it is frozen history and its old paths are meant to stay.
+A renamed or deleted file leaves links that point nowhere, and a reader (or an agent) following
+the docs hits a dead end. Offline mode checks links to files and anchors in the repository only
+(deterministic, no network); web links are not checked. ``link_exclude`` leaves out frozen
+history whose old paths are meant to stay.
 """
 
 import json

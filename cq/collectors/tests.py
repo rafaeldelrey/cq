@@ -1,7 +1,7 @@
 """Test results and coverage: pytest + coverage for Python apps, vitest for the UI.
 
 Python coverage uses the app's own [tool.coverage] config (branch coverage, its ``source``), the
-number scripts/check.sh gates on with ``fail_under``.
+number the app's own coverage gate uses (``fail_under``).
 """
 
 import json

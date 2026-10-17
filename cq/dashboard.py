@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from cq.metrics import METRICS
+from cq.render_md import measurement_changes
 
 TEMPLATE = Path(__file__).with_name("dashboard.html")
 
@@ -110,10 +111,16 @@ def markdown_to_html(md: str) -> str:
 
 
 def build(
-    history: list[dict], snap: dict, run_dir: Path, analysis_md: str | None = None, found: list[dict] | None = None
+    history: list[dict],
+    snap: dict,
+    run_dir: Path,
+    analysis_md: str | None = None,
+    found: list[dict] | None = None,
+    title: str = "Code quality",
 ) -> str:
-    """The dashboard page for the run whose snapshot is ``snap``."""
-    points = [series_point(s) for s in history_until(history, snap)]
+    """The dashboard page for the run whose snapshot is ``snap``, headed ``title``."""
+    upto = history_until(history, snap)
+    points = [series_point(s) for s in upto]
     data = {
         "metrics": [
             {"path": m.path, "label": m.label, "better": m.better, "unit": m.unit, "group": m.group} for m in METRICS
@@ -123,6 +130,8 @@ def build(
         "files": run_files(run_dir),
         "analysis": markdown_to_html(analysis_md) if analysis_md else None,
         "findings": found or [],
+        "steps": measurement_changes(upto[-2], snap) if len(upto) > 1 else [],
     }
     payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
-    return TEMPLATE.read_text().replace("/*__DATA__*/{}", payload)
+    page = TEMPLATE.read_text().replace("__TITLE__", html.escape(title))
+    return page.replace("/*__DATA__*/{}", payload)

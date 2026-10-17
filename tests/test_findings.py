@@ -207,3 +207,22 @@ def test_first_party_packages(tmp_path: Path) -> None:
     settings = Settings(targets=(target,), jscpd="j", knip="k", complexity_limit=15, cognitive_limit=15)
     ctx = Context(target=target, checkout=tmp_path, raw_dir=tmp_path, settings=settings)
     assert sorted(first_party_packages(ctx)) == ["app", "pkg", "tool"]
+
+
+def test_first_party_packages_include_namespace_packages(tmp_path: Path) -> None:
+    (tmp_path / "acme").mkdir()
+    (tmp_path / "acme" / "core.py").write_text("")  # a namespace package at the root
+    (tmp_path / "src" / "beta").mkdir(parents=True)
+    (tmp_path / "src" / "beta" / "x.py").write_text("")  # and one inside src/
+    target = Target(name="a", kind="python", root=".", source=("acme", "src"), tests=False)
+    ctx = Context(target=target, checkout=tmp_path, raw_dir=tmp_path, settings=Settings(targets=(target,)))
+    assert sorted(first_party_packages(ctx)) == ["acme", "beta"]
+
+
+def test_first_party_packages_name_direct_modules_in_src(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "foo.py").write_text("")
+    (tmp_path / "src" / "bar.py").write_text("")
+    target = Target(name="a", kind="python", root=".", source=("src",), tests=False)
+    ctx = Context(target=target, checkout=tmp_path, raw_dir=tmp_path, settings=Settings(targets=(target,)))
+    assert first_party_packages(ctx) == ["bar", "foo"]

@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HanBot Code Quality</title>
+<title>__TITLE__</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -133,7 +133,7 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
 
 <main>
   <header>
-    <h1>HanBot code quality</h1>
+    <h1>__TITLE__</h1>
     <div class="meta" id="meta"></div>
     <div class="controls">
       <label for="cmp">Compare with
@@ -149,6 +149,11 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
     </div>
   </header>
 
+  <section class="panel" id="steps" hidden>
+    <h2>Measurement changed since the previous snapshot</h2>
+    <p>A step in a metric may come from these, not from the code:</p>
+    <ul id="steps-list"></ul>
+  </section>
   <section class="panel" id="analysis" hidden>
     <div class="head"><h2>Analysis</h2><span class="sub">written by /code-quality for this run</span></div>
     <div class="body" id="analysis-body"></div>
@@ -549,6 +554,10 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
   addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => state.sel?.p && renderTrend(), 120); });
 
   if (D.analysis) { $("analysis").hidden = false; $("analysis-body").innerHTML = D.analysis; }
+  if (D.steps && D.steps.length) {
+    $("steps").hidden = false;
+    for (const note of D.steps) { const li = document.createElement("li"); li.textContent = note; $("steps-list").appendChild(li); }
+  }
   renderMeta(); renderAll(); renderFindings(); renderRun();
 })();
 </script>

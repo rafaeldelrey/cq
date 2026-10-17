@@ -1,0 +1,7 @@
+{
+  "$comment": "cq's default cspell config, used when the repo has no cspell.json of its own. Add the project's own technical terms to a cspell.json in the repo.",
+  "version": "0.2",
+  "language": "en,en-GB",
+  "words": [],
+  "ignorePaths": ["**/node_modules/**", "**/.venv/**", "**/dist/**", "**/build/**"]
+}

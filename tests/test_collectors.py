@@ -7,7 +7,7 @@ import pytest
 from cq.collectors import complexity, dead_code, maintainability, size
 from cq.collectors import tests as tests_collector
 from cq.collectors.tests import parse_pytest_summary
-from cq.config import Settings, Target, load_settings
+from cq.config import Settings, Target
 from cq.context import Context
 from cq.proc import ToolError
 
@@ -51,12 +51,6 @@ def ctx(tmp_path: Path) -> Context:
     raw = tmp_path / "raw"
     raw.mkdir()
     return Context(target=target, checkout=tmp_path, raw_dir=raw, settings=settings)
-
-
-def test_settings_load_every_target() -> None:
-    settings = load_settings()
-    assert {t.name for t in settings.targets} == {"agents_server", "ns_sync", "hanbot_ui", "repo"}
-    assert settings.complexity_limit == 15
 
 
 def test_size_skips_tests(ctx: Context) -> None:

@@ -15,7 +15,7 @@ import pytest
 
 from cq import findings, proc, qlty
 from cq.collectors import aislop, cspell, fallow, pyscn, radarlint, secrets, smells, vale
-from cq.config import Settings, Target, load_settings
+from cq.config import DEFAULTS_DIR, Settings, Target, load_settings
 from cq.context import Context
 from cq.proc import ToolError, log_to, run
 
@@ -230,11 +230,9 @@ def test_cspell_counts_unknown_words(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert not list(ctx.raw_dir.iterdir())
 
 
-def test_cspell_word_list_has_no_typos_or_capitalised_names() -> None:
-    config = json.loads((Path(cspell.CONFIG)).read_text())
-    assert "hyperglicemia" not in {w.lower() for w in config["words"]}
-    # Words are lower-case technical terms; a capitalised entry would be a name slipping in.
-    assert all(w == w.lower() for w in config["words"]), [w for w in config["words"] if w != w.lower()]
+def test_cspell_default_has_no_project_words() -> None:
+    config = json.loads((DEFAULTS_DIR / "cspell.json").read_text())
+    assert config["words"] == []  # a project's words belong in its own cspell.json
 
 
 # ── vale (real binary) ───────────────────────────────────────────────────────────────────────
@@ -391,12 +389,14 @@ def test_history_cache_is_betterleaks_own(tmp_path: Path, monkeypatch: pytest.Mo
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x"],
                    cwd=tmp_path, check=True)  # fmt: skip
-    monkeypatch.setattr(secrets, "CACHE_DIR", tmp_path / "cache")
-    (tmp_path / "cache").mkdir()
-    (tmp_path / "cache" / "gitleaks-history-x-y.json").write_text("{}")  # the old scanner's cache: ignored
-    monkeypatch.setattr(secrets, "betterleaks", lambda args, cwd: [])
-    secrets.scan_history(make_ctx(tmp_path))
-    names = sorted(p.name.split("-")[0] for p in (tmp_path / "cache").iterdir())
+    ctx = make_ctx(tmp_path, data_dir=tmp_path / ".cq", repo_root=tmp_path)
+    cache = ctx.settings.runs_dir / "_cache"
+    cache.mkdir(parents=True)
+    (cache / "gitleaks-history-x-y.json").write_text("{}")  # the old scanner's cache: ignored
+    monkeypatch.setattr(secrets, "betterleaks", lambda args, cwd, config: [])
+    monkeypatch.setattr(secrets, "config_hash", lambda config: "h")
+    secrets.scan_history(ctx)
+    names = sorted(p.name.split("-")[0] for p in cache.iterdir())
     assert names == ["betterleaks", "gitleaks"]
 
 
@@ -566,7 +566,7 @@ def test_history_cache_is_keyed_by_the_betterleaks_version(monkeypatch: pytest.M
     hashes = []
     for version in ("1.9.0", "1.10.0"):
         monkeypatch.setattr(secrets, "run", lambda *a, v=version, **k: v)
-        hashes.append(secrets.config_hash())
+        hashes.append(secrets.config_hash(secrets.DEFAULT_CONFIG))
     assert hashes[0] != hashes[1]
 
 
@@ -670,3 +670,14 @@ def test_head_paths_follow_a_rename_made_on_the_branch_before_it_joined(tmp_path
     git(tmp_path, "commit", "-qm", "work on main")
     git(tmp_path, "merge", "-q", "--no-edit", "side")
     assert secrets.head_paths(tmp_path, {("old.env", found)}) == {("old.env", found): "new.env"}
+
+
+def test_a_qlty_setup_without_configs_folder_mirrors_its_absence(tmp_path: Path) -> None:
+    source, old = tmp_path / "repo", tmp_path / "old"
+    (source / ".qlty").mkdir(parents=True)
+    (source / ".qlty" / "qlty.toml").write_text("current")  # what cq init writes: no configs/
+    (old / ".qlty" / "configs").mkdir(parents=True)
+    (old / ".qlty" / "configs" / ".stale").write_text("from an old commit")
+    qlty.use_current_config(old, source)
+    assert (old / ".qlty" / "qlty.toml").read_text() == "current"
+    assert not (old / ".qlty" / "configs").exists()

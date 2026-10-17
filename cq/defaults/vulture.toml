@@ -1,0 +1,20 @@
+# cq's default vulture config, used when the measured app has no [tool.vulture] of its own.
+# Functions registered with a framework decorator are called by the framework, not by name.
+[tool.vulture]
+min_confidence = 60
+ignore_decorators = [
+    "@router.*",
+    "@app.*",
+    "@*.get",
+    "@*.post",
+    "@*.put",
+    "@*.patch",
+    "@*.delete",
+    "@tool",
+    "@field_validator",
+    "@model_validator",
+    "@validator",
+    "@pytest.fixture",
+]
+# Read by a framework through attribute lookup (pydantic, FastAPI, LangChain tools).
+ignore_names = ["handle_tool_error", "model_config", "model_post_init", "lifespan", "cls"]

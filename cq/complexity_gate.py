@@ -1,7 +1,3 @@
-# /// script
-# requires-python = ">=3.12"
-# dependencies = ["radon>=6.0"]
-# ///
 """Cyclomatic-complexity gate for production code, measured with radon.
 
 A function may not exceed ``--max`` (default 15, the middle of radon's rank C), with one
@@ -9,10 +5,13 @@ exception: functions already above it when the gate was introduced are listed in
 ``.complexity-baseline.json`` and may stay, but never get worse. That makes the gate a
 ratchet: new and changed code is held to the limit, legacy code can only improve.
 
-Usage (from the repo root):
-    uv run scripts/complexity_gate.py check apps/agents_server/app
-    uv run scripts/complexity_gate.py report apps/agents_server/app --base origin/main
-    uv run scripts/complexity_gate.py baseline apps/agents_server/app
+Usage (from the repo, or with ``cq --repo <path>``):
+    cq complexity check src
+    cq complexity report src --base origin/main
+    cq complexity baseline src
+
+The baseline file is ``complexity_baseline`` in the settings (default ``.complexity-baseline.json``
+at the repo root), and the limit defaults to the settings' ``complexity_limit``.
 
 ``check``    exits 1 when a function is over the limit and not covered by the baseline, got
              worse than its baseline, or improved without the baseline being lowered.
@@ -26,13 +25,9 @@ import argparse
 import ast
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 from radon.complexity import cc_rank, cc_visit_ast
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-BASELINE_FILE = REPO_ROOT / ".complexity-baseline.json"
 
 
 def iter_functions(tree: ast.AST, prefix: str = "") -> list[tuple[str, ast.AST]]:
@@ -68,31 +63,31 @@ def measure_source(source: str) -> dict[str, int]:
     return result
 
 
-def python_files(paths: list[str]) -> list[Path]:
-    """Every .py file under the given paths, tests excluded."""
+def python_files(root: Path, paths: list[str]) -> list[Path]:
+    """Every .py file under the given repo-relative paths, tests excluded."""
     files: list[Path] = []
     for raw in paths:
-        path = (REPO_ROOT / raw).resolve()
+        path = (root / raw).resolve()
         candidates = [path] if path.is_file() else sorted(path.rglob("*.py"))
-        files.extend(f for f in candidates if "tests" not in f.relative_to(REPO_ROOT).parts)
+        files.extend(f for f in candidates if "tests" not in f.relative_to(root).parts)
     return files
 
 
-def measure_paths(paths: list[str]) -> dict[str, int]:
+def measure_paths(root: Path, paths: list[str]) -> dict[str, int]:
     """Complexity keyed by ``<repo-relative file>::<qualified name>``."""
     result: dict[str, int] = {}
-    for file in python_files(paths):
-        rel = file.relative_to(REPO_ROOT).as_posix()
+    for file in python_files(root, paths):
+        rel = file.relative_to(root).as_posix()
         for name, complexity in measure_source(file.read_text()).items():
             result[f"{rel}::{name}"] = complexity
     return result
 
 
-def load_baseline() -> dict[str, int]:
+def load_baseline(baseline_file: Path) -> dict[str, int]:
     """The grandfathered functions, or an empty baseline when the file does not exist."""
-    if not BASELINE_FILE.exists():
+    if not baseline_file.exists():
         return {}
-    return json.loads(BASELINE_FILE.read_text())["functions"]
+    return json.loads(baseline_file.read_text())["functions"]
 
 
 def in_paths(key: str, paths: list[str]) -> bool:
@@ -116,10 +111,10 @@ def verdict(key: str, complexity: int, allowed: int | None, limit: int) -> tuple
     return None
 
 
-def cmd_check(paths: list[str], limit: int) -> int:
+def cmd_check(root: Path, baseline_file: Path, paths: list[str], limit: int) -> int:
     """Fail on any function over the limit that the baseline does not cover."""
-    baseline = load_baseline()
-    measured = measure_paths(paths)
+    baseline = load_baseline(baseline_file)
+    measured = measure_paths(root, paths)
     failures = []
     for key, cc in sorted(measured.items()):
         result = verdict(key, cc, baseline.get(key), limit)
@@ -138,17 +133,17 @@ def cmd_check(paths: list[str], limit: int) -> int:
     return 0
 
 
-def git_show(base: str, rel: str) -> str | None:
+def git_show(root: Path, base: str, rel: str) -> str | None:
     """A file's content at ``base``, or None when it did not exist there."""
-    proc = subprocess.run(["git", "show", f"{base}:{rel}"], cwd=REPO_ROOT, capture_output=True, text=True)
+    proc = subprocess.run(["git", "show", f"{base}:{rel}"], cwd=root, capture_output=True, text=True, check=False)
     return proc.stdout if proc.returncode == 0 else None
 
 
-def cmd_report(paths: list[str], base: str) -> int:
+def cmd_report(root: Path, paths: list[str], base: str) -> int:
     """Markdown table of the functions whose complexity changed against ``base``."""
     diff = subprocess.run(
         ["git", "diff", "--name-only", f"{base}...HEAD", "--", *paths],
-        cwd=REPO_ROOT,
+        cwd=root,
         capture_output=True,
         text=True,
         check=True,
@@ -157,9 +152,9 @@ def cmd_report(paths: list[str], base: str) -> int:
     for rel in diff:
         if not rel.endswith(".py") or "tests" in Path(rel).parts:
             continue
-        head_path = REPO_ROOT / rel
+        head_path = root / rel
         after = measure_source(head_path.read_text()) if head_path.exists() else {}
-        old_source = git_show(base, rel)
+        old_source = git_show(root, base, rel)
         before = measure_source(old_source) if old_source else {}
         for name in sorted(set(before) | set(after)):
             old, new = before.get(name), after.get(name)
@@ -175,30 +170,29 @@ def cmd_report(paths: list[str], base: str) -> int:
     return 0
 
 
-def cmd_baseline(paths: list[str], limit: int) -> int:
+def cmd_baseline(root: Path, baseline_file: Path, paths: list[str], limit: int) -> int:
     """Rewrite the baseline entries for ``paths`` with every function currently over the limit."""
-    kept = {k: v for k, v in load_baseline().items() if not in_paths(k, paths)}
-    over = {k: v for k, v in measure_paths(paths).items() if v > limit}
+    kept = {k: v for k, v in load_baseline(baseline_file).items() if not in_paths(k, paths)}
+    over = {k: v for k, v in measure_paths(root, paths).items() if v > limit}
     functions = dict(sorted({**kept, **over}.items()))
-    BASELINE_FILE.write_text(json.dumps({"max": limit, "functions": functions}, indent=2) + "\n")
-    print(f"Baseline: {len(functions)} grandfathered functions written to {BASELINE_FILE.name}.")
+    baseline_file.write_text(json.dumps({"max": limit, "functions": functions}, indent=2) + "\n")
+    print(f"Baseline: {len(functions)} grandfathered functions written to {baseline_file.name}.")
     return 0
 
 
-def main() -> int:
-    """Parse arguments and run one command."""
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["check", "report", "baseline"])
+def add_arguments(parser: argparse.ArgumentParser, limit: int | None) -> None:
+    """The ``cq complexity`` arguments; ``limit`` None means the settings' complexity_limit."""
+    # "action", not "command": cq's own subcommand is already stored as "command".
+    parser.add_argument("action", choices=["check", "report", "baseline"])
     parser.add_argument("paths", nargs="+", help="repo-relative directories or files of production code")
-    parser.add_argument("--max", type=int, default=15, dest="limit")
+    parser.add_argument("--max", type=int, default=limit, dest="limit")
     parser.add_argument("--base", default="origin/main")
-    args = parser.parse_args()
-    if args.command == "check":
-        return cmd_check(args.paths, args.limit)
-    if args.command == "report":
-        return cmd_report(args.paths, args.base)
-    return cmd_baseline(args.paths, args.limit)
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def run(args: argparse.Namespace, root: Path, baseline_file: Path) -> int:
+    """Run one ``cq complexity`` command."""
+    if args.action == "check":
+        return cmd_check(root, baseline_file, args.paths, args.limit)
+    if args.action == "report":
+        return cmd_report(root, args.paths, args.base)
+    return cmd_baseline(root, baseline_file, args.paths, args.limit)

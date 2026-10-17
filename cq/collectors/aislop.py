@@ -3,10 +3,10 @@
 Its `ai-slop` engine finds swallowed errors that drop the cause, comments that narrate decisions
 or plans, TODO stubs, double type assertions, isinstance ladders; its other engines add complexity,
 duplicate blocks and a few security checks. aislop reports nothing in test files but counts them in
-its score, so they are excluded (agents_server: 425 files and score 86 with tests, 311 and 83 without).
+its score, so they are excluded.
 
-Tuned per the trial (#284): ``narrative-comment`` flags this repo's decorative section separators,
-and ``hardcoded-url`` its config defaults, so both are dropped. aislop's own 0–100 score is kept as
+``narrative-comment`` flags decorative section separators and ``hardcoded-url`` config defaults,
+so both are dropped. aislop's own 0–100 score is kept as
 reported (it still counts them); the counts here don't.
 """
 

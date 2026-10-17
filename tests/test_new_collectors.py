@@ -10,8 +10,9 @@ import pytest
 
 from cq import findings
 from cq.collectors import containers, freshness, hotspots, links, scripts, semgrep, suppressions
-from cq.config import Settings, Target
+from cq.config import DEFAULTS_DIR, Settings, Target
 from cq.context import Context
+from cq.proc import own
 
 BRANCHY = """
 def branchy(x):
@@ -79,7 +80,7 @@ def test_suppressions_count_and_reasons(tmp_path: Path) -> None:
     assert result["items"][0]["reason"] is False  # the ones without a reason come first
 
 
-@pytest.mark.skipif(shutil.which("semgrep") is None, reason="semgrep not installed")
+@pytest.mark.skipif(shutil.which(own("semgrep")) is None, reason="semgrep not installed")
 def test_mock_only_rule_finds_tests_under_a_tests_folder(tmp_path: Path) -> None:
     tests = tmp_path / "apps" / "demo" / "tests"
     tests.mkdir(parents=True)
@@ -89,8 +90,9 @@ def test_mock_only_rule_finds_tests_under_a_tests_folder(tmp_path: Path) -> None
         "def test_not_called_is_fine():\n    m = MagicMock()\n    m.send.assert_not_called()\n\n"
         "def test_with_assert():\n    m = MagicMock()\n    m.send('x')\n    m.send.assert_called_once()\n    assert m.send.call_count == 1\n"
     )
-    found = semgrep.scan_tests(make_ctx(tmp_path), tests)
-    hits = [f for f in found if f.get("code") == "hanbot-test-only-asserts-mocks"]
+    rules = semgrep.rule_files(DEFAULTS_DIR / "semgrep" / "tests")
+    found = semgrep.scan_tests(make_ctx(tmp_path), tests, rules)
+    hits = [f for f in found if f.get("code") == "cq-test-only-asserts-mocks"]
     assert [(h["file"], h["line"]) for h in hits] == [("apps/demo/tests/test_x.py", 3)]
 
 
@@ -206,3 +208,10 @@ def test_new_tools_become_findings() -> None:
         ("scripts", "SC2086", "info"),
         ("links", "broken-link", "warning"),
     }
+
+
+def test_house_rule_ids_match_findings_by_their_last_segment(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "rules.yml").write_text("rules:\n  - id: company.security.no-eval\n  - id: plain-rule\n")
+    (tmp_path / "tests" / "t.yml").write_text("rules:\n  - id: company.tests.mock-only\n")
+    assert semgrep.house_rule_ids(tmp_path) == {"no-eval", "plain-rule", "mock-only"}

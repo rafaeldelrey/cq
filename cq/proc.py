@@ -4,7 +4,9 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
+import tomllib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -57,6 +59,16 @@ def run(
     return proc.stdout
 
 
+def own(tool: str) -> str:
+    """A tool cq installs with itself (vulture, semgrep, …), from cq's own environment.
+
+    ``uv tool install`` puts only the ``cq`` command on the PATH, not its dependencies' scripts, so
+    they are found next to the interpreter running cq; the bare name is the fallback.
+    """
+    path = Path(sys.executable).parent / tool
+    return str(path) if path.exists() else tool
+
+
 def require(*tools: str) -> None:
     """A missing binary is a blind spot, never a clean result: fail with how to install it."""
     for tool in tools:
@@ -90,14 +102,24 @@ def log(text: str) -> None:
             fh.write(text.rstrip("\n") + "\n\n")
 
 
-def uv_app(*args: str, overlay: tuple[str, ...] = ()) -> list[str]:
-    """A command run in an app's own environment, with its dev extra (as scripts/check.sh does).
+def has_dev_extra(app_dir: Path) -> bool:
+    """Whether the app declares a ``dev`` extra (optional-dependencies) rather than a dev group."""
+    pyproject = app_dir / "pyproject.toml"
+    if not pyproject.exists():
+        return False
+    return "dev" in tomllib.loads(pyproject.read_text()).get("project", {}).get("optional-dependencies", {})
 
-    ``overlay`` adds packages on top with ``uv run --with``, for old commits whose dev extra
-    did not have the tool yet.
+
+def uv_app(app_dir: Path, *args: str, overlay: tuple[str, ...] = ()) -> list[str]:
+    """A command run in an app's own environment, with its dev tools.
+
+    The dev tools are a ``dev`` extra in older apps, or a ``dev`` dependency group, which
+    ``uv run`` includes by default. ``overlay`` adds packages on top with ``uv run --with``, for
+    old commits whose dev tools did not have the tool yet.
     """
+    extra = ["--extra", "dev"] if has_dev_extra(app_dir) else []
     withs = [arg for pkg in overlay for arg in ("--with", pkg)]
-    return ["uv", "run", "-q", "--extra", "dev", *withs, *args]
+    return ["uv", "run", "-q", *extra, *withs, *args]
 
 
 def run_app_tool(
@@ -111,11 +133,11 @@ def run_app_tool(
 ) -> str:
     """Run a tool in the app's environment; when the app does not have it, overlay it and retry.
 
-    Today's apps all have their tools in the dev extra, so the retry only kicks in for commits
-    from before that, and the app's own pinned version is used whenever it exists.
+    An app with the tool among its dev tools runs its own pinned version; the retry is for an app,
+    or an old commit, without it.
     """
     try:
-        return run(uv_app(*args, overlay=overlay), cwd, ok_codes=ok_codes, env=env)
+        return run(uv_app(cwd, *args, overlay=overlay), cwd, ok_codes=ok_codes, env=env)
     except ToolError as exc:
         if "Failed to spawn" not in str(exc) and "extra" not in str(exc).lower():
             raise

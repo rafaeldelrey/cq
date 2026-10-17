@@ -1,7 +1,7 @@
 """radarlint: SonarSource's analyzers (the SonarLint rules for Python and JS/TS), run through qlty.
 
 Hundreds of bug and code-smell rules that ruff and eslint don't have, without a SonarQube server.
-The trial (#284) found real ones: redundant exception classes, duplicated regex ranges,
+Real ones it finds: redundant exception classes, duplicated regex ranges,
 commented-out code, nested ternaries. Rules another collector already measures are left out, and
 test files are dropped (float equality and empty blocks there are noise).
 """

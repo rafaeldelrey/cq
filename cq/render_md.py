@@ -132,6 +132,42 @@ def tool_sections(found: list[dict]) -> list[str]:
     return out
 
 
+def measurement_changes(previous: dict, latest: dict) -> list[str]:
+    """What changed in how the two snapshots were measured: tool versions and the configs read.
+
+    A metric that steps between them may be the measurement, not the code. A snapshot from before
+    cq recorded its configs says nothing about them, so only versions are compared then.
+    """
+    notes = []
+    old_tools, new_tools = previous.get("tool_versions", {}), latest.get("tool_versions", {})
+    for tool in sorted(set(old_tools) | set(new_tools)):
+        if old_tools.get(tool) != new_tools.get(tool):
+            notes.append(f"{tool}: {old_tools.get(tool, 'none')} → {new_tools.get(tool, 'none')}")
+    if "configs" in previous:
+        old, new = previous["configs"], latest.get("configs", {})
+        for name in sorted(set(old) | set(new)):
+            before, after = old.get(name), new.get(name)
+            if before is None or after is None or before["hash"] != after["hash"]:
+                source = (after or before or {}).get("file", "")
+                verb = "added" if before is None else "removed" if after is None else "changed"
+                notes.append(f"{name} config {verb} ({source})")
+    return notes
+
+
+def step_section(notes: list[str]) -> list[str]:
+    """The report section that flags a measurement change, or nothing."""
+    if not notes:
+        return []
+    return [
+        "## Measurement changed since the previous snapshot",
+        "",
+        "A step in a metric below may come from these, not from the code:",
+        "",
+        *(f"- {n}" for n in notes),
+        "",
+    ]
+
+
 def render(history: list[dict], window_days: int = 30, details: bool = True) -> str:
     """The whole report."""
     latest = history[-1]

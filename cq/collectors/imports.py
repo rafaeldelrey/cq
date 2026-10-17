@@ -1,7 +1,7 @@
-"""Architecture contracts (import-linter): code_quality/contracts/<target>.ini, when one exists.
+"""Architecture contracts (import-linter): the app's contracts, when it has any (cq/toolconfig.py).
 
-Each contract is a rule about who may import whom, e.g. the danger-path shadow lane never
-reaching a sender. A broken contract lists the imports that break it, read from lint-imports'
+Each contract is a rule about who may import whom, e.g. a domain layer never importing the web
+layer. A broken contract lists the imports that break it, read from lint-imports'
 report for each contract type used: forbidden ("X is not allowed to import Y:" and its chains),
 protected ("Illegal imports of protected package X:") and acyclic_siblings ("No cycles are
 allowed in X." and the dependencies whose removal would break the cycle, relative to X).
@@ -9,15 +9,14 @@ allowed in X." and the dependencies whose removal would break the cycle, relativ
 
 import re
 
-from cq.config import PROJECT_DIR
 from cq.context import Context
-from cq.proc import run
+from cq.proc import own, run
+from cq.toolconfig import import_contracts
 
 KINDS = ("python",)
 
-CONTRACTS_DIR = PROJECT_DIR / "contracts"
 STATUS = re.compile(r"^(?P<name>.+?) (?P<status>KEPT|BROKEN)$")
-VIOLATION = re.compile(r"^-\s+(?P<chain>app\.[\w.]+(?: ->\s*\S+)?)")
+VIOLATION = re.compile(r"^-\s+(?P<chain>[A-Za-z_][\w.]*(?: ->\s*\S+)?)")
 PROTECTED = re.compile(r"^Illegal imports of protected package (?P<package>[\w.]+):$")
 CYCLE = re.compile(r"^No cycles are allowed in (?P<ancestor>[\w.]+)\.$")
 # "It could be made acyclic by removing N dependencies:" lists at most five, then "(and M more)".
@@ -58,11 +57,11 @@ def parse(out: str) -> tuple[list[dict], dict[str, list[str]]]:
 
 def collect(ctx: Context) -> dict:
     """lint-imports exits 1 when a contract is broken; that is the measurement."""
-    config = CONTRACTS_DIR / f"{ctx.target.name}.ini"
-    if not config.exists():
-        return {"skipped": f"no contracts/{ctx.target.name}.ini"}
+    config = import_contracts(ctx.settings, ctx.target)
+    if config is None:
+        return {"skipped": "no import contracts for this app"}
     out = run(
-        ["lint-imports", "--config", str(config), "--no-cache"],
+        [own("lint-imports"), "--config", str(config), "--no-cache"],
         ctx.app_dir,
         ok_codes=(0, 1),
         env={"PYTHONPATH": str(ctx.app_dir)},

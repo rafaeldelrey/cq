@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "cq",
+  "description": "cq's own marketplace: the Claude Code plugin for the cq code-quality tool",
+  "owner": {
+    "name": "Rafael Del Rey"
+  },
+  "plugins": [
+    {
+      "name": "cq",
+      "description": "Code-quality snapshots, trends and a PR gate: the /code-quality and /setup-cq skills for the cq CLI",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

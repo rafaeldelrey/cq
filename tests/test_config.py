@@ -287,3 +287,13 @@ def test_src_and_the_project_package_count_only_with_python_in_them(tmp_path: Pa
     assert detect_targets(tmp_path)[0].source == ("acme",)
     write(tmp_path / "src" / "acme_cli" / "main.py")
     assert detect_targets(tmp_path)[0].source == ("src",)
+
+
+def test_used_configs_cover_each_apps_own_configs_and_lockfile(repo: Path) -> None:
+    lock = write(repo / "apps" / "api" / "uv.lock", "ruff 0.12.0\n")
+    write(repo / "apps" / "api" / "pyrightconfig.json", "{}")
+    before = toolconfig.used_configs(load_settings(repo))
+    assert {"api.app:pyproject.toml", "api.app:uv.lock", "api.app:pyrightconfig.json"} <= set(before)
+    assert before["api.app:uv.lock"]["file"] == "apps/api/uv.lock"
+    lock.write_text("ruff 0.13.0\n")  # the app's own ruff moved: a measurement change
+    assert toolconfig.used_configs(load_settings(repo))["api.app:uv.lock"]["hash"] != before["api.app:uv.lock"]["hash"]

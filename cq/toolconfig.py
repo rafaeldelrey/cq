@@ -113,6 +113,22 @@ def qlty_config(settings: Settings) -> Path | None:
     return first_existing(settings.repo_root, (".qlty/qlty.toml",))
 
 
+# What the tools run in an app's own environment read: its configs, and the lockfile that pins the
+# tools themselves (ruff, pyright, pytest, eslint, tsc, vitest), so a version bump shows as a change.
+APP_INPUTS = (
+    "pyproject.toml", "uv.lock", "pyrightconfig.json", "ruff.toml", ".ruff.toml", "setup.cfg", "tox.ini",
+    "pytest.ini", ".coveragerc", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+    "tsconfig.json", "eslint.config.js", "eslint.config.mjs", ".eslintrc.json", "vitest.config.ts",
+    "vitest.config.mts",
+)  # fmt: skip
+
+
+def app_inputs(settings: Settings, target: Target) -> dict[str, Path]:
+    """The app's own config and lockfiles that exist, keyed ``<target>.app:<file>``."""
+    app = target.app_dir(settings.repo_root)
+    return {f"{target.name}.app:{name}": app / name for name in APP_INPUTS if (app / name).is_file()}
+
+
 def digest(path: Path) -> str:
     """A short hash of a config file, or of every file in a config folder."""
     files = sorted(p for p in path.rglob("*") if p.is_file()) if path.is_dir() else [path]
@@ -148,6 +164,8 @@ def used_configs(settings: Settings) -> dict[str, dict[str, str]]:
         "qlty.configs": first_existing(settings.repo_root, (".qlty/configs",)),
     }
     for t in settings.targets:
+        if t.kind != "repo":
+            files |= app_inputs(settings, t)
         if t.kind == "python":
             files[f"{t.name}.vulture"] = vulture_config(settings, t)
             files[f"{t.name}.vulture_whitelist"] = vulture_whitelist(settings, t)

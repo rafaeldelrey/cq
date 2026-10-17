@@ -89,8 +89,13 @@ def trivy(ctx: Context) -> dict:
 
 
 def collect(ctx: Context) -> dict:
-    """hadolint and Trivy; each is skipped (not an error) when the app has nothing for it."""
-    for tool in ("hadolint", "trivy"):
-        if shutil.which(tool) is None:
+    """hadolint and Trivy; each is skipped (not an error) when the app has nothing for it.
+
+    A tool is needed only when there is something for it: a missing hadolint fails an app with a
+    Dockerfile, a missing Trivy one with an image, and neither fails an app with nothing to scan.
+    """
+    needed = [("hadolint", (ctx.app_dir / "Dockerfile").exists()), ("trivy", bool(ctx.target.image))]
+    for tool, wanted in needed:
+        if wanted and shutil.which(tool) is None:
             raise ToolError(f"{tool} is not installed (brew install {tool})")
     return {"dockerfile": hadolint(ctx), "image": trivy(ctx)}

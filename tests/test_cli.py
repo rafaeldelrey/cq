@@ -277,3 +277,10 @@ def test_an_uncommitted_root_file_makes_a_monorepo_run_dirty(tmp_path: Path) -> 
     assert runner.commit_info("HEAD", settings)["dirty"] is False
     (root / "README.md").write_text("# mono, edited\n")  # outside every app, but the repo target reads it
     assert runner.commit_info("HEAD", settings)["dirty"] is True
+
+
+def test_backfill_refuses_a_step_under_a_day(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert run_cq(repo, "backfill", "--since", "2026-01-01", "--every", "0", "--dry-run") == 2
+    assert "--every must be at least 1" in capsys.readouterr().err
+    with pytest.raises(ValueError, match="at least a day apart"):
+        runner.first_parent_commits("2026-01-01", -1, repo)

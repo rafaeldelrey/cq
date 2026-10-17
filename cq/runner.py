@@ -225,6 +225,8 @@ def save(snap: dict, settings: Settings, *, to_history: bool) -> list[Path]:
 
 def first_parent_commits(since: str, every_days: int, cwd: Path, branch: str = "HEAD") -> list[str]:
     """The last commit on ``branch`` (first parent) before each step from ``since`` to now."""
+    if every_days < 1:
+        raise ValueError(f"backfill steps must be at least a day apart, not {every_days}")
     start = datetime.fromisoformat(since).replace(tzinfo=UTC)
     now = datetime.now(UTC)
     shas: list[str] = []

@@ -129,6 +129,9 @@ def cmd_backfill(settings: Settings, args: argparse.Namespace) -> int:
     if not args.since and not args.rev:
         print("give --since or --rev", file=sys.stderr)
         return 2
+    if args.every < 1:
+        print(f"--every must be at least 1 (days), not {args.every}", file=sys.stderr)
+        return 2
     todo = commits_to_measure(settings, args.rev, args.since, args.every, force=args.force, branch=args.branch)
     for sha in todo:
         print(git("show", "-s", "--format=%h %cs %s", sha, cwd=settings.repo_root), file=sys.stderr)

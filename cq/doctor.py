@@ -27,7 +27,7 @@ class Tool:
     version_flag: str
     formula: str  # the Homebrew formula that installs it ("" for qlty, installed from its release)
     needed_for: str
-    optional: bool = False  # a missing optional tool skips its collector instead of failing it
+    optional: bool = False  # needed only by some repos (hadolint: a Dockerfile; trivy: an image)
 
 
 TOOLS = (
@@ -163,8 +163,18 @@ def apply(formulas: list[str], qlty_needed: bool) -> int:
         subprocess.run(["brew", "install", *formulas], check=True)
     if qlty_needed:
         install_qlty(PINS["qlty"])
-        if shutil.which("qlty") is None:
-            print(f"qlty is in {QLTY_BIN.parent}, which is not on your PATH: add it.")
+        return shadowed_qlty(shutil.which("qlty"))
+    return 0
+
+
+def shadowed_qlty(found: str | None) -> int:
+    """1, with what to do, when the qlty on the PATH isn't the one setup just installed."""
+    if found is None:
+        print(f"qlty is in {QLTY_BIN.parent}, which is not on your PATH: add it.")
+        return 1
+    if Path(found).resolve() != QLTY_BIN.resolve():
+        print(f"Another qlty comes first on your PATH ({found}): remove it, or put {QLTY_BIN.parent} before it.")
+        return 1
     return 0
 
 

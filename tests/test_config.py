@@ -94,7 +94,7 @@ def test_detects_a_package_named_like_the_project(tmp_path: Path) -> None:
     assert detect_targets(tmp_path)[0].source == ("acme_pricing",)
 
 
-def test_falls_back_to_top_level_packages_then_the_root(tmp_path: Path) -> None:
+def test_falls_back_to_top_level_packages_then_modules_never_the_root(tmp_path: Path) -> None:
     write(tmp_path / "pyproject.toml", "[tool.ruff]\n")  # no [project] table: named after the folder
     write(tmp_path / "beta" / "__init__.py")
     write(tmp_path / "alpha" / "__init__.py")
@@ -104,7 +104,11 @@ def test_falls_back_to_top_level_packages_then_the_root(tmp_path: Path) -> None:
     assert app.name  # never empty
     for p in ("alpha", "beta", "tests"):
         (tmp_path / p / "__init__.py").unlink()
-    assert detect_targets(tmp_path)[0].source == (".",)
+    write(tmp_path / ".venv" / "lib" / "site.py")  # installed code: never production source
+    assert detect_targets(tmp_path) == (REPO_TARGET,)  # no Python code of its own: only the repo target
+    for name in ("tool.py", "test_tool.py", "conftest.py", "setup.py"):
+        write(tmp_path / name)
+    assert detect_targets(tmp_path)[0].source == ("tool.py",)
 
 
 def test_a_repo_without_pyproject_is_only_the_repo_target(tmp_path: Path) -> None:
@@ -244,6 +248,7 @@ def test_the_default_vulture_ignores_framework_names() -> None:
 
 def test_a_project_named_repo_does_not_shadow_the_repo_target(tmp_path: Path) -> None:
     write(tmp_path / "pyproject.toml", "[project]\nname = 'repo'\n")
+    write(tmp_path / "src" / "repo" / "__init__.py")
     assert [t.name for t in detect_targets(tmp_path)] == ["app", "repo"]
 
 

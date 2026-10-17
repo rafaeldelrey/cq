@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from cq import doctor, init, proc
-from cq.collectors import pyscn, scripts
+from cq.collectors import containers, pyscn, scripts
 from cq.config import DEFAULTS_DIR, PINS, Settings, Target, load_settings
 from cq.context import Context
 
@@ -84,7 +84,9 @@ def test_setup_shows_its_plan_and_stops_without_a_yes(
 
 def test_setup_installs_with_brew_then_qlty(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     fake_versions(monkeypatch, {k: v for k, v in ALL.items() if k not in ("vale", "qlty")})
-    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        doctor.shutil, "which", lambda name: str(doctor.QLTY_BIN) if name == "qlty" else f"/usr/bin/{name}"
+    )
     brewed: list[list[str]] = []
     monkeypatch.setattr(doctor.subprocess, "run", lambda cmd, check: brewed.append(cmd))
     installed: list[str] = []
@@ -148,6 +150,7 @@ def test_confirm_reads_a_yes_from_the_terminal(monkeypatch: pytest.MonkeyPatch) 
 
 def test_init_adds_tool_cq_to_pyproject_and_qlty_config(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'acme'\n")
+    (tmp_path / "acme.py").write_text('"""Acme."""\n')
     assert init.init(load_settings(tmp_path), assume_yes=True) == 0
     settings = load_settings(tmp_path)
     assert settings.config_file == tmp_path / "pyproject.toml"
@@ -260,3 +263,28 @@ def test_setup_plan_adds_gh_only_when_qlty_needs_it(monkeypatch: pytest.MonkeyPa
     assert doctor.plan([doctor.check(t) for t in doctor.TOOLS]) == (["vale"], False)
     fake_versions(monkeypatch, {k: v for k, v in ALL.items() if k != "qlty"})
     assert doctor.plan([doctor.check(t) for t in doctor.TOOLS]) == (["gh"], True)
+
+
+def test_setup_says_when_another_qlty_shadows_the_installed_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert doctor.shadowed_qlty(str(doctor.QLTY_BIN)) == 0
+    assert doctor.shadowed_qlty(None) == 1
+    assert "not on your PATH" in capsys.readouterr().out
+    old = tmp_path / "qlty"
+    old.write_text("")
+    assert doctor.shadowed_qlty(str(old)) == 1
+    assert f"Another qlty comes first on your PATH ({old})" in capsys.readouterr().out
+
+
+def test_container_tools_are_needed_only_for_what_the_app_has(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = Target(name="a", kind="python", root=".", source=("src",), tests=False)
+    ctx = Context(target=target, checkout=tmp_path, raw_dir=tmp_path, settings=Settings(targets=(target,)))
+    monkeypatch.setattr(containers.shutil, "which", lambda name: None)  # neither tool installed
+    assert containers.collect(ctx) == {
+        "dockerfile": {"skipped": "no Dockerfile"},
+        "image": {"skipped": "no image configured"},
+    }
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
+    with pytest.raises(proc.ToolError, match="hadolint is not installed"):
+        containers.collect(ctx)

@@ -144,7 +144,8 @@ def find_config(repo_root: Path, config: Path | None = None) -> tuple[dict[str, 
 
 
 def python_source(repo_root: Path, project_name: str) -> tuple[str, ...]:
-    """A root project's production code: src/, else its package, else its top-level packages."""
+    """A root project's production code: src/, else its package, else its top-level packages,
+    else its top-level modules; never the whole root, which holds .venv and other installed code."""
     if (repo_root / "src").is_dir():
         return ("src",)
     package = re.sub(r"[-.]+", "_", project_name).lower()
@@ -155,7 +156,12 @@ def python_source(repo_root: Path, project_name: str) -> tuple[str, ...]:
         for p in repo_root.iterdir()
         if p.is_dir() and (p / "__init__.py").exists() and p.name not in ("tests", "test")
     )
-    return tuple(packages) or (".",)
+    modules = sorted(
+        p.name
+        for p in repo_root.glob("*.py")
+        if not p.name.startswith("test_") and p.name not in ("conftest.py", "setup.py", "noxfile.py")
+    )
+    return tuple(packages) or tuple(modules)
 
 
 def detect_targets(repo_root: Path) -> tuple[Target, ...]:
@@ -164,12 +170,15 @@ def detect_targets(repo_root: Path) -> tuple[Target, ...]:
     if not pyproject.exists():
         return (REPO_TARGET,)
     name = tomllib.loads(pyproject.read_text()).get("project", {}).get("name") or repo_root.name
+    source = python_source(repo_root, name)
+    if not source:  # a pyproject with no Python code beside it (a tool config, a docs site)
+        return (REPO_TARGET,)
     slug = re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_")
     app = Target(
         name=slug if slug and slug != REPO_TARGET.name else "app",  # "repo" is the repo target's name
         kind="python",
         root=".",
-        source=python_source(repo_root, name),
+        source=source,
         tests=(repo_root / "tests").is_dir(),
     )
     return (app, REPO_TARGET)

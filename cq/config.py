@@ -184,8 +184,13 @@ def detect_targets(repo_root: Path) -> tuple[Target, ...]:
     return (app, REPO_TARGET)
 
 
+KINDS = ("python", "typescript", "repo")
+
+
 def parse_target(t: dict[str, Any]) -> Target:
-    """One [[targets]] entry."""
+    """One [[targets]] entry; an unknown kind is a configuration error, not an app nothing measures."""
+    if t["kind"] not in KINDS:
+        raise ValueError(f"target {t['name']!r}: kind must be one of {', '.join(KINDS)}, not {t['kind']!r}")
     return Target(
         name=t["name"],
         kind=t["kind"],

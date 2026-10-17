@@ -288,3 +288,9 @@ def test_container_tools_are_needed_only_for_what_the_app_has(tmp_path: Path, mo
     (tmp_path / "Dockerfile").write_text("FROM scratch\n")
     with pytest.raises(proc.ToolError, match="hadolint is not installed"):
         containers.collect(ctx)
+
+
+def test_setup_leaves_the_optional_tools_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_versions(monkeypatch, {k: v for k, v in ALL.items() if k not in ("vale", "hadolint", "trivy")})
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
+    assert doctor.plan([doctor.check(t) for t in doctor.TOOLS]) == (["vale"], False)

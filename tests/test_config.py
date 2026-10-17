@@ -257,3 +257,9 @@ def test_repeated_target_names_are_refused(tmp_path: Path) -> None:
     write(tmp_path / "cq.toml", '[[targets]]\nname = "repo"\nkind = "python"\nroot = "."\nsource = ["src"]\n')
     with pytest.raises(ValueError, match="repeated: repo"):
         load_settings(tmp_path)
+
+
+def test_an_unknown_target_kind_is_refused(tmp_path: Path) -> None:
+    write(tmp_path / "cq.toml", '[[targets]]\nname = "api"\nkind = "pyhton"\nroot = "."\nsource = ["src"]\n')
+    with pytest.raises(ValueError, match="kind must be one of python, typescript, repo, not 'pyhton'"):
+        load_settings(tmp_path)

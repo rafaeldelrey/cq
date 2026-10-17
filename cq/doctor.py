@@ -136,8 +136,12 @@ def confirm(question: str, *, assume_yes: bool) -> bool:
 
 
 def plan(checks: list[Check]) -> tuple[list[str], bool]:
-    """The Homebrew formulas to install, and whether qlty needs installing."""
-    formulas = [c.tool.formula for c in checks if not c.ok and c.tool.formula]
+    """The Homebrew formulas to install, and whether qlty needs installing.
+
+    Optional tools stay out: a repo with no Dockerfile or image never needs hadolint or Trivy, and
+    doctor names the command for anyone who does.
+    """
+    formulas = [c.tool.formula for c in checks if not c.ok and c.tool.formula and not c.tool.optional]
     qlty_needed = any(c.tool.name == "qlty" and not c.ok for c in checks)
     if qlty_needed and shutil.which("gh") is None:
         formulas.append("gh")  # qlty's download and attestation check go through the GitHub CLI

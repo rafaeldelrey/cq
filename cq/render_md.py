@@ -70,6 +70,7 @@ def hot_spots(target: dict) -> list[str]:
     section(
         "Lowest maintainability", [f"`{w['file']}` MI {w['mi']} ({w['lines']} lines)" for w in mi.get("worst", [])[:5]]
     )
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
     cov = target.get("tests", {}).get("coverage", {})
     section(
         "Least-covered files",
@@ -91,6 +92,7 @@ def hot_spots(target: dict) -> list[str]:
         "Most missing docstrings", [f"`{f['file']}` {f['missing']} missing" for f in doc.get("worst_files", [])[:6]]
     )
     for tool in ("ruff", "pyright", "eslint", "typecheck"):
+        # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
         items = target.get(tool, {}).get("items", [])
         section(f"{tool} findings", [f"`{i['file']}:{i['line']}` {i.get('code') or ''} {i['msg']}" for i in items[:10]])
     return out

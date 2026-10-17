@@ -5,6 +5,8 @@ system binaries: Homebrew installs them, and qlty comes from its GitHub release 
 cq release pins, checked against its checksum and its build attestation before it is installed.
 """
 
+# aislop-ignore-file ai-slop/python-print-debug -- `cq doctor` and `cq setup` report to the user: their prints are the interface
+
 import platform
 import re
 import shutil

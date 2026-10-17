@@ -131,12 +131,14 @@ def find_config(repo_root: Path, config: Path | None = None) -> tuple[dict[str, 
     """The settings table and the file it came from: ``config``, cq.toml, or pyproject's [tool.cq]."""
     if config is not None:
         data = tomllib.loads(config.read_text())
+        # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyprojects have no [tool.cq]
         return (data.get("tool", {}).get("cq", {}) if config.name == "pyproject.toml" else data), config
     own = repo_root / CONFIG_FILE
     if own.exists():
         return tomllib.loads(own.read_text()), own
     pyproject = repo_root / "pyproject.toml"
     if pyproject.exists():
+        # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyprojects have no [tool.cq]
         table = tomllib.loads(pyproject.read_text()).get("tool", {}).get("cq")
         if table is not None:
             return table, pyproject
@@ -179,6 +181,7 @@ def detect_targets(repo_root: Path) -> tuple[Target, ...]:
     pyproject = repo_root / "pyproject.toml"
     if not pyproject.exists():
         return (REPO_TARGET,)
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a pyproject may have no [project] table (a tool-only config)
     name = tomllib.loads(pyproject.read_text()).get("project", {}).get("name") or repo_root.name
     source = python_source(repo_root, name)
     if not source:  # a pyproject with no Python code beside it (a tool config, a docs site)

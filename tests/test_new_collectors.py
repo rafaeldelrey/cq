@@ -1,14 +1,16 @@
 """The collectors added on 2026-10-14: hotspots, suppressions, the mock-only test rule, containers,
 freshness, scripts and links. Binaries run for real on small inputs; a missing one skips its test."""
 
+import json
 import shutil
 import subprocess
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from cq import findings
+from cq import findings, runner
 from cq.collectors import containers, freshness, hotspots, links, scripts, semgrep, suppressions
 from cq.config import DEFAULTS_DIR, Settings, Target
 from cq.context import Context
@@ -215,3 +217,81 @@ def test_house_rule_ids_match_findings_by_their_last_segment(tmp_path: Path) -> 
     (tmp_path / "rules.yml").write_text("rules:\n  - id: company.security.no-eval\n  - id: plain-rule\n")
     (tmp_path / "tests" / "t.yml").write_text("rules:\n  - id: company.tests.mock-only\n")
     assert semgrep.house_rule_ids(tmp_path) == {"no-eval", "plain-rule", "mock-only"}
+
+
+def fake_tool_output(monkeypatch: pytest.MonkeyPatch, module: object, data: dict) -> None:
+    """The module's ``run`` writes ``data`` where ``--output`` points, and answers git with a fresh commit date."""
+
+    def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        if cmd[0] == "git":
+            return datetime.now(UTC).isoformat()
+        Path(cmd[cmd.index("--output") + 1]).write_text(json.dumps(data))
+        return ""
+
+    monkeypatch.setattr(module, "run", fake_run)
+
+
+TRIVY_VULN = {"PkgName": "openssl", "VulnerabilityID": "CVE-1", "Severity": "HIGH", "FixedVersion": "3.0.1"}
+
+
+def image_ctx(tmp_path: Path) -> Context:
+    """A context whose target has a published image."""
+    ctx = make_ctx(tmp_path)
+    return replace(ctx, target=replace(ctx.target, image="ghcr.io/acme/demo:latest"))
+
+
+def test_trivy_reads_the_image_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    meta = {"OS": {"Family": "debian", "Name": "12.5"}, "RepoDigests": ["ghcr.io/acme/demo@sha256:abc"]}
+    fake_tool_output(monkeypatch, containers, {"Metadata": meta, "Results": [{"Vulnerabilities": [TRIVY_VULN]}]})
+    result = containers.trivy(image_ctx(tmp_path))
+    assert (result["os"], result["digest"], result["high"], result["fixable_high"]) == (
+        "debian 12.5",
+        "ghcr.io/acme/demo@sha256:abc",
+        1,
+        1,
+    )
+
+
+def test_trivy_without_os_or_digest_still_scans(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_tool_output(monkeypatch, containers, {"Metadata": {}, "Results": [{"Vulnerabilities": [TRIVY_VULN]}]})
+    result = containers.trivy(image_ctx(tmp_path))  # a scratch image, built locally: no OS, no digest
+    assert (result["os"], result["digest"], result["high"]) == ("", "", 1)
+
+
+def test_trivy_output_without_metadata_is_an_error_not_a_clean_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_tool_output(monkeypatch, containers, {"Results": []})
+    with pytest.raises(KeyError, match="Metadata"):
+        containers.trivy(image_ctx(tmp_path))
+
+
+def test_links_reads_lychee_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = f"file://{tmp_path.resolve()}/"
+    errors = {"wiki/index.md": [{"url": f"{root}wiki/missing.md", "status": {"text": "Cannot find file"}}]}
+    fake_tool_output(monkeypatch, links, {"total": 2, "error_map": errors})
+    monkeypatch.setattr(links.shutil, "which", lambda name: f"/bin/{name}")
+    (tmp_path / "wiki").mkdir()
+    result = links.collect(make_ctx(tmp_path, kind="repo", link_paths=("wiki",)))
+    assert result["items"] == [{"file": "wiki/index.md", "target": "wiki/missing.md", "status": "Cannot find file"}]
+
+
+def test_lychee_output_without_its_error_map_is_an_error_not_zero_broken_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_tool_output(monkeypatch, links, {"total": 2})
+    monkeypatch.setattr(links.shutil, "which", lambda name: f"/bin/{name}")
+    (tmp_path / "wiki").mkdir()
+    with pytest.raises(KeyError, match="error_map"):
+        links.collect(make_ctx(tmp_path, kind="repo", link_paths=("wiki",)))
+
+
+def test_a_missing_required_key_lands_in_the_snapshot_as_a_tool_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_tool_output(monkeypatch, links, {"total": 2})
+    monkeypatch.setattr(links.shutil, "which", lambda name: f"/bin/{name}")
+    (tmp_path / "wiki").mkdir()
+    result, error = runner.run_collector(make_ctx(tmp_path, kind="repo", link_paths=("wiki",)), "links")
+    assert result is None
+    assert error == "KeyError: 'error_map'"

@@ -150,6 +150,7 @@ class RunLog:
 
     def __call__(self, text: str, end: str = "\n") -> None:
         """Write ``text`` to both."""
+        # aislop-ignore-next-line ai-slop/python-print-debug -- RunLog is the run's progress on stderr
         print(text, end=end, flush=True, file=sys.stderr)
         with self.path.open("a") as fh:
             fh.write(text + end)

@@ -33,9 +33,9 @@ def collect(ctx: Context) -> dict:
         {
             "file": ctx.rel(source, ctx.checkout),
             "target": e["url"].replace(root, ""),
-            "status": str(e.get("status", {}).get("text", ""))[:80],
+            "status": str(e["status"]["text"])[:80],
         }
-        for source, errors in data.get("error_map", {}).items()
+        for source, errors in data["error_map"].items()
         for e in errors
     ]
     by_file: dict[str, int] = {}

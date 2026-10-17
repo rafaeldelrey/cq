@@ -1,8 +1,8 @@
 """vale with the AISlop style: AI-written prose and stub language in docs, comments and docstrings.
 
-The style (cq's AISlop, unless the repo has its own .vale.ini) flags the words and phrases that give AI prose away
-("delve", "seamless", "it's worth noting") as warnings, and stub language ("in a real
-implementation", "placeholder logic") as errors. It runs on the docs lychee checks (`link_paths`)
+The style (cq's AISlop in cq/defaults/vale/styles, unless the repo has its own .vale.ini) flags the words and
+phrases that give AI prose away as warnings, and stub language (text standing in for code that was never
+written) as errors; the word lists are in the style's rule files. It runs on the docs lychee checks (`link_paths`)
 and on the production code of every app, where vale reads only comments and docstrings.
 """
 

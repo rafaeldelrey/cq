@@ -68,16 +68,17 @@ def results(sarif: dict) -> list[dict]:
     for run_ in sarif.get("runs", []):
         for r in run_.get("results", []):
             plugin, _, rule = r.get("ruleId", "unknown").partition(":")
-            location = r.get("locations", [{}])[0].get("physicalLocation", {})
+            location = r["locations"][0]["physicalLocation"]  # qlty locates every result in a file
+            region = location.get("region") or {}  # SARIF leaves it out for a finding about a whole file
             rows.append(
                 {
                     "plugin": plugin,
                     "rule": rule or plugin,
                     "severity": SEVERITY.get(r.get("level", "warning"), "warning"),
-                    "file": location.get("artifactLocation", {}).get("uri", ""),
-                    "line": location.get("region", {}).get("startLine"),
-                    "end_line": location.get("region", {}).get("endLine"),
-                    "msg": r.get("message", {}).get("text", "")[:240],
+                    "file": location["artifactLocation"]["uri"],
+                    "line": region.get("startLine"),
+                    "end_line": region.get("endLine"),
+                    "msg": r["message"]["text"][:240],
                     "properties": r.get("properties", {}),
                 }
             )
@@ -94,6 +95,8 @@ def run_sarif(ctx: Context, args: list[str], name: str) -> list[dict]:
         return results(json.loads(out))
     except json.JSONDecodeError as exc:
         raise ToolError(f"qlty {' '.join(args[:2])} printed no SARIF: {out[-300:]}") from exc
+    except KeyError as exc:  # a result without the field qlty always writes: the gate lists it as a tool error
+        raise ToolError(f"qlty {' '.join(args[:2])} SARIF has a result without {exc}") from exc
 
 
 def source_args(ctx: Context) -> list[str]:

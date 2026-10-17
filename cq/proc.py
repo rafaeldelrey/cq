@@ -107,6 +107,7 @@ def has_dev_extra(app_dir: Path) -> bool:
     pyproject = app_dir / "pyproject.toml"
     if not pyproject.exists():
         return False
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a pyproject may have no [project] table or optional dependencies
     return "dev" in tomllib.loads(pyproject.read_text()).get("project", {}).get("optional-dependencies", {})
 
 

@@ -706,3 +706,12 @@ def test_sarif_without_a_location_or_message_is_an_error_not_a_blank_finding() -
         qlty.results({"runs": [{"results": [{"ruleId": "x:y", "message": {"text": "m"}}]}]})
     with pytest.raises(KeyError, match="message"):
         qlty.results({"runs": [{"results": [{"ruleId": "x:y", **located}]}]})
+
+
+def test_qlty_sarif_without_a_required_field_is_a_tool_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(qlty, "check_version", lambda ctx: None)
+    monkeypatch.setattr(qlty, "use_current_config", lambda checkout, repo_root: None)
+    no_location = {"runs": [{"results": [{"ruleId": "smells:x", "message": {"text": "m"}}]}]}
+    monkeypatch.setattr(qlty, "run", lambda cmd, cwd, ok_codes: json.dumps(no_location))
+    with pytest.raises(ToolError, match="without 'locations'"):  # the gate's attempt() lists a ToolError
+        qlty.run_sarif(make_ctx(tmp_path), ["smells", "--all"], "smells")

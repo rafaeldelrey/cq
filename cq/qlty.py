@@ -95,6 +95,8 @@ def run_sarif(ctx: Context, args: list[str], name: str) -> list[dict]:
         return results(json.loads(out))
     except json.JSONDecodeError as exc:
         raise ToolError(f"qlty {' '.join(args[:2])} printed no SARIF: {out[-300:]}") from exc
+    except KeyError as exc:  # a result without the field qlty always writes: the gate lists it as a tool error
+        raise ToolError(f"qlty {' '.join(args[:2])} SARIF has a result without {exc}") from exc
 
 
 def source_args(ctx: Context) -> list[str]:

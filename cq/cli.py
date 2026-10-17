@@ -165,11 +165,18 @@ def cmd_complexity(settings: Settings, args: argparse.Namespace) -> int:
     return complexity_gate.run(args, settings.repo_root, settings.repo_root / settings.complexity_baseline)
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Which measuring tools this machine has, for the repo given (or here)."""
+    return doctor(args.repo.resolve())
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Install the missing tools, asking first unless --yes."""
+    return setup(assume_yes=args.yes)
+
+
 # The commands about this machine, which run anywhere, and the ones that measure or set up a repo.
-MACHINE_COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
-    "doctor": lambda args: doctor(args.repo.resolve()),
-    "setup": lambda args: setup(assume_yes=args.yes),
-}
+MACHINE_COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {"doctor": cmd_doctor, "setup": cmd_setup}
 REPO_COMMANDS: dict[str, Callable[[Settings, argparse.Namespace], int]] = {
     "init": cmd_init,
     "run": cmd_run,

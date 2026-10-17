@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from cq import findings
+from cq import findings, runner
 from cq.collectors import containers, freshness, hotspots, links, scripts, semgrep, suppressions
 from cq.config import DEFAULTS_DIR, Settings, Target
 from cq.context import Context
@@ -284,3 +284,14 @@ def test_lychee_output_without_its_error_map_is_an_error_not_zero_broken_links(
     (tmp_path / "wiki").mkdir()
     with pytest.raises(KeyError, match="error_map"):
         links.collect(make_ctx(tmp_path, kind="repo", link_paths=("wiki",)))
+
+
+def test_a_missing_required_key_lands_in_the_snapshot_as_a_tool_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_tool_output(monkeypatch, links, {"total": 2})
+    monkeypatch.setattr(links.shutil, "which", lambda name: f"/bin/{name}")
+    (tmp_path / "wiki").mkdir()
+    result, error = runner.run_collector(make_ctx(tmp_path, kind="repo", link_paths=("wiki",)), "links")
+    assert result is None
+    assert error == "KeyError: 'error_map'"

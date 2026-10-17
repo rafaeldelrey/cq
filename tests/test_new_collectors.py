@@ -208,3 +208,10 @@ def test_new_tools_become_findings() -> None:
         ("scripts", "SC2086", "info"),
         ("links", "broken-link", "warning"),
     }
+
+
+def test_house_rule_ids_match_findings_by_their_last_segment(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "rules.yml").write_text("rules:\n  - id: company.security.no-eval\n  - id: plain-rule\n")
+    (tmp_path / "tests" / "t.yml").write_text("rules:\n  - id: company.tests.mock-only\n")
+    assert semgrep.house_rule_ids(tmp_path) == {"no-eval", "plain-rule", "mock-only"}

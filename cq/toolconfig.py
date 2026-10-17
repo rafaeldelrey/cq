@@ -145,10 +145,12 @@ def used_configs(settings: Settings) -> dict[str, dict[str, str]]:
         "vale": vale_config(settings),
         "gitleaks": gitleaks_config(settings),
         "qlty": qlty_config(settings),
+        "qlty.configs": first_existing(settings.repo_root, (".qlty/configs",)),
     }
     for t in settings.targets:
         if t.kind == "python":
             files[f"{t.name}.vulture"] = vulture_config(settings, t)
+            files[f"{t.name}.vulture_whitelist"] = vulture_whitelist(settings, t)
             files[f"{t.name}.interrogate"] = interrogate_config(settings, t)
             files[f"{t.name}.contracts"] = import_contracts(settings, t)
     return {

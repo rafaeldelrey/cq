@@ -263,3 +263,17 @@ def test_an_unknown_target_kind_is_refused(tmp_path: Path) -> None:
     write(tmp_path / "cq.toml", '[[targets]]\nname = "api"\nkind = "pyhton"\nroot = "."\nsource = ["src"]\n')
     with pytest.raises(ValueError, match="kind must be one of python, typescript, repo, not 'pyhton'"):
         load_settings(tmp_path)
+
+
+def test_used_configs_cover_qlty_configs_and_the_vulture_whitelist(repo: Path) -> None:
+    write(repo / ".qlty" / "qlty.toml", "config_version = '0'\n")
+    rc = write(repo / ".qlty" / "configs" / ".shellcheckrc", "disable=SC1090\n")
+    whitelist = write(repo / "apps" / "api" / "vulture_whitelist.py", "price\n")
+    before = toolconfig.used_configs(load_settings(repo))
+    assert before["qlty.configs"]["file"] == ".qlty/configs"
+    assert before["api.vulture_whitelist"]["file"] == "apps/api/vulture_whitelist.py"
+    rc.write_text("disable=SC2086\n")
+    whitelist.write_text("price\nfetch\n")
+    after = toolconfig.used_configs(load_settings(repo))
+    assert after["qlty.configs"]["hash"] != before["qlty.configs"]["hash"]
+    assert after["api.vulture_whitelist"]["hash"] != before["api.vulture_whitelist"]["hash"]

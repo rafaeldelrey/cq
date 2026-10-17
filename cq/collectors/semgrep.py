@@ -35,9 +35,13 @@ def rule_files(folder: Path) -> list[Path]:
 
 
 def house_rule_ids(folder: Path) -> set[str]:
-    """Every rule id the house-rule files define, production and test rules alike."""
+    """Every rule id the house-rule files define, production and test rules alike.
+
+    By the id's last segment, as ``scan`` records a finding's rule: a namespaced id
+    (``company.security.rule``) matches its findings either way.
+    """
     files = [*rule_files(folder), *rule_files(folder / "tests")]
-    return {m for f in files for m in RULE_ID.findall(f.read_text())}
+    return {m.rsplit(".", 1)[-1] for f in files for m in RULE_ID.findall(f.read_text())}
 
 
 def documented_catch(path: Path, start: int, end: int) -> bool:

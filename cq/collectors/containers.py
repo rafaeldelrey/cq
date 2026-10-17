@@ -45,6 +45,16 @@ def hadolint(ctx: Context) -> dict:
     }
 
 
+def image_metadata(data: dict) -> dict:
+    """The scanned image's digest and OS from trivy's JSON (blank when trivy left them out)."""
+    meta = data["Metadata"]  # trivy always writes it; OS and RepoDigests are left out for some images
+    os_info = meta.get("OS") or {}
+    return {
+        "digest": (meta.get("RepoDigests") or [""])[0],
+        "os": f"{os_info.get('Family', '')} {os_info.get('Name', '')}".strip(),
+    }
+
+
 def trivy(ctx: Context) -> dict:
     """Known vulnerabilities in the published image, by severity."""
     image = ctx.target.image
@@ -77,11 +87,9 @@ def trivy(ctx: Context) -> dict:
             "fix": v.get("FixedVersion") or "none yet",
             "title": (v.get("Title") or "")[:160],
         })  # fmt: skip
-    os_info = data.get("Metadata", {}).get("OS", {})
     return {
         "image": image,
-        "digest": (data.get("Metadata", {}).get("RepoDigests") or [""])[0],
-        "os": f"{os_info.get('Family', '')} {os_info.get('Name', '')}".strip(),
+        **image_metadata(data),
         **counts,
         "fixable_high": len({(v["PkgName"], v["VulnerabilityID"]) for v in fixable}),
         "items": items[:80],

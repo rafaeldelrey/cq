@@ -45,6 +45,7 @@ def fail_under(ctx: Context) -> float | None:
     pyproject = ctx.app_dir / "pyproject.toml"
     if not pyproject.exists():
         return None
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyprojects have no [tool.coverage.report]
     report = tomllib.loads(pyproject.read_text()).get("tool", {}).get("coverage", {}).get("report", {})
     value = report.get("fail_under")
     return float(value) if value is not None else None

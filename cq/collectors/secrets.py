@@ -118,7 +118,7 @@ def parse_trufflehog(out: str) -> list[dict]:
         if not line.startswith("{"):
             continue
         r = json.loads(line)
-        git = r.get("SourceMetadata", {}).get("Data", {}).get("Git", {})
+        git = r["SourceMetadata"]["Data"]["Git"]  # `trufflehog git` writes it for every finding
         rows.append(
             {
                 "detector": r.get("DetectorName", "?"),

@@ -21,6 +21,7 @@ import importlib.metadata
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from cq import complexity_gate
@@ -147,33 +148,50 @@ def cmd_backfill(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_init(settings: Settings, args: argparse.Namespace) -> int:
+    """Set the repo up, asking first unless --yes or --skills says."""
+    return init(settings, assume_yes=args.yes, skills=args.skills)
+
+
+def cmd_gate(settings: Settings, args: argparse.Namespace) -> int:
+    """Judge what HEAD adds over the base."""
+    return run_gate(settings, load_gate(settings), args.base, report_only=args.report_only)
+
+
+def cmd_complexity(settings: Settings, args: argparse.Namespace) -> int:
+    """The CC ratchet, with the settings' limit unless --max gives one."""
+    if args.limit is None:
+        args.limit = settings.complexity_limit
+    return complexity_gate.run(args, settings.repo_root, settings.repo_root / settings.complexity_baseline)
+
+
+# The commands about this machine, which run anywhere, and the ones that measure or set up a repo.
+MACHINE_COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
+    "doctor": lambda args: doctor(args.repo.resolve()),
+    "setup": lambda args: setup(assume_yes=args.yes),
+}
+REPO_COMMANDS: dict[str, Callable[[Settings, argparse.Namespace], int]] = {
+    "init": cmd_init,
+    "run": cmd_run,
+    "gate": cmd_gate,
+    "report": cmd_report,
+    "backfill": cmd_backfill,
+    "complexity": cmd_complexity,
+}
+
+
 def main(argv: list[str] | None = None) -> int:
     """Parse the command line and run one command."""
     args = parser().parse_args(argv)
-    if args.command == "doctor":
-        return doctor(args.repo.resolve())
-    if args.command == "setup":
-        return setup(assume_yes=args.yes)
+    if args.command in MACHINE_COMMANDS:
+        return MACHINE_COMMANDS[args.command](args)
     repo = args.repo.resolve()
     if not (repo / ".git").exists():
         print(f"{repo} is not the root of a git repository: run cq there, or pass --repo", file=sys.stderr)
         return 2
     os.chdir(repo)  # git and the tools run in the measured repo
     config = repo / args.config if args.config and not args.config.is_absolute() else args.config
-    settings = load_settings(repo, config)
-    if args.command == "init":
-        return init(settings, assume_yes=args.yes, skills=args.skills)
-    if args.command == "run":
-        return cmd_run(settings, args)
-    if args.command == "gate":
-        return run_gate(settings, load_gate(settings), args.base, report_only=args.report_only)
-    if args.command == "report":
-        return cmd_report(settings, args)
-    if args.command == "backfill":
-        return cmd_backfill(settings, args)
-    if args.limit is None:
-        args.limit = settings.complexity_limit
-    return complexity_gate.run(args, settings.repo_root, settings.repo_root / settings.complexity_baseline)
+    return REPO_COMMANDS[args.command](load_settings(repo, config), args)
 
 
 if __name__ == "__main__":

@@ -248,6 +248,7 @@ def base_errors(base: dict) -> dict[str, str]:
 
 def measured(snap: dict, target: str, tool: str, field: str) -> object:
     """One field of a tool's result in a snapshot, or None when the tool didn't measure it."""
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a target or tool the snapshot didn't measure is None, by contract
     data = snap["targets"].get(target, {}).get(tool)
     return data.get(field) if isinstance(data, dict) else None
 
@@ -404,7 +405,9 @@ def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: 
     if step_summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with Path(step_summary).open("a") as fh:
             fh.write(text + "\n")
+    # aislop-ignore-next-line ai-slop/python-print-debug -- `cq gate` prints its summary: the CLI output
     print(text)
+    # aislop-ignore-next-line ai-slop/python-print-debug -- `cq gate` prints its summary: the CLI output
     print(f"\ngate run: {out_dir}")
     failed = any(f["blocking"] for f in findings) or bool(errors)
     return 1 if mode == "block" and failed else 0

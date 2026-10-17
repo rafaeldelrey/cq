@@ -4,6 +4,26 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.2.1] - 2026-10-17
+
+### Fixed
+
+- cq's lock pins mcp 1.30.0 (an override of semgrep's `mcp==1.29.0`), which closes CVE-2026-59951
+  in the development environment and CI. semgrep's version is unchanged. `uv tool install` doesn't
+  apply a package's overrides, so an installed cq still has mcp 1.29.0. Only `semgrep mcp`, semgrep's
+  MCP server, loads it, and cq never runs that.
+
+### Changed
+
+- When trivy, lychee, trufflehog or qlty write output without a field they always write (trivy's
+  `Metadata`, lychee's `error_map`, trufflehog's git source, a SARIF result's location or message),
+  the tool is reported as an error. Before, it counted as a clean result: no vulnerabilities, no
+  broken links, a blank file.
+- cq's own code is clean under aislop: the CLI's prints are marked as intentional, and `cq`
+  dispatches its commands from a table.
+
+No measurement changed: snapshots from 0.2.0 and 0.2.1 compare directly.
+
 ## [0.2.0] - 2026-10-17
 
 ### Added

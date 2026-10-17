@@ -353,6 +353,7 @@ def _suppressions(t: str, d: dict) -> Iterator[Finding]:
 
 
 def _containers(t: str, d: dict) -> Iterator[Finding]:
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- stored snapshots, older ones included, may lack this part
     for i in d.get("dockerfile", {}).get("items", []):
         yield make(
             t,
@@ -394,6 +395,7 @@ def _freshness(t: str, d: dict) -> Iterator[Finding]:
 
 def _scripts(t: str, d: dict) -> Iterator[Finding]:
     levels = {"error": "error", "warning": "warning"}
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- stored snapshots, older ones included, may lack this part
     for i in d.get("shell", {}).get("items", []):
         yield make(
             t,
@@ -405,6 +407,7 @@ def _scripts(t: str, d: dict) -> Iterator[Finding]:
             i["line"],
             symbol=f"{i['code']}@{i['line']}",
         )
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- stored snapshots, older ones included, may lack this part
     for i in d.get("workflows", {}).get("items", []):
         yield make(
             t,
@@ -416,6 +419,7 @@ def _scripts(t: str, d: dict) -> Iterator[Finding]:
             i["line"],
             symbol=f"{i['code']}@{i['line']}",
         )
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- stored snapshots, older ones included, may lack this part
     for i, symbol in numbered(d.get("workflow_security", {}).get("items", []), lambda i: i["code"]):
         yield make(t, "scripts", f"zizmor-{i['code']}", "warning", i["msg"], i["file"], i["line"], symbol=symbol)
 

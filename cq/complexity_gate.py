@@ -21,6 +21,8 @@ at the repo root), and the limit defaults to the settings' ``complexity_limit``.
              after a refactor; growing it needs a reason in the PR (Codex flags it).
 """
 
+# aislop-ignore-file ai-slop/python-print-debug -- `cq complexity` prints its report and verdict
+
 import argparse
 import ast
 import json

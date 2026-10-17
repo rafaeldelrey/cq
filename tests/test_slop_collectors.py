@@ -681,3 +681,28 @@ def test_a_qlty_setup_without_configs_folder_mirrors_its_absence(tmp_path: Path)
     qlty.use_current_config(old, source)
     assert (old / ".qlty" / "qlty.toml").read_text() == "current"
     assert not (old / ".qlty" / "configs").exists()
+
+
+def test_a_trufflehog_finding_without_its_git_source_is_an_error() -> None:
+    line = json.dumps({"DetectorName": "AWS", "Verified": False, "SourceMetadata": {"Data": {}}})
+    with pytest.raises(KeyError, match="Git"):
+        secrets.parse_trufflehog(line)
+
+
+def test_sarif_without_a_region_is_a_whole_file_finding() -> None:
+    result = {
+        "ruleId": "smells:file-complexity",
+        "level": "warning",
+        "message": {"text": "complex file"},
+        "locations": [{"physicalLocation": {"artifactLocation": {"uri": "cq/findings.py"}}}],
+    }
+    [row] = qlty.results({"runs": [{"results": [result]}]})
+    assert (row["file"], row["line"], row["end_line"], row["msg"]) == ("cq/findings.py", None, None, "complex file")
+
+
+def test_sarif_without_a_location_or_message_is_an_error_not_a_blank_finding() -> None:
+    located = {"locations": [{"physicalLocation": {"artifactLocation": {"uri": "a.py"}}}]}
+    with pytest.raises(KeyError, match="locations"):
+        qlty.results({"runs": [{"results": [{"ruleId": "x:y", "message": {"text": "m"}}]}]})
+    with pytest.raises(KeyError, match="message"):
+        qlty.results({"runs": [{"results": [{"ruleId": "x:y", **located}]}]})

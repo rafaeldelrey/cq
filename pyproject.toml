@@ -1,6 +1,6 @@
 [project]
 name = "cq"
-version = "0.2.0"
+version = "0.2.1"
 description = "Code-quality snapshots of a repository, stored as history and reported as trends, plus a PR gate"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -17,6 +17,11 @@ dependencies = [
     "deptry==0.25.1",
     "import-linter==2.15",
 ]
+
+[tool.uv]
+# semgrep pins mcp==1.29.0 (CVE-2026-59951, fixed in 1.30). Only `semgrep mcp` imports it, and cq runs
+# `semgrep scan`. `uv tool install` ignores this override, so it covers the lock, dev and CI.
+override-dependencies = ["mcp>=1.30,<2"]
 
 [project.scripts]
 cq = "cq.cli:main"

@@ -6,6 +6,8 @@ targets without any setting. ``init`` adds what a repo keeps for good: a starter
 It also offers cq's Claude Code plugin, for the user or for the repo.
 """
 
+# aislop-ignore-file ai-slop/python-print-debug -- `cq init` talks to the user: its prints are the interface
+
 import shutil
 import sys
 

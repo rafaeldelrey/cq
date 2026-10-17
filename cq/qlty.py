@@ -45,6 +45,10 @@ def use_current_config(checkout: Path, source: Path) -> None:
     for name in CONFIG_FILES:
         src, dst = source / ".qlty" / name, checkout / ".qlty" / name
         dst.parent.mkdir(parents=True, exist_ok=True)
+        if not src.exists():  # configs/ is optional (cq init writes only qlty.toml): mirror its absence
+            if dst.is_dir():
+                shutil.rmtree(dst)
+            continue
         if src.is_dir():
             if dst.exists():
                 shutil.rmtree(dst)  # a mirror: files today's config dropped go too

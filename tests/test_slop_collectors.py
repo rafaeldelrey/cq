@@ -670,3 +670,14 @@ def test_head_paths_follow_a_rename_made_on_the_branch_before_it_joined(tmp_path
     git(tmp_path, "commit", "-qm", "work on main")
     git(tmp_path, "merge", "-q", "--no-edit", "side")
     assert secrets.head_paths(tmp_path, {("old.env", found)}) == {("old.env", found): "new.env"}
+
+
+def test_a_qlty_setup_without_configs_folder_mirrors_its_absence(tmp_path: Path) -> None:
+    source, old = tmp_path / "repo", tmp_path / "old"
+    (source / ".qlty").mkdir(parents=True)
+    (source / ".qlty" / "qlty.toml").write_text("current")  # what cq init writes: no configs/
+    (old / ".qlty" / "configs").mkdir(parents=True)
+    (old / ".qlty" / "configs" / ".stale").write_text("from an old commit")
+    qlty.use_current_config(old, source)
+    assert (old / ".qlty" / "qlty.toml").read_text() == "current"
+    assert not (old / ".qlty" / "configs").exists()

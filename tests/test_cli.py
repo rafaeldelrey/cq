@@ -262,3 +262,18 @@ def test_backfill_walks_the_checked_out_branch_whatever_its_name(
     assert run_cq(root, "backfill", "--since", "2000-01-01", "--dry-run") == 0
     assert run_cq(root, "backfill", "--since", "2000-01-01", "--branch", "trunk", "--dry-run") == 0
     assert capsys.readouterr().err.count("0 commit(s) to measure") == 2
+
+
+def test_an_uncommitted_root_file_makes_a_monorepo_run_dirty(tmp_path: Path) -> None:
+    root = tmp_path / "mono"
+    (root / "apps" / "api" / "app").mkdir(parents=True)
+    (root / "apps" / "api" / "app" / "__init__.py").write_text('"""Api."""\n')
+    (root / "cq.toml").write_text('[[targets]]\nname = "api"\nkind = "python"\nroot = "apps/api"\nsource = ["app"]\n')
+    (root / "README.md").write_text("# mono\n")
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "mono")
+    settings = load_settings(root)
+    assert runner.commit_info("HEAD", settings)["dirty"] is False
+    (root / "README.md").write_text("# mono, edited\n")  # outside every app, but the repo target reads it
+    assert runner.commit_info("HEAD", settings)["dirty"] is True

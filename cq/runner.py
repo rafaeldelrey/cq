@@ -75,15 +75,14 @@ def commit_info(rev: str, settings: Settings) -> dict:
         "dirty": False,
     }
     if rev == "HEAD":
-        # The code measured, not the whole repo; a repo with only the repo target is measured whole.
-        roots = [t.root for t in settings.targets if t.kind != "repo"] or ["."]
-        # cq's own output never makes the code dirty, wherever its data folder is.
+        # The whole tree: the repo target measures root files too (docs, scripts, workflows, secrets).
+        # cq's own output never makes it dirty, wherever its data folder is.
         produced = [
             f":(exclude){p.relative_to(root)}"
             for p in (settings.history_dir, settings.runs_dir)
             if p.is_relative_to(root)
         ]
-        info["dirty"] = bool(git("status", "--porcelain", "--", *roots, *produced, cwd=root))
+        info["dirty"] = bool(git("status", "--porcelain", "--", ".", *produced, cwd=root))
     return info
 
 

@@ -307,3 +307,13 @@ def test_a_failed_install_loses_only_that_target(tmp_path: Path, monkeypatch: py
     monkeypatch.setattr(runner, "run", fail)
     assert runner.prepare(ui, tmp_path / "old", settings) == "dependency install failed: pnpm: command not found"
     assert runner.prepare(ui, settings.repo_root, settings) is None  # the repo's own node_modules are assumed
+
+
+def test_a_dirty_snapshot_does_not_count_as_the_commit_backfilled(repo: Path) -> None:
+    settings = load_settings(repo)
+    head = git(repo, "rev-parse", "HEAD")
+    settings.history_dir.mkdir(parents=True)
+    (settings.history_dir / f"2026-10-17_{head[:7]}-dirty.json").write_text("{}")
+    assert commits_to_measure(settings, [head], None, 14, force=False) == [head]
+    (settings.history_dir / f"2026-10-17_{head[:7]}.json").write_text("{}")
+    assert commits_to_measure(settings, [head], None, 14, force=False) == []

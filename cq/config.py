@@ -266,8 +266,20 @@ def load_gate(settings: Settings) -> GateSettings:
 
 
 def ensure_data_dir(settings: Settings) -> None:
-    """Create the data folder; a new one ignores itself, so git never sees what cq writes."""
-    if settings.data_dir.exists():
+    """Make sure git never sees what cq writes: history/ and runs/ are ignored.
+
+    A new data folder ignores itself whole. An existing one (pre-created, or a tracked folder that
+    also holds the settings) gets the missing ``history/`` and ``runs/`` lines added to its own
+    .gitignore, whose other rules stay as they are.
+    """
+    ignore = settings.data_dir / ".gitignore"
+    if not settings.data_dir.exists():
+        settings.data_dir.mkdir(parents=True)
+        ignore.write_text("# cq's history and runs: never committed\n*\n")
         return
-    settings.data_dir.mkdir(parents=True)
-    (settings.data_dir / ".gitignore").write_text("# cq's history and runs: never committed\n*\n")
+    rules = {line.strip().strip("/") for line in ignore.read_text().splitlines()} if ignore.exists() else set()
+    missing = [f"{name}/" for name in ("history", "runs") if not rules & {"*", name}]
+    if missing:
+        text = ignore.read_text() if ignore.exists() else ""
+        prefix = "" if not text or text.endswith("\n") else "\n"
+        ignore.write_text(text + prefix + "# cq's history and runs: never committed\n" + "\n".join(missing) + "\n")

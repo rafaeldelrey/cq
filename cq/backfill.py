@@ -19,7 +19,8 @@ def commits_to_measure(
     shas = [git("rev-parse", r, cwd=root) for r in revs]
     if since:
         shas += first_parent_commits(since, every, root, branch)
-    done = {p.stem.split("_", 1)[1].removesuffix("-dirty") for p in settings.history_dir.glob("*.json")}
+    # A -dirty snapshot measured uncommitted changes, so it doesn't stand for the commit itself.
+    done = {p.stem.split("_", 1)[1] for p in settings.history_dir.glob("*.json") if not p.stem.endswith("-dirty")}
     return [s for s in dict.fromkeys(shas) if force or s[:7] not in done]
 
 

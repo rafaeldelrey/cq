@@ -128,15 +128,25 @@ def test_target_paths_for_an_app_at_the_root_and_in_a_folder() -> None:
 # ── the data folder ───────────────────────────────────────────────────────────────────────────
 
 
-def test_a_new_data_folder_ignores_itself_and_an_existing_one_is_left_alone(tmp_path: Path) -> None:
+def test_a_new_data_folder_ignores_itself_and_an_existing_one_gets_the_missing_rules(tmp_path: Path) -> None:
     write(tmp_path / "pyproject.toml", "[project]\nname = 'x'\n")
     settings = load_settings(tmp_path)
     ensure_data_dir(settings)
     assert (settings.data_dir / ".gitignore").read_text().splitlines()[-1] == "*"
     existing = load_settings(tmp_path, write(tmp_path / "cq.toml", "data_dir = 'mine'\n"))
-    (tmp_path / "mine").mkdir()
+    (tmp_path / "mine").mkdir()  # pre-created, with no ignore rules yet
     ensure_data_dir(existing)
-    assert not (tmp_path / "mine" / ".gitignore").exists()
+    assert (tmp_path / "mine" / ".gitignore").read_text().splitlines()[-2:] == ["history/", "runs/"]
+    tracked = write(tmp_path / "mine" / ".gitignore", "notes/\nhistory/")  # its own rules, history already there
+    ensure_data_dir(existing)
+    assert tracked.read_text().splitlines() == [
+        "notes/",
+        "history/",
+        "# cq's history and runs: never committed",
+        "runs/",
+    ]
+    ensure_data_dir(existing)  # nothing missing: unchanged
+    assert tracked.read_text().count("runs/") == 1
 
 
 # ── which config each tool reads ──────────────────────────────────────────────────────────────

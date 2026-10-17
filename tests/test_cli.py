@@ -234,3 +234,31 @@ def test_the_latest_run_is_the_last_written_not_the_last_named(tmp_path: Path) -
         (tmp_path / name / "snapshot.json").write_text("{}")
     assert latest_run(tmp_path) == tmp_path / "20261017T071548Z_0000000"
     assert latest_run(tmp_path / "none") is None
+
+
+def test_a_repo_with_only_the_repo_target_still_knows_when_it_is_dirty(tmp_path: Path) -> None:
+    root = tmp_path / "docs-only"
+    root.mkdir()
+    (root / "README.md").write_text("# docs\n")
+    git(root, "init", "-q", "-b", "trunk")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "docs")
+    settings = load_settings(root)
+    assert [t.name for t in settings.targets] == ["repo"]
+    assert runner.commit_info("HEAD", settings)["dirty"] is False
+    (root / "README.md").write_text("# docs, edited\n")
+    assert runner.commit_info("HEAD", settings)["dirty"] is True
+
+
+def test_backfill_walks_the_checked_out_branch_whatever_its_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = tmp_path / "trunk-repo"
+    root.mkdir()
+    (root / "README.md").write_text("# x\n")
+    git(root, "init", "-q", "-b", "trunk")  # no branch named main
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "one")
+    assert run_cq(root, "backfill", "--since", "2000-01-01", "--dry-run") == 0
+    assert run_cq(root, "backfill", "--since", "2000-01-01", "--branch", "trunk", "--dry-run") == 0
+    assert capsys.readouterr().err.count("0 commit(s) to measure") == 2

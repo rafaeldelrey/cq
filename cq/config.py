@@ -164,8 +164,9 @@ def detect_targets(repo_root: Path) -> tuple[Target, ...]:
     if not pyproject.exists():
         return (REPO_TARGET,)
     name = tomllib.loads(pyproject.read_text()).get("project", {}).get("name") or repo_root.name
+    slug = re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_")
     app = Target(
-        name=re.sub(r"[^a-z0-9_]+", "_", name.lower()).strip("_") or "app",
+        name=slug if slug and slug != REPO_TARGET.name else "app",  # "repo" is the repo target's name
         kind="python",
         root=".",
         source=python_source(repo_root, name),
@@ -203,6 +204,10 @@ def load_settings(repo_root: Path | None = None, config: Path | None = None) -> 
     targets = tuple(parse_target(t) for t in table["targets"]) if table.get("targets") else detect_targets(root)
     if not any(t.kind == "repo" for t in targets):
         targets = (*targets, REPO_TARGET)  # secrets, scripts, links and vale run on the repo target
+    names = [t.name for t in targets]
+    if len(set(names)) != len(names):  # a snapshot keys results by name: a duplicate would overwrite
+        dupes = sorted({n for n in names if names.count(n) > 1})
+        raise ValueError(f"target names must be unique; repeated: {', '.join(dupes)} ('repo' is the repo target's)")
     return Settings(
         targets=targets,
         complexity_limit=int(table.get("complexity_limit", 15)),

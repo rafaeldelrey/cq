@@ -11,12 +11,14 @@ from cq.config import Settings
 from cq.runner import cleanup_worktrees, first_parent_commits, git, save, snapshot
 
 
-def commits_to_measure(settings: Settings, revs: list[str], since: str | None, every: int, *, force: bool) -> list[str]:
-    """The commits asked for, minus those already in history/ (unless ``force``)."""
+def commits_to_measure(
+    settings: Settings, revs: list[str], since: str | None, every: int, *, force: bool, branch: str = "HEAD"
+) -> list[str]:
+    """The commits asked for (``revs``, and ``branch``'s first parents from ``since``), minus those in history/."""
     root = settings.repo_root
     shas = [git("rev-parse", r, cwd=root) for r in revs]
     if since:
-        shas += first_parent_commits(since, every, root)
+        shas += first_parent_commits(since, every, root, branch)
     done = {p.stem.split("_", 1)[1].removesuffix("-dirty") for p in settings.history_dir.glob("*.json")}
     return [s for s in dict.fromkeys(shas) if force or s[:7] not in done]
 

@@ -75,14 +75,15 @@ def commit_info(rev: str, settings: Settings) -> dict:
         "dirty": False,
     }
     if rev == "HEAD":
-        roots = [t.root for t in settings.targets if t.kind != "repo"]  # the code measured, not the whole repo
+        # The code measured, not the whole repo; a repo with only the repo target is measured whole.
+        roots = [t.root for t in settings.targets if t.kind != "repo"] or ["."]
         # cq's own output never makes the code dirty, wherever its data folder is.
         produced = [
             f":(exclude){p.relative_to(root)}"
             for p in (settings.history_dir, settings.runs_dir)
             if p.is_relative_to(root)
         ]
-        info["dirty"] = bool(git("status", "--porcelain", "--", *roots, *produced, cwd=root)) if roots else False
+        info["dirty"] = bool(git("status", "--porcelain", "--", *roots, *produced, cwd=root))
     return info
 
 
@@ -223,7 +224,7 @@ def save(snap: dict, settings: Settings, *, to_history: bool) -> list[Path]:
     return paths
 
 
-def first_parent_commits(since: str, every_days: int, cwd: Path, branch: str = "main") -> list[str]:
+def first_parent_commits(since: str, every_days: int, cwd: Path, branch: str = "HEAD") -> list[str]:
     """The last commit on ``branch`` (first parent) before each step from ``since`` to now."""
     start = datetime.fromisoformat(since).replace(tzinfo=UTC)
     now = datetime.now(UTC)

@@ -240,3 +240,15 @@ def test_a_named_vulture_or_interrogate_file_wins_for_every_app(repo: Path) -> N
 def test_the_default_vulture_ignores_framework_names() -> None:
     text = (DEFAULTS_DIR / "vulture.toml").read_text()
     assert '"handle_tool_error"' in text and '"@router.*"' in text
+
+
+def test_a_project_named_repo_does_not_shadow_the_repo_target(tmp_path: Path) -> None:
+    write(tmp_path / "pyproject.toml", "[project]\nname = 'repo'\n")
+    assert [t.name for t in detect_targets(tmp_path)] == ["app", "repo"]
+
+
+def test_repeated_target_names_are_refused(tmp_path: Path) -> None:
+    # A Python target named "repo" collides with the repo target cq adds.
+    write(tmp_path / "cq.toml", '[[targets]]\nname = "repo"\nkind = "python"\nroot = "."\nsource = ["src"]\n')
+    with pytest.raises(ValueError, match="repeated: repo"):
+        load_settings(tmp_path)

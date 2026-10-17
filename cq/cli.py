@@ -70,6 +70,7 @@ def parser() -> argparse.ArgumentParser:
     back.add_argument("--since", help="ISO date of the first step")
     back.add_argument("--every", type=int, default=14, help="days between steps (default 14)")
     back.add_argument("--rev", action="append", default=[], help="a specific commit (repeatable)")
+    back.add_argument("--branch", default="HEAD", help="the branch --since walks (default: the checked-out one)")
     back.add_argument("--force", action="store_true", help="re-measure commits already in history/")
     back.add_argument("--dry-run", action="store_true", help="list the commits only")
 
@@ -128,7 +129,7 @@ def cmd_backfill(settings: Settings, args: argparse.Namespace) -> int:
     if not args.since and not args.rev:
         print("give --since or --rev", file=sys.stderr)
         return 2
-    todo = commits_to_measure(settings, args.rev, args.since, args.every, force=args.force)
+    todo = commits_to_measure(settings, args.rev, args.since, args.every, force=args.force, branch=args.branch)
     for sha in todo:
         print(git("show", "-s", "--format=%h %cs %s", sha, cwd=settings.repo_root), file=sys.stderr)
     if args.dry_run or not todo:

@@ -19,6 +19,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: "22"
+      - name: System tools the collector tests run for real
+        # ubuntu-latest has Homebrew installed but off the PATH, and shellcheck preinstalled.
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          brew install vale hadolint lychee betterleaks
+          dirname "$(brew --prefix)/bin/vale" >> "$GITHUB_PATH"
       - name: Sync
         run: uv sync
       - name: ruff

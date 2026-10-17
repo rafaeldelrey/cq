@@ -8,7 +8,7 @@ used in production code.
 
 import json
 
-from cq.config import PINS
+from cq.config import PINS, has_python
 from cq.context import Context
 from cq.proc import has_dev_extra, run, uv_app
 
@@ -23,7 +23,10 @@ DEPTRY_LABELS = {
 
 
 def first_party_packages(ctx: Context) -> list[str]:
-    """The app's own top-level packages: a source dir that is a package, or the packages inside a src/ dir."""
+    """The app's own top-level packages: a source dir that is a package, or the packages inside a src/ dir.
+
+    Namespace packages (no ``__init__.py``) count too: a folder of Python files is a package by name.
+    """
     names = []
     for path in ctx.sources:
         if path.is_file():
@@ -31,7 +34,9 @@ def first_party_packages(ctx: Context) -> list[str]:
         elif (path / "__init__.py").exists():
             names.append(path.name)
         else:
-            names.extend(child.name for child in path.iterdir() if (child / "__init__.py").exists())
+            inner = [c.name for c in sorted(path.iterdir()) if c.is_dir() and has_python(c)]
+            # A folder of modules with no package inside is itself a namespace package (acme/core.py).
+            names.extend(inner or ([path.name] if any(path.glob("*.py")) else []))
     return names
 
 

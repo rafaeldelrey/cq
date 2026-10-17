@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from cq import doctor, init, proc
-from cq.collectors import containers, pyscn, scripts
+from cq.collectors import containers, pyscn, scripts, vulnerabilities
 from cq.config import DEFAULTS_DIR, PINS, Settings, Target, load_settings
 from cq.context import Context
 
@@ -294,3 +294,12 @@ def test_setup_leaves_the_optional_tools_out(monkeypatch: pytest.MonkeyPatch) ->
     fake_versions(monkeypatch, {k: v for k, v in ALL.items() if k not in ("vale", "hadolint", "trivy")})
     monkeypatch.setattr(doctor.shutil, "which", lambda name: f"/usr/bin/{name}")
     assert doctor.plan([doctor.check(t) for t in doctor.TOOLS]) == (["vale"], False)
+
+
+def test_a_pnpm_or_yarn_app_is_skipped_by_the_audit_with_the_reason(tmp_path: Path) -> None:
+    target = Target(name="ui", kind="typescript", root=".", source=("src",), tests=False)
+    ctx = Context(target=target, checkout=tmp_path, raw_dir=tmp_path, settings=Settings(targets=(target,)))
+    (tmp_path / "yarn.lock").write_text("")
+    assert vulnerabilities.collect_typescript(ctx) == {
+        "skipped": "yarn.lock: cq audits npm projects only (npm audit needs package-lock.json)"
+    }

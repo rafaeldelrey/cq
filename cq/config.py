@@ -143,13 +143,23 @@ def find_config(repo_root: Path, config: Path | None = None) -> tuple[dict[str, 
     return {}, None
 
 
+def has_python(folder: Path) -> bool:
+    """Whether a folder holds any .py file, at any depth."""
+    return folder.is_dir() and next(folder.rglob("*.py"), None) is not None
+
+
 def python_source(repo_root: Path, project_name: str) -> tuple[str, ...]:
     """A root project's production code: src/, else its package, else its top-level packages,
-    else its top-level modules; never the whole root, which holds .venv and other installed code."""
-    if (repo_root / "src").is_dir():
+    else its top-level modules; never the whole root, which holds .venv and other installed code.
+
+    src/ and the project's package count only when they hold Python, and the package may be a
+    namespace package (no __init__.py). Other folders need an __init__.py, so scripts/ or docs/
+    are never taken for production code.
+    """
+    if has_python(repo_root / "src"):
         return ("src",)
     package = re.sub(r"[-.]+", "_", project_name).lower()
-    if (repo_root / package / "__init__.py").exists():
+    if has_python(repo_root / package):
         return (package,)
     packages = sorted(
         p.name

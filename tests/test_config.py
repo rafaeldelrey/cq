@@ -277,3 +277,13 @@ def test_used_configs_cover_qlty_configs_and_the_vulture_whitelist(repo: Path) -
     after = toolconfig.used_configs(load_settings(repo))
     assert after["qlty.configs"]["hash"] != before["qlty.configs"]["hash"]
     assert after["api.vulture_whitelist"]["hash"] != before["api.vulture_whitelist"]["hash"]
+
+
+def test_src_and_the_project_package_count_only_with_python_in_them(tmp_path: Path) -> None:
+    write(tmp_path / "pyproject.toml", "[project]\nname = 'acme'\n")
+    write(tmp_path / "src" / "index.ts", "export {}\n")  # a src/ of TypeScript: not a Python app
+    assert detect_targets(tmp_path) == (REPO_TARGET,)
+    write(tmp_path / "acme" / "core.py")  # a namespace package: no __init__.py
+    assert detect_targets(tmp_path)[0].source == ("acme",)
+    write(tmp_path / "src" / "acme_cli" / "main.py")
+    assert detect_targets(tmp_path)[0].source == ("src",)

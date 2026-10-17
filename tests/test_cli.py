@@ -3,12 +3,14 @@
 import json
 import subprocess
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
 from cq import cli, complexity_gate, gate, runner
 from cq.backfill import commits_to_measure
 from cq.config import Target, load_settings
+from cq.proc import ToolError
 from cq.report import latest_run
 
 PRICING = '''"""Pricing."""
@@ -330,8 +332,9 @@ def test_gate_runs_from_the_command_line(repo: Path, monkeypatch: pytest.MonkeyP
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123"}
     monkeypatch.setattr(gate, "git", lambda *a: answers.get(a[:1], ""))
     monkeypatch.setattr(gate, "branch_secrets", lambda settings, base: [])
+    monkeypatch.setattr(gate, "line_level", Mock(side_effect=ToolError("qlty printed no SARIF")))
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     assert run_cq(repo, "gate", "--base", "origin/dev", "--report-only") == 0  # a tool error, but report-only
     text = next((repo / ".cq" / "runs").glob("*_gate_head123/gate.md")).read_text()
     assert "(warn mode)" in text and "1 tool errors" in text
-    assert "`qlty`: the repo has no .qlty/qlty.toml" in text
+    assert "`qlty`: qlty printed no SARIF" in text

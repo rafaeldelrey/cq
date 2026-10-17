@@ -149,6 +149,11 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
     </div>
   </header>
 
+  <section class="panel" id="steps" hidden>
+    <h2>Measurement changed since the previous snapshot</h2>
+    <p>A step in a metric may come from these, not from the code:</p>
+    <ul id="steps-list"></ul>
+  </section>
   <section class="panel" id="analysis" hidden>
     <div class="head"><h2>Analysis</h2><span class="sub">written by /code-quality for this run</span></div>
     <div class="body" id="analysis-body"></div>
@@ -549,6 +554,10 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
   addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => state.sel?.p && renderTrend(), 120); });
 
   if (D.analysis) { $("analysis").hidden = false; $("analysis-body").innerHTML = D.analysis; }
+  if (D.steps && D.steps.length) {
+    $("steps").hidden = false;
+    for (const note of D.steps) { const li = document.createElement("li"); li.textContent = note; $("steps-list").appendChild(li); }
+  }
   renderMeta(); renderAll(); renderFindings(); renderRun();
 })();
 </script>

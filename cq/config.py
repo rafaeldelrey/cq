@@ -103,6 +103,8 @@ class Settings:
     cspell_config: str = ""
     vale_config: str = ""
     gitleaks_config: str = ""
+    vulture_config: str = ""  # a toml holding [tool.vulture], for every Python app
+    interrogate_config: str = ""  # a toml holding [tool.interrogate], for every Python app
     complexity_baseline: str = ".complexity-baseline.json"  # relative to the repo root
     name: str = ""  # the dashboard's title: "<name> code quality"; the repo folder's name by default
 
@@ -217,6 +219,8 @@ def load_settings(repo_root: Path | None = None, config: Path | None = None) -> 
         cspell_config=str(table.get("cspell_config", "")),
         vale_config=str(table.get("vale_config", "")),
         gitleaks_config=str(table.get("gitleaks_config", "")),
+        vulture_config=str(table.get("vulture_config", "")),
+        interrogate_config=str(table.get("interrogate_config", "")),
         complexity_baseline=str(table.get("complexity_baseline", ".complexity-baseline.json")),
         name=str(table.get("name", root.name)),
     )

@@ -16,4 +16,5 @@ ignore_decorators = [
     "@validator",
     "@pytest.fixture",
 ]
-ignore_names = ["model_config", "model_post_init", "lifespan", "cls"]
+# Read by a framework through attribute lookup (pydantic, FastAPI, LangChain tools).
+ignore_names = ["handle_tool_error", "model_config", "model_post_init", "lifespan", "cls"]

@@ -192,3 +192,34 @@ def test_the_app_environment_tools_run_on_a_dependency_group_repo(repo: Path) ->
     assert measured["pyright"]["errors"] >= 0
     assert measured["duplication"]["clones"] == 0
     assert measured["freshness"]["outdated"] >= 0
+
+
+def test_version_and_cq_config(repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["--version"])
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out.startswith("cq ")
+    (repo / "quality").mkdir()
+    (repo / "quality" / "cq.toml").write_text('data_dir = "data"\nname = "Acme"\n')
+    monkeypatch.setenv("CQ_CONFIG", "quality/cq.toml")  # relative to the repo, as in CI or a cron job
+    assert run_cq(repo, "run", "--tool", "size") == 0
+    run_dir = latest_run(repo / "quality" / "data" / "runs")
+    assert run_dir is not None
+    assert "<title>Acme code quality</title>" in (run_dir / "dashboard.html").read_text()[:400]
+
+
+def test_a_measurement_change_is_flagged_above_the_numbers(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    settings = load_settings(repo)
+    first = git(repo, "rev-list", "--max-parents=0", "HEAD")
+    runner.save(runner.snapshot(settings, rev=first, tools=["size"]), settings, to_history=True)
+    (repo / "cspell.json").write_text('{"words": ["acme"]}')  # the repo now has its own word list
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "words")
+    run_cq(repo, "run", "--tool", "size", "--no-history")
+    run_dir = latest_run(settings.runs_dir)
+    assert run_dir is not None
+    report = (run_dir / "report.md").read_text()
+    assert "## Measurement changed since the previous snapshot" in report
+    assert "cspell config changed (cspell.json)" in report
+    assert report.index("Measurement changed") < report.index("## Since the previous snapshot")
+    assert "cspell config changed" in (run_dir / "dashboard.html").read_text()

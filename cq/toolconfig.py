@@ -33,8 +33,10 @@ def has_table(pyproject: Path, tool: str) -> bool:
     return tool in tomllib.loads(pyproject.read_text()).get("tool", {})
 
 
-def pyproject_tool(settings: Settings, target: Target, tool: str) -> Path:
-    """A tool configured in a pyproject: the app's, else the repo root's, else cq's default."""
+def pyproject_tool(settings: Settings, target: Target, tool: str, setting: str) -> Path:
+    """A tool configured in a toml: the file the settings name, the app's or the root's pyproject, or cq's default."""
+    if named_file := named(settings, setting):
+        return named_file
     for pyproject in (target.app_dir(settings.repo_root) / "pyproject.toml", settings.repo_root / "pyproject.toml"):
         if has_table(pyproject, tool):
             return pyproject
@@ -43,7 +45,7 @@ def pyproject_tool(settings: Settings, target: Target, tool: str) -> Path:
 
 def vulture_config(settings: Settings, target: Target) -> Path:
     """The pyproject or toml holding ``[tool.vulture]`` for this app."""
-    return pyproject_tool(settings, target, "vulture")
+    return pyproject_tool(settings, target, "vulture", settings.vulture_config)
 
 
 def vulture_whitelist(settings: Settings, target: Target) -> Path | None:
@@ -53,7 +55,7 @@ def vulture_whitelist(settings: Settings, target: Target) -> Path | None:
 
 def interrogate_config(settings: Settings, target: Target) -> Path:
     """The pyproject or toml holding ``[tool.interrogate]`` for this app."""
-    return pyproject_tool(settings, target, "interrogate")
+    return pyproject_tool(settings, target, "interrogate", settings.interrogate_config)
 
 
 def cspell_config(settings: Settings) -> Path:

@@ -31,6 +31,11 @@ def write_reports(
     full_history = load_history(history_dir)
     history = dashboard.history_until(full_history, snap)
     text = render_md.render(history, window_days=window, details=details)
+    if len(history) > 1:
+        # The flag goes right after the header, before "## Since the previous snapshot".
+        header, sep, rest = text.partition("\n## ")
+        notes = render_md.step_section(render_md.measurement_changes(history[-2], history[-1]))
+        text = header + "\n".join(notes) + sep + rest if notes and sep else text
     (run_dir / "report.md").write_text(text)
     found = findings.mark_new(findings.from_snapshot(snap), history[-2] if len(history) > 1 else None)
     findings.write_jsonl(found, run_dir / "findings.jsonl")

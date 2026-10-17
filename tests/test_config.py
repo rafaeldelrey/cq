@@ -222,3 +222,21 @@ def test_used_configs_label_their_source_and_change_with_the_file(repo: Path) ->
     assert toolconfig.used_configs(load_settings(repo))["cspell"]["hash"] != second["cspell"]["hash"]
     outside = Path("/") / "elsewhere" / "x.toml"
     assert toolconfig.label(settings, outside) == "/elsewhere/x.toml"
+
+
+def test_a_named_vulture_or_interrogate_file_wins_for_every_app(repo: Path) -> None:
+    shared = write(repo / "quality" / "pyproject.toml", "[tool.vulture]\n[tool.interrogate]\n")
+    write(repo / "apps" / "api" / "pyproject.toml", "[tool.vulture]\n")  # the named file still wins
+    text = (repo / "cq.toml").read_text()
+    write(
+        repo / "cq.toml",
+        'vulture_config = "quality/pyproject.toml"\ninterrogate_config = "quality/pyproject.toml"\n' + text,
+    )
+    settings = load_settings(repo)
+    assert toolconfig.vulture_config(settings, settings.targets[0]) == shared.resolve()
+    assert toolconfig.interrogate_config(settings, settings.targets[0]) == shared.resolve()
+
+
+def test_the_default_vulture_ignores_framework_names() -> None:
+    text = (DEFAULTS_DIR / "vulture.toml").read_text()
+    assert '"handle_tool_error"' in text and '"@router.*"' in text

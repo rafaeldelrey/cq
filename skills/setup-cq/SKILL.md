@@ -14,11 +14,12 @@ let them commit.
 Check with `cq --version` (or `command -v cq`). If it is missing:
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.1.0
 ```
 
-The repo is private, so this needs the user's GitHub ssh access. If `uv` is missing, the user
-installs it first (`brew install uv`). To pin a version, add `@v<version>` to the URL.
+Use the newest release tag (`git ls-remote --tags git@github.com:rafaeldelrey/cq.git`): a tag pins
+the measuring tools, so snapshots stay comparable. The repo is private, so this needs the user's
+GitHub ssh access. If `uv` is missing, the user installs it first (`brew install uv`).
 
 ## 2. The measuring tools
 

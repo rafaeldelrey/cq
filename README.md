@@ -41,7 +41,8 @@ cq complexity check src          # the cyclomatic-complexity ratchet (check | re
 
 `cq run --target <t> --tool <tool>` runs a subset; a partial run stays out of history.
 `cq run --rev <sha>` measures a past commit in a temporary worktree outside the repo. `--repo`
-measures another folder, and `--config` reads a settings file other than the defaults.
+measures another folder, and `--config` (or `CQ_CONFIG`) reads a settings file other than the
+defaults, relative to the repo.
 
 `.cq/` ignores itself, so nothing cq writes is ever committed.
 
@@ -66,6 +67,8 @@ complexity_baseline = ".complexity-baseline.json"
 # The repo's own config for a tool, when it isn't where cq looks by default:
 semgrep_rules = ""               # a folder: *.yml production rules, tests/*.yml test rules
 contracts_dir = ""               # import-linter contracts as <target>.ini
+vulture_config = ""              # a toml with [tool.vulture], for every Python app
+interrogate_config = ""          # a toml with [tool.interrogate], for every Python app
 cspell_config = ""
 vale_config = ""
 gitleaks_config = ""
@@ -105,8 +108,9 @@ Each tool reads, in order:
 | betterleaks | `.gitleaks.toml` |
 | qlty | `.qlty/qlty.toml` (required: `cq init` writes cq's default) |
 
-Every snapshot records which file each tool read and a hash of it. When a number changes because
-the config changed, the trend shows it and you can tell it apart from a change in the code.
+Every snapshot records which file each tool read and a hash of it. When a tool version or a config
+changed since the previous snapshot, the report and the dashboard say so above the numbers, so a
+step that comes from the measurement isn't read as a change in the code.
 
 ### Tool versions
 

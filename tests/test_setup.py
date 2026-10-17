@@ -225,3 +225,38 @@ def test_shell_scripts_anywhere_for_a_root_shell_root(tmp_path: Path) -> None:
         target=target, checkout=tmp_path, raw_dir=tmp_path, settings=Settings(targets=(target,), shell_roots=(".",))
     )
     assert scripts.tracked_scripts(ctx) == ["deep/er/x.sh", "run.sh"]
+
+
+def test_install_qlty_copies_nothing_when_verification_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def fake_run(cmd: list[str], cwd: Path) -> str:
+        if cmd[0] == "shasum":
+            raise proc.ToolError("shasum -a 256 -c exited 1: FAILED")
+        return ""
+
+    monkeypatch.setattr(doctor, "run", fake_run)
+    dest = tmp_path / "bin" / "qlty"
+    with pytest.raises(proc.ToolError):
+        doctor.install_qlty("0.654.0", dest)
+    assert not dest.exists()
+
+
+def test_qlty_triple_refuses_an_unsupported_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(doctor.platform, "machine", lambda: "armv7l")
+    with pytest.raises(SystemExit, match="no release for armv7l"):
+        doctor.qlty_triple()
+
+
+def test_version_line_gives_up_on_a_tool_that_hangs(monkeypatch: pytest.MonkeyPatch) -> None:
+    def hang(*args: object, **kwargs: object) -> None:
+        raise subprocess.TimeoutExpired(cmd="x", timeout=30)
+
+    monkeypatch.setattr(doctor.subprocess, "run", hang)
+    assert doctor.version_line("git", "--version") == "unknown"
+
+
+def test_setup_plan_adds_gh_only_when_qlty_needs_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_versions(monkeypatch, {k: v for k, v in ALL.items() if k != "vale"})
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    assert doctor.plan([doctor.check(t) for t in doctor.TOOLS]) == (["vale"], False)
+    fake_versions(monkeypatch, {k: v for k, v in ALL.items() if k != "qlty"})
+    assert doctor.plan([doctor.check(t) for t in doctor.TOOLS]) == (["gh"], True)

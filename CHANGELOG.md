@@ -21,6 +21,11 @@ First release, extracted from angel-monitor's `code_quality/` (angel-monitor#391
   them with Homebrew, and qlty from its GitHub release after checking its checksum and attestation.
 - `cq init` writes starter settings (the gate in `warn` mode) and cq's default `.qlty/qlty.toml`,
   asking first.
+- The report and the dashboard flag a measurement change since the previous snapshot (a tool
+  version, or a config added, removed or changed) above the numbers.
+- `vulture_config` and `interrogate_config` settings name one toml for every Python app.
+- `CQ_CONFIG` names the settings file, like `--config`; `cq --version`.
+- `name` setting: the dashboard's title (the repo folder's name by default).
 - The data folder (`.cq/` by default) ignores itself.
 - A Claude Code plugin in the same repo: `/code-quality` and `/setup-cq`.
 - Generic house rules (`cq-no-print`, `cq-logs-and-carries-on`, `cq-nested-import`,

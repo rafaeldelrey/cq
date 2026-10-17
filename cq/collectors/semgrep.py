@@ -94,9 +94,8 @@ def scan_tests(ctx: Context, tests_dir: Path, rules: list[Path]) -> list[dict]:
     return found
 
 
-def collect(ctx: Context) -> dict:
-    """Production rules over the production paths; test rules over the app's tests."""
-    folder = semgrep_rules(ctx.settings)
+def scan_all(ctx: Context, folder: Path) -> list[dict]:
+    """The production scan, plus the test scan when the app has tests and the folder has test rules."""
     found = scan(
         ctx,
         [*(str(r) for r in rule_files(folder)), *REGISTRY[ctx.target.kind]],
@@ -108,6 +107,13 @@ def collect(ctx: Context) -> dict:
     test_rules = rule_files(folder / "tests")
     if ctx.target.kind == "python" and tests_dir.is_dir() and test_rules:
         found += scan_tests(ctx, tests_dir, test_rules)
+    return found
+
+
+def collect(ctx: Context) -> dict:
+    """Production rules over the production paths; test rules over the app's tests."""
+    folder = semgrep_rules(ctx.settings)
+    found = scan_all(ctx, folder)
     items = [i for i in found if "scan_error" not in i]
     house = house_rule_ids(folder)
     by_rule: dict[str, int] = {}

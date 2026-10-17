@@ -153,3 +153,28 @@ def test_new_findings_named(tmp_path: Path) -> None:
     section = text.split("**New since the previous snapshot**")[1].split("\n\n")[0]
     assert "`b.py` `g` cyclomatic complexity 18 > 15" in section
     assert "a.py" not in section
+
+
+def test_measurement_changes_compare_versions_and_configs() -> None:
+    old = {"tool_versions": {"radon": "6.0.1"}}  # from before cq recorded its configs
+    new = {
+        "tool_versions": {"radon": "6.0.1", "cq": "0.1.0"},
+        "configs": {"vale": {"file": "cq:vale/.vale.ini", "hash": "a"}},
+    }
+    assert render_md.measurement_changes(old, new) == [
+        "cq: none → 0.1.0"
+    ]  # configs aren't compared with an older snapshot
+    newer = {
+        "tool_versions": new["tool_versions"],
+        "configs": {"vale": {"file": ".vale.ini", "hash": "b"}, "cspell": {"file": "cspell.json", "hash": "c"}},
+    }
+    assert render_md.measurement_changes(new, newer) == [
+        "cspell config added (cspell.json)",
+        "vale config changed (.vale.ini)",
+    ]
+    assert render_md.measurement_changes(newer, new) == [
+        "cspell config removed (cspell.json)",
+        "vale config changed (cq:vale/.vale.ini)",
+    ]
+    assert render_md.step_section([]) == []
+    assert render_md.step_section(["x"])[-2] == "- x"

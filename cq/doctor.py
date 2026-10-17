@@ -63,7 +63,10 @@ def version_line(name: str, flag: str) -> str:
     path = shutil.which(name)
     if path is None:
         return ""
-    proc = subprocess.run([path, flag], capture_output=True, text=True, check=False)
+    try:
+        proc = subprocess.run([path, flag], capture_output=True, text=True, check=False, timeout=30)
+    except subprocess.TimeoutExpired:  # a shim that prompts or hangs: installed, version unknown
+        return "unknown"
     text = (proc.stdout or proc.stderr).strip()
     return text.splitlines()[0] if text else "unknown"
 
@@ -98,9 +101,11 @@ def doctor() -> int:
 
 
 def qlty_triple() -> str:
-    """qlty's release name for this machine."""
-    machine = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64", "AMD64": "x86_64"}[platform.machine()]
-    system = {"Darwin": "apple-darwin", "Linux": "unknown-linux-gnu"}[platform.system()]
+    """qlty's release name for this machine; a platform qlty doesn't build for stops setup."""
+    machine = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64", "AMD64": "x86_64"}.get(platform.machine())
+    system = {"Darwin": "apple-darwin", "Linux": "unknown-linux-gnu"}.get(platform.system())
+    if machine is None or system is None:
+        raise SystemExit(f"qlty has no release for {platform.machine()}/{platform.system()}: install it by hand")
     return f"{machine}-{system}"
 
 
@@ -130,31 +135,47 @@ def confirm(question: str, *, assume_yes: bool) -> bool:
     return input(f"{question} [y/N] ").strip().lower() in ("y", "yes")
 
 
-def setup(*, assume_yes: bool = False) -> int:
-    """Install what doctor reports missing, after showing the plan."""
-    checks = [check(t) for t in TOOLS]
+def plan(checks: list[Check]) -> tuple[list[str], bool]:
+    """The Homebrew formulas to install, and whether qlty needs installing."""
     formulas = [c.tool.formula for c in checks if not c.ok and c.tool.formula]
     qlty_needed = any(c.tool.name == "qlty" and not c.ok for c in checks)
     if qlty_needed and shutil.which("gh") is None:
         formulas.append("gh")  # qlty's download and attestation check go through the GitHub CLI
-    if not formulas and not qlty_needed:
-        print("Nothing to install.")
-        return doctor()
+    return formulas, qlty_needed
+
+
+def show(formulas: list[str], qlty_needed: bool) -> None:
+    """Print what setup will do."""
     print("cq setup will:")
     if formulas:
         print(f"  brew install {' '.join(formulas)}")
     if qlty_needed:
         print(f"  install qlty {PINS['qlty']} from github.com/qltysh/qlty (checksum + attestation) to {QLTY_BIN}")
-    if not confirm("Go ahead?", assume_yes=assume_yes):
-        return 1
+
+
+def apply(formulas: list[str], qlty_needed: bool) -> int:
+    """Install the plan; 1 when Homebrew is needed and missing."""
     if formulas:
         if shutil.which("brew") is None:
             print("Homebrew is not installed: see https://brew.sh, then run `cq setup` again.")
             return 1
+        # Not through cq.proc.run: brew's progress goes straight to the terminal, as it would by hand.
         subprocess.run(["brew", "install", *formulas], check=True)
     if qlty_needed:
         install_qlty(PINS["qlty"])
         if shutil.which("qlty") is None:
             print(f"qlty is in {QLTY_BIN.parent}, which is not on your PATH: add it.")
+    return 0
+
+
+def setup(*, assume_yes: bool = False) -> int:
+    """Install what doctor reports missing, after showing the plan."""
+    formulas, qlty_needed = plan([check(t) for t in TOOLS])
+    if not formulas and not qlty_needed:
+        print("Nothing to install.")
+        return doctor()
+    show(formulas, qlty_needed)
+    if not confirm("Go ahead?", assume_yes=assume_yes) or apply(formulas, qlty_needed):
+        return 1
     print()
     return doctor()

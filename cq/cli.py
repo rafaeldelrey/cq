@@ -11,12 +11,13 @@
     cq backfill --since 2026-06-01     past commits into history/, one every 14 days
     cq complexity check src            the cyclomatic-complexity ratchet (check | report | baseline)
 
-``--repo`` names the measured repo (default: the current directory), ``--config`` a settings file
-other than its cq.toml or pyproject's [tool.cq]. Runs and history go to the settings' data_dir
+``--repo`` names the measured repo (default: the current directory), ``--config`` (or ``CQ_CONFIG``)
+a settings file other than its cq.toml or pyproject's [tool.cq]; relative to the repo. Runs and history go to the settings' data_dir
 (default .cq/, which ignores itself).
 """
 
 import argparse
+import importlib.metadata
 import json
 import os
 import sys
@@ -36,8 +37,14 @@ from cq.runner import git, save, snapshot
 def parser() -> argparse.ArgumentParser:
     """The command line."""
     p = argparse.ArgumentParser(prog="cq", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--version", action="version", version=f"cq {importlib.metadata.version('cq')}")
     p.add_argument("--repo", type=Path, default=Path(), help="the repository to measure (default: here)")
-    p.add_argument("--config", type=Path, help="settings file (default: cq.toml, else pyproject's [tool.cq])")
+    p.add_argument(
+        "--config",
+        type=Path,
+        default=Path(os.environ["CQ_CONFIG"]) if os.environ.get("CQ_CONFIG") else None,
+        help="settings file (default: $CQ_CONFIG, else cq.toml, else pyproject's [tool.cq])",
+    )
     sub = p.add_subparsers(dest="command", required=True)
 
     run = sub.add_parser("run", help="take a snapshot")
@@ -143,7 +150,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{repo} is not the root of a git repository: run cq there, or pass --repo", file=sys.stderr)
         return 2
     os.chdir(repo)  # git and the tools run in the measured repo
-    settings = load_settings(repo, args.config)
+    config = repo / args.config if args.config and not args.config.is_absolute() else args.config
+    settings = load_settings(repo, config)
     if args.command == "init":
         return init(settings, assume_yes=args.yes)
     if args.command == "run":

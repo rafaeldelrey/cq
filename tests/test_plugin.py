@@ -286,3 +286,16 @@ def test_skills_project_installs_over_a_local_install(repo: Path, monkeypatch: p
     fake.calls.clear()
     init.add_plugin(load_settings(repo), skills=None, assume_yes=True)  # no explicit project: already here
     assert fake.calls == []
+
+
+def test_doctor_says_a_disabled_plugin_is_not_ready(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    off = {"id": "cq@cq", "scope": "user", "version": "0.2.0", "enabled": False}
+    use(monkeypatch, FakeClaude(installed=[off]))
+    assert plugin.status(repo) == (
+        False,
+        "cq@cq (user 0.2.0), disabled",
+        "claude plugin enable cq@cq --scope user",
+    )
+    on_here = {"id": "cq@cq", "scope": "project", "version": "0.2.0", "projectPath": str(repo), "enabled": True}
+    use(monkeypatch, FakeClaude(installed=[off, on_here]))
+    assert plugin.status(repo)[0] is True  # enabled for this repo: the skills work here

@@ -44,27 +44,30 @@ def call(cmd: list[str], cwd: Path) -> int:
         return 1
 
 
-def installed(claude: str, repo_root: Path) -> dict[str, str]:
-    """Where cq's plugin is installed that counts for this repo: scope → version.
+def rows_here(claude: str, repo_root: Path) -> list[dict]:
+    """``claude plugin list --json``'s rows for cq's plugin that count for this repo.
 
     ``user`` counts everywhere; ``project`` and ``local`` count when their project is this repo.
-    Unknown (claude failed, odd output) is an empty dict: the question is asked rather than skipped.
+    Unknown (claude failed, odd output) is no rows: the question is asked rather than skipped.
     """
     out = capture([claude, "plugin", "list", "--json"], repo_root)
     try:
         rows = json.loads(out) if out else []
     except json.JSONDecodeError:  # output claude didn't mean as JSON: treated as "can't tell"
-        return {}
-    found: dict[str, str] = {}
+        return []
     here = repo_root.resolve()
-    for row in rows if isinstance(rows, list) else []:
-        if not isinstance(row, dict) or row.get("id") != PLUGIN:
-            continue
-        scope = row.get("scope", "")
-        project = row.get("projectPath")
-        if scope == "user" or (project and Path(project).resolve() == here):
-            found[scope] = str(row.get("version", ""))
-    return found
+    return [
+        row
+        for row in (rows if isinstance(rows, list) else [])
+        if isinstance(row, dict)
+        and row.get("id") == PLUGIN
+        and (row.get("scope") == "user" or (row.get("projectPath") and Path(row["projectPath"]).resolve() == here))
+    ]
+
+
+def installed(claude: str, repo_root: Path) -> dict[str, str]:
+    """Where cq's plugin is installed that counts for this repo: scope → version."""
+    return {str(row.get("scope", "")): str(row.get("version", "")) for row in rows_here(claude, repo_root)}
 
 
 def commands(claude: str, scope: Scope) -> list[list[str]]:
@@ -91,8 +94,13 @@ def status(folder: Path) -> tuple[bool, str, str]:
     claude = claude_cli()
     if claude is None:
         return False, "Claude Code not installed", "in Claude Code: " + PASTE.replace("\n", ", then ")
-    found = installed(claude, repo_root_of(folder))
-    if not found:
+    rows = sorted(rows_here(claude, repo_root_of(folder)), key=lambda r: str(r.get("scope", "")))
+    if not rows:
         return False, "not installed", "cq init"
-    where = ", ".join(f"{scope} {version}" for scope, version in sorted(found.items()))
+    where = ", ".join(f"{r.get('scope', '')} {r.get('version', '')}" for r in rows)
+    # Installed is not enough: a plugin disabled in the merged settings gives no skills.
+    disabled = [str(r.get("scope", "")) for r in rows if r.get("enabled") is False]
+    if len(disabled) == len(rows):
+        fix = " or ".join(f"claude plugin enable {PLUGIN} --scope {scope}" for scope in disabled)
+        return False, f"{PLUGIN} ({where}), disabled", fix
     return True, f"{PLUGIN} ({where})", ""

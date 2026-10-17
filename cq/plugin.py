@@ -99,8 +99,8 @@ def status(folder: Path) -> tuple[bool, str, str]:
         return False, "not installed", "cq init"
     where = ", ".join(f"{r.get('scope', '')} {r.get('version', '')}" for r in rows)
     # Installed is not enough: a plugin disabled in the merged settings gives no skills.
-    disabled = [str(r.get("scope", "")) for r in rows if r.get("enabled") is False]
-    if len(disabled) == len(rows):
-        fix = " or ".join(f"claude plugin enable {PLUGIN} --scope {scope}" for scope in disabled)
-        return False, f"{PLUGIN} ({where}), disabled", fix
+    # No --scope in the fix: the disable can sit in another settings file than the install's
+    # (settings.local.json), and claude enable without a scope finds the one that mentions it.
+    if all(r.get("enabled") is False for r in rows):
+        return False, f"{PLUGIN} ({where}), disabled", f"claude plugin enable {PLUGIN}"
     return True, f"{PLUGIN} ({where})", ""

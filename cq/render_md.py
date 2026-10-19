@@ -56,11 +56,13 @@ def titled_list(title: str, lines: list[str]) -> list[str]:
 
 def part(target: dict, tool: str, key: str) -> list[dict]:
     """One list from a tool's result; empty when the tool didn't run (its error is listed in the report)."""
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
     return target.get(tool, {}).get(key, [])
 
 
 def complexity_spots(target: dict) -> list[tuple[str, list[str]]]:
     """The most complex functions and the least maintainable files."""
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
     limit = target.get("complexity", {}).get("limit")
     return [
         (

@@ -10,6 +10,6 @@
     "sparkline", "timespec", "toolconfig", "Tornhill", "typegen", "vitest", "vulns", "worktrees", "xfailed",
     "xpassed", "zizmor"
   ],
-  "ignoreRegExpList": ["xǁ\\w+"],
+  "ignoreRegExpList": ["xǁ\\w+", "\\\\x[0-9a-fA-F]{2}"],
   "ignorePaths": ["**/node_modules/**", "**/.venv/**", "**/dist/**", "**/build/**"]
 }

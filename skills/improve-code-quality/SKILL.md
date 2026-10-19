@@ -102,7 +102,9 @@ Done when every finding has its outcome written down for the PR body.
 
 ## 9. Test and commit
 
-Run every check from step 1 and fix what fails. Commit the round, and its review fixes as a second commit. Each message names the round and what it changed.
+Run every check from step 1 and fix what fails: the repo's quality gate too, and the tests of any shared config the round changed.
+- In angel-monitor, the trial PR's CI caught two things the per-app checks missed: a test that keeps cspell words lower case, and a gate that blocks on new findings.
+- **A gate that judges the files a branch touches** charges each touched file's old smells to the branch, even when the only edit is a docstring. Expect that before touching many files, and fix those smells in the same round. Commit the round, and its review fixes as a second commit. Each message names the round and what it changed.
 
 Done when the checks pass and the worktree is clean.
 

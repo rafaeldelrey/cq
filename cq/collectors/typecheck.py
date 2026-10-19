@@ -22,6 +22,7 @@ def collect(ctx: Context) -> dict:
         "errors": len(errors),
         "by_rule": by_code,
         "items": [
-            {"file": e["file"], "line": int(e["line"]), "code": e["code"], "msg": e["msg"][:200]} for e in errors[:30]
+            {"file": e["file"], "line": int(e["line"]), "code": e["code"], "msg": e["msg"][:200]}
+            for e in ctx.cap(errors, 30)
         ],
     }

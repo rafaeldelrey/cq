@@ -1,10 +1,12 @@
 """Parsing the tools' output, and the collectors that need no subprocess."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from cq import findings, runner
 from cq.collectors import complexity, dead_code, maintainability, size, vulnerabilities
 from cq.collectors import tests as tests_collector
 from cq.collectors.tests import parse_pytest_summary
@@ -186,3 +188,54 @@ def test_pip_audit_on_the_locked_requirements(ctx: Context, monkeypatch: pytest.
 def test_pip_audit_needs_a_lock(ctx: Context) -> None:
     with pytest.raises(ToolError, match=r"no uv\.lock"):
         vulnerabilities.collect(ctx)
+
+
+def busy_module(n: int) -> str:
+    """``n`` functions of CC 5 (four branches each): over the test context's CC limit of 3."""
+    return "".join(
+        f"def f{i}(x):\n    if x > 1:\n        return 1\n    if x > 2:\n        return 2\n"
+        f"    if x > 3:\n        return 3\n    if x > 4:\n        return 4\n    return 0\n\n\n"
+        for i in range(n)
+    )
+
+
+def test_complexity_keeps_every_function_over_the_limit(ctx: Context) -> None:
+    (ctx.app_dir / "pkg" / "busy.py").write_text(busy_module(20))
+    result, error = runner.run_collector(ctx, "complexity")
+    assert error is None and result is not None
+    assert len(result["worst"]) == 15
+    assert result["truncated"] == {"worst": result["functions"]}
+    assert len(result["over_limit_items"]) == result["over_limit"] >= 20
+    over = [f for f in findings.extract("demo", "complexity", result) if f["rule"] == "cc-over-limit"]
+    assert len(over) == result["over_limit"]  # one finding each, not the top 15
+
+
+def test_a_snapshot_without_over_limit_items_keeps_its_old_findings() -> None:
+    old = {
+        "limit": 15,
+        "worst": [{"function": "a.py::f", "cc": 20, "rank": "D"}, {"function": "a.py::g", "cc": 3, "rank": "A"}],
+    }
+    assert [f["symbol"] for f in findings.extract("app", "complexity", old)] == ["f"]
+
+
+def test_a_list_within_its_cap_is_not_marked(ctx: Context) -> None:
+    result, _ = runner.run_collector(ctx, "complexity")
+    assert result is not None
+    assert "truncated" not in result
+
+
+def test_the_gate_keeps_every_item_and_marks_no_cut(ctx: Context) -> None:
+    (ctx.app_dir / "pkg" / "busy.py").write_text(busy_module(20))
+    full = replace(ctx, full=True)
+    result, _ = runner.run_collector(full, "complexity")
+    assert result is not None
+    assert "truncated" not in result
+    assert len(result["worst"]) == result["functions"]
+
+
+def test_cuts_belong_to_the_collector_that_made_them(ctx: Context) -> None:
+    (ctx.app_dir / "pkg" / "busy.py").write_text(busy_module(20))
+    first, _ = runner.run_collector(ctx, "complexity")
+    second, _ = runner.run_collector(ctx, "size")  # same context, next collector: nothing carried over
+    assert first is not None and second is not None
+    assert "truncated" in first and "truncated" not in second

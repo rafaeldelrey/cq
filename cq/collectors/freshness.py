@@ -60,14 +60,14 @@ def lag_years(dates: dict[str, datetime], current: str, latest: str) -> float:
     return 0.0
 
 
-def summarise(rows: list[dict]) -> dict:
+def summarise(ctx: Context, rows: list[dict]) -> dict:
     """The three numbers, plus the list sorted by lag."""
     rows.sort(key=lambda r: -r["years"])
     return {
         "outdated": len(rows),
         "major_behind": sum(1 for r in rows if r["major"]),
         "libyear": round(sum(r["years"] for r in rows), 2),
-        "items": rows[:60],
+        "items": ctx.cap(rows, 60),
     }
 
 
@@ -87,7 +87,7 @@ def collect_python(ctx: Context) -> dict:
                 "years": round(lag_years(pypi_dates(name), current, latest), 2),
             }
         )
-    return summarise(rows)
+    return summarise(ctx, rows)
 
 
 def collect_typescript(ctx: Context) -> dict:
@@ -109,7 +109,7 @@ def collect_typescript(ctx: Context) -> dict:
                 "years": round(lag_years(npm_dates(ctx, name), current, latest), 2),
             }
         )
-    return summarise(rows)
+    return summarise(ctx, rows)
 
 
 def collect(ctx: Context) -> dict:

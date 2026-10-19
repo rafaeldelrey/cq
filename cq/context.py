@@ -1,7 +1,7 @@
 """What a collector gets to work with."""
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
@@ -26,6 +26,8 @@ class Context:
     raw_dir: Path  # gitignored: runs/<run_id>/<target>/
     settings: Settings
     full: bool = False  # the gate: every item, so a new finding never hides behind a report cap
+    # The lists the running collector cut, by name, with their true lengths (see ``cap``).
+    cuts: dict[str, int] = field(default_factory=dict, compare=False, repr=False)
 
     @property
     def app_dir(self) -> Path:
@@ -51,9 +53,16 @@ class Context:
         except ValueError:
             return p.as_posix()
 
-    def cap(self, items: list, limit: int) -> list:
-        """The first ``limit`` items for a report, or all of them in a gate run."""
-        return items if self.full else items[:limit]
+    def cap(self, items: list, limit: int, name: str = "items") -> list:
+        """The first ``limit`` items for a report, or all of them in a gate run.
+
+        A cut is noted under ``name`` (the list's key in the result, dotted when nested), with the
+        list's true length: the runner stores those as the result's ``truncated``.
+        """
+        if self.full or len(items) <= limit:
+            return items
+        self.cuts[name] = len(items)
+        return items[:limit]
 
     def fingerprint(self, file: str, line: int | None) -> str:
         """A short hash of a finding's source line: who it is, whatever lines shift above it.

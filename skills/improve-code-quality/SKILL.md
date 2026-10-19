@@ -71,7 +71,7 @@ Start from the latest complete run: step 4's in round 1, and the one step 10 too
 
 **A run is complete** when every tool the baseline measured has a measurement in it. `cq run` exits 0 even when a collector fails, and records the failure in `snapshot.json`'s `errors` (or as a `skipped` with its reason). A tool missing from a run is a blind spot, never a fall to zero. Run it again once; if the tool still fails, stop and ask the user. Never compare, stop on or report a total from an incomplete run.
 
-**Totals come from the snapshot.** cq lists only each tool's worst items, with a cap that varies by tool. Once those are fixed the next ones fill the list, so a row count can stay flat while the real number falls. Take each tool's count from `snapshot.json` (`docstrings.missing`, `smells.smells`, `aislop.findings`, `radarlint.findings`, …), and use rows only for tools that list everything. Low-coverage files are capped too: count the files under 50% from the app's own coverage report.
+**Totals come from the snapshot.** cq lists only each tool's worst items, with a cap that varies by tool. Once those are fixed the next ones fill the list, so a row count can stay flat while the real number falls. Take each tool's count from `snapshot.json` (`docstrings.missing`, `smells.smells`, `aislop.findings`, `radarlint.findings`, …), and use rows only for tools that list everything. `findings-totals.json` in the run folder (cq 0.4.0 and later) names every list that was cut and its true total. Low-coverage files are capped too: count the files under 50% from the app's own coverage report.
 
 Done when the run is complete and you have the list of findings this round will work on.
 

@@ -33,6 +33,43 @@ def from_snapshot(snap: dict) -> list[Finding]:
     return sorted(out, key=lambda f: (SEVERITIES.index(f["severity"]), f["target"], f["tool"], f["file"]))
 
 
+def listed(result: dict, name: str) -> int:
+    """How many entries a result's list (dotted name for a nested one) kept after its cut."""
+    node: object = result
+    for key in name.split("."):
+        node = node.get(key, []) if isinstance(node, dict) else []
+    return len(node) if isinstance(node, list | dict) else 0
+
+
+def cut_lists(snap: dict) -> list[dict]:
+    """Every list a snapshot's collectors cut to fit: target, tool, list, how many it kept, and the true total."""
+    return [
+        {"target": target, "tool": tool, "list": name, "shown": listed(result, name), "total": total}
+        for target, tools in snap["targets"].items()
+        for tool, result in tools.items()
+        if isinstance(result, dict)
+        for name, total in result.get("truncated", {}).items()
+    ]
+
+
+def totals(snap: dict, found: list[Finding]) -> dict:
+    """findings-totals.json: per target and tool, the findings findings.jsonl holds, and each cut list's
+    true total, so a reader counting rows knows where they stop short."""
+    out: dict[str, dict[str, dict]] = {}
+    for f in found:
+        entry = out.setdefault(f["target"], {}).setdefault(f["tool"], {"findings": 0, "cut": {}})
+        entry["findings"] += 1
+    for c in cut_lists(snap):
+        entry = out.setdefault(c["target"], {}).setdefault(c["tool"], {"findings": 0, "cut": {}})
+        entry["cut"][c["list"]] = {"shown": c["shown"], "total": c["total"]}
+    return {"targets": out}
+
+
+def write_totals(snap: dict, found: list[Finding], path: Path) -> None:
+    """Write findings-totals.json."""
+    path.write_text(json.dumps(totals(snap, found), indent=1) + "\n")
+
+
 def mark_new(findings: list[Finding], previous: dict | None) -> list[Finding]:
     """Flag the findings whose key the previous snapshot did not have.
 

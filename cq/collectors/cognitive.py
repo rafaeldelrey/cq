@@ -36,7 +36,7 @@ def collect(ctx: Context) -> dict:
     rows = json.loads(read_report(out_file, "complexipy"))
     limit = ctx.settings.cognitive_limit
     scores = [r["complexity"] for r in rows]
-    worst = sorted(rows, key=lambda r: -r["complexity"])[:15]
+    worst = ctx.cap(sorted(rows, key=lambda r: -r["complexity"]), 15, "worst")
     return {
         "functions": len(rows),
         "mean": round(mean(scores), 2) if scores else 0.0,

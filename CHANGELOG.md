@@ -4,6 +4,28 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.4.0] - 2026-10-19
+
+### Added
+
+- Each run writes `findings-totals.json`: per target and tool, how many findings `findings.jsonl`
+  holds, and every list a collector cut to fit with its true total. Collectors keep each tool's
+  first or worst items (15 to 200), so counting rows stops short; count from this file or the
+  snapshot.
+- A tool's result records `truncated` (list name → true total) whenever a list was cut. The report
+  names the cut lists under each app's table ("3 of 10"), and so does the dashboard's findings
+  view. Old snapshots have no `truncated` and read as before.
+- Complexity records `over_limit_items`, every function over the CC limit, as cognitive already did.
+
+### Changed
+
+- `findings.jsonl` has one complexity or cognitive finding per function over the limit. Before, it
+  had at most 15, taken from each tool's worst list. A repo with more functions over a limit gets
+  the rest as new findings once. No metric changed: `over_limit` already counted them all.
+- Every list a collector shortens goes through one cap. The gate keeps every item, as before.
+
+No metric changed: snapshots from 0.3.2 and 0.4.0 compare directly.
+
 ## [0.3.2] - 2026-10-19
 
 ### Fixed

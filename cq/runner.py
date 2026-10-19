@@ -166,6 +166,7 @@ class RunLog:
 def run_collector(ctx: Context, tool: str) -> tuple[dict | None, str | None]:
     """One collector's result, or the error that stopped it. Its commands go to <target>/<tool>.log."""
     started = time.monotonic()
+    ctx.cuts.clear()  # one context serves every collector of a target
     with log_to(ctx.raw_dir / f"{tool}.log"):
         try:
             result = COLLECTORS[tool].collect(ctx)
@@ -174,6 +175,8 @@ def run_collector(ctx: Context, tool: str) -> tuple[dict | None, str | None]:
             # snapshot and shown in the report, and the traceback goes to the tool's log.
             log(f"--- collector failed ---\n{traceback.format_exc()}")
             return None, f"{type(exc).__name__}: {exc}"[:2000]
+    if ctx.cuts:  # which lists were cut to fit, and how long they really were
+        result["truncated"] = dict(ctx.cuts)
     result["seconds"] = round(time.monotonic() - started, 2)
     return result, None
 

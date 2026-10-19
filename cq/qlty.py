@@ -96,7 +96,7 @@ def report_items(ctx: Context, rows: list[dict], *, with_severity: bool = False)
     return ctx.with_fingerprints(
         [
             {"file": r["file"], "line": r["line"], "code": r["rule"], "msg": r["msg"], **{f: r[f] for f in fields}}
-            for r in rows[:120]
+            for r in ctx.cap(rows, 120)
         ]
     )
 

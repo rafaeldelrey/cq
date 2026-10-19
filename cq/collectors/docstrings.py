@@ -117,6 +117,6 @@ def collect(ctx: Context) -> dict:
         "total": total,
         "missing": missed,
         "covered": covered,
-        "worst_files": files[:15],
+        "worst_files": ctx.cap(files, 15, "worst_files"),
         "items": ctx.cap(worst_first(missing(out, full, lambda f: syntax_ends(ctx.checkout / f))), 200),
     }

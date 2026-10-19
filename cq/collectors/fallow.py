@@ -45,7 +45,7 @@ def collect(ctx: Context) -> dict:
                 "a": f"{ctx.rel(g['instances'][0]['file'])}:{g['instances'][0]['start_line']}",
                 "b": f"{ctx.rel(g['instances'][1]['file'])}:{g['instances'][1]['start_line']}",
             }
-            for g in ctx.cap(dupes.get("clone_groups", []), 40)
+            for g in ctx.cap(dupes.get("clone_groups", []), 40, "clones")
             if len(g.get("instances", [])) >= 2
         ],
         "items": ctx.with_fingerprints(

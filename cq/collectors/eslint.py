@@ -24,7 +24,7 @@ def collect(ctx: Context) -> dict:
     by_rule = ranked(rule_of(m) for _, m in messages)
     items = [
         {"file": ctx.rel(path), "line": m.get("line"), "code": rule_of(m), "msg": m["message"][:200]}
-        for path, m in messages[:30]
+        for path, m in ctx.cap(messages, 30)
     ]
     return {
         "errors": sum(f["errorCount"] for f in files),

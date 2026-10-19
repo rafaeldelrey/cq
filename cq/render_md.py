@@ -245,6 +245,14 @@ def metrics_table(name: str, rows: list[Row], window_days: int) -> list[str]:
     return [*lines, ""]
 
 
+def cut_section(cuts: list[dict]) -> list[str]:
+    """The lists a target's tools cut to fit, each as "kept of total": counts of their rows stop short."""
+    if not cuts:
+        return []
+    parts = [f"`{c['tool']}` {c['list']} {c['shown']} of {c['total']}" for c in cuts]
+    return [f"**Lists cut to fit** (the snapshot's totals are the real counts): {'; '.join(parts)}", ""]
+
+
 def render(history: list[dict], window_days: int = 30, details: bool = True) -> str:
     """The whole report."""
     latest = history[-1]
@@ -263,6 +271,7 @@ def render(history: list[dict], window_days: int = 30, details: bool = True) -> 
     lines += errors_section(latest["errors"])
     for name, rows in all_rows.items():
         lines += metrics_table(name, rows, window_days)
+        lines += cut_section([c for c in findings.cut_lists(latest) if c["target"] == name])
         mine = [f for f in all_findings if f["target"] == name]
         lines += new_findings_section(mine)
         if details:

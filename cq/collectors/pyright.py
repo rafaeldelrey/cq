@@ -28,6 +28,6 @@ def collect(ctx: Context) -> dict:
         "by_rule": by_rule,
         "items": [
             {"file": ctx.rel(d["file"]), "line": d["range"]["start"]["line"] + 1, "msg": d["message"][:200]}
-            for d in errors[:30]
+            for d in ctx.cap(errors, 30)
         ],
     }

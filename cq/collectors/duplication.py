@@ -54,6 +54,6 @@ def collect(ctx: Context) -> dict:
                 "a": f"{ctx.rel(c['firstFile']['name'], ctx.checkout)}:{c['firstFile']['start']}",
                 "b": f"{ctx.rel(c['secondFile']['name'], ctx.checkout)}:{c['secondFile']['start']}",
             }
-            for c in clones[:15]
+            for c in ctx.cap(clones, 15, "top")
         ],
     }

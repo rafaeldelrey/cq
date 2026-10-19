@@ -126,7 +126,7 @@ def collect_typescript(ctx: Context) -> dict:
     if files:
         counts["files"] = counts.get("files", 0) + len(files)
         items.extend({"file": ctx.rel(f), "kind": "files", "name": "unused file", "line": None} for f in files)
-    return {"issues": sum(counts.values()), "by_kind": counts, "items": items[:120]}
+    return {"issues": sum(counts.values()), "by_kind": counts, "items": ctx.cap(items, 120)}
 
 
 def collect(ctx: Context) -> dict:

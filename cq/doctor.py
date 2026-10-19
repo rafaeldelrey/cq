@@ -5,13 +5,10 @@ system binaries: Homebrew installs them, and qlty comes from its GitHub release 
 cq release pins, checked against its checksum and its build attestation before it is installed.
 """
 
-# aislop-ignore-file ai-slop/python-print-debug -- `cq doctor` and `cq setup` report to the user: their prints are the interface
-
 import platform
 import re
 import shutil
 import subprocess
-import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass
@@ -19,6 +16,7 @@ from pathlib import Path
 
 from cq import plugin
 from cq.config import PINS, QLTY_CONFIG, QLTY_DIR, QLTY_IGNORE
+from cq.console import confirm, out
 from cq.proc import run
 
 
@@ -124,15 +122,15 @@ def doctor(folder: Path | None = None) -> int:
         if c.tool.name == "qlty" and not c.ok:
             state = f"{state} (cq pins {PINS['qlty']})"
         line = f"{mark} {c.tool.name:<{width}}  {state}"
-        print(f"{line}\n      for {c.tool.needed_for}: {c.fix}" if c.fix else line)
-    print(plugin_line(width, folder))
+        out(f"{line}\n      for {c.tool.needed_for}: {c.fix}" if c.fix else line)
+    out(plugin_line(width, folder))
     if note := qlty_ignore_line(width, folder):
-        print(note)
+        out(note)
     missing = [c for c in checks if not c.ok and not c.tool.optional]
     if missing:
-        print(f"\n{len(missing)} required tool(s) missing or off their pin: `cq setup` installs them.")
+        out(f"\n{len(missing)} required tool(s) missing or off their pin: `cq setup` installs them.")
         return 1
-    print("\nEverything cq needs is installed.")
+    out("\nEverything cq needs is installed.")
     return 0
 
 
@@ -161,16 +159,6 @@ def install_qlty(version: str, dest: Path = QLTY_BIN) -> None:
         dest.chmod(0o755)
 
 
-def confirm(question: str, *, assume_yes: bool) -> bool:
-    """A y/N answer; no answer without a terminal, unless ``assume_yes``."""
-    if assume_yes:
-        return True
-    if not sys.stdin.isatty():
-        print(f"{question} [y/N] no (not a terminal: pass --yes)")
-        return False
-    return input(f"{question} [y/N] ").strip().lower() in ("y", "yes")
-
-
 def plan(checks: list[Check]) -> tuple[list[str], bool]:
     """The Homebrew formulas to install, and whether qlty needs installing.
 
@@ -186,18 +174,18 @@ def plan(checks: list[Check]) -> tuple[list[str], bool]:
 
 def show(formulas: list[str], qlty_needed: bool) -> None:
     """Print what setup will do."""
-    print("cq setup will:")
+    out("cq setup will:")
     if formulas:
-        print(f"  brew install {' '.join(formulas)}")
+        out(f"  brew install {' '.join(formulas)}")
     if qlty_needed:
-        print(f"  install qlty {PINS['qlty']} from github.com/qltysh/qlty (checksum + attestation) to {QLTY_BIN}")
+        out(f"  install qlty {PINS['qlty']} from github.com/qltysh/qlty (checksum + attestation) to {QLTY_BIN}")
 
 
 def apply(formulas: list[str], qlty_needed: bool) -> int:
     """Install the plan; 1 when Homebrew is needed and missing."""
     if formulas:
         if shutil.which("brew") is None:
-            print("Homebrew is not installed: see https://brew.sh, then run `cq setup` again.")
+            out("Homebrew is not installed: see https://brew.sh, then run `cq setup` again.")
             return 1
         # Not through cq.proc.run: brew's progress goes straight to the terminal, as it would by hand.
         subprocess.run(["brew", "install", *formulas], check=True)
@@ -210,10 +198,10 @@ def apply(formulas: list[str], qlty_needed: bool) -> int:
 def shadowed_qlty(found: str | None) -> int:
     """1, with what to do, when the qlty on the PATH isn't the one setup just installed."""
     if found is None:
-        print(f"qlty is in {QLTY_BIN.parent}, which is not on your PATH: add it.")
+        out(f"qlty is in {QLTY_BIN.parent}, which is not on your PATH: add it.")
         return 1
     if Path(found).resolve() != QLTY_BIN.resolve():
-        print(f"Another qlty comes first on your PATH ({found}): remove it, or put {QLTY_BIN.parent} before it.")
+        out(f"Another qlty comes first on your PATH ({found}): remove it, or put {QLTY_BIN.parent} before it.")
         return 1
     return 0
 
@@ -222,10 +210,10 @@ def setup(*, assume_yes: bool = False) -> int:
     """Install what doctor reports missing, after showing the plan."""
     formulas, qlty_needed = plan([check(t) for t in TOOLS])
     if not formulas and not qlty_needed:
-        print("Nothing to install.")
+        out("Nothing to install.")
         return doctor()
     show(formulas, qlty_needed)
     if not confirm("Go ahead?", assume_yes=assume_yes) or apply(formulas, qlty_needed):
         return 1
-    print()
+    out()
     return doctor()

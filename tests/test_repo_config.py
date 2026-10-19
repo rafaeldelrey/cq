@@ -7,7 +7,7 @@ from pathlib import Path
 from cq.config import DEFAULTS_DIR, QLTY_IGNORE_DEFAULT
 
 ROOT = Path(__file__).resolve().parent.parent
-CLI_MODULES = '"cq/cli.py", "cq/init.py", "cq/doctor.py", "cq/complexity_gate.py"'
+CLI_MODULES = '"cq/console.py"'
 
 
 def test_qlty_config_is_cqs_default() -> None:

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from cq import doctor, init, proc
+from cq import console, doctor, init, proc
 from cq.collectors import containers, pyscn, scripts, vulnerabilities
 from cq.config import DEFAULTS_DIR, PINS, QLTY_IGNORE_DEFAULT, Settings, Target, load_settings
 from cq.context import Context
@@ -140,9 +140,9 @@ def test_confirm_reads_a_yes_from_the_terminal(monkeypatch: pytest.MonkeyPatch) 
             return True
 
     monkeypatch.setattr(sys, "stdin", Tty("y\n"))
-    assert doctor.confirm("Go?", assume_yes=False) is True
+    assert console.confirm("Go?", assume_yes=False) is True
     monkeypatch.setattr(sys, "stdin", Tty("\n"))
-    assert doctor.confirm("Go?", assume_yes=False) is False
+    assert console.confirm("Go?", assume_yes=False) is False
 
 
 # ── init ──────────────────────────────────────────────────────────────────────────────────────

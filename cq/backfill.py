@@ -5,9 +5,8 @@ points are comparable. A commit that already has a history file is skipped unles
 that did not exist yet, or a tool its old setup cannot run, is recorded as an error.
 """
 
-import sys
-
 from cq.config import Settings
+from cq.console import note
 from cq.runner import cleanup_worktrees, first_parent_commits, git, save, snapshot
 
 
@@ -28,9 +27,7 @@ def backfill(settings: Settings, todo: list[str]) -> None:
     """Measure each commit; a commit from before any app existed stays out of the trend."""
     cleanup_worktrees(settings)
     for i, sha in enumerate(todo, 1):
-        # aislop-ignore-next-line ai-slop/python-print-debug -- progress to stderr
-        print(f"[{i}/{len(todo)}] measuring {sha[:7]}", file=sys.stderr)  # nosemgrep: cq-no-print - progress to stderr
+        note(f"[{i}/{len(todo)}] measuring {sha[:7]}")
         snap = snapshot(settings, rev=sha)
         for path in save(snap, settings, to_history=bool(snap["targets"])):
-            # aislop-ignore-next-line ai-slop/python-print-debug -- progress to stderr
-            print(f"wrote {path}", file=sys.stderr)  # nosemgrep: cq-no-print - progress to stderr
+            note(f"wrote {path}")

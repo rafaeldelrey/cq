@@ -9,7 +9,7 @@ disable-model-invocation: true
 An unattended loop of **rounds** on the repo you are in: measure with cq, fix, commit, review, fix, check, until the stop rule the user picks. The work lands the way the user chooses, at best as a PR that is **ready** ([references/follow-up.md](references/follow-up.md) defines it). Landing it is always the user's call: the loop never merges.
 
 The words the loop runs on:
-- **Round:** one pass through steps 5–9, ending in its commits. Round 1 measures with step 4's run.
+- **Round:** one pass through steps 5–10, ending in its commits and its own measurement. Round 1 starts from step 4's run; each later round starts from the run that ended the round before.
 - **Total:** the sum of every tool's own count, taken from the snapshot (step 5), never from finding rows.
 - **Plateau:** two rounds in a row that each move the total by under 10%, or by fewer than 5.
 - **Out of bounds:** the paths the loop never changes (step 1).
@@ -65,13 +65,15 @@ The PR body repeats the decision.
 
 Done when the stop rule, the config policy, the landing and the scope are each answered and recorded.
 
-## 5. Measure
+## 5. Pick the round's findings
 
-From round 2 on, run `cq run`; round 1 uses step 4's run. Pick the findings to work on with `jq` on `.cq/runs/<run>/findings.jsonl`.
+Start from the latest complete run: step 4's in round 1, and the one step 10 took after that. Pick the findings to work on with `jq` on `.cq/runs/<run>/findings.jsonl`.
+
+**A run is complete** when every tool the baseline measured has a measurement in it. `cq run` exits 0 even when a collector fails, and records the failure in `snapshot.json`'s `errors` (or as a `skipped` with its reason). A tool missing from a run is a blind spot, never a fall to zero. Run it again once; if the tool still fails, stop and ask the user. Never compare, stop on or report a total from an incomplete run.
 
 **Totals come from the snapshot.** cq lists only each tool's worst items, with a cap that varies by tool. Once those are fixed the next ones fill the list, so a row count can stay flat while the real number falls. Take each tool's count from `snapshot.json` (`docstrings.missing`, `smells.smells`, `aislop.findings`, `radarlint.findings`, …), and use rows only for tools that list everything. Low-coverage files are capped too: count the files under 50% from the app's own coverage report.
 
-Done when you have each tool's total, compared with the previous round's, and the list of findings this round will work on.
+Done when the run is complete and you have the list of findings this round will work on.
 
 ## 6. Reduce, and commit
 
@@ -113,15 +115,15 @@ Run every check from step 1: each app's, the repo's quality gate, and the tests 
 
 Done when every check passes and the worktree is clean.
 
-## 10. Stop or go on
+## 10. Measure, then stop or go on
 
-Compare this round's total with the last round's.
+Run `cq run` on the round's last commit, and check that it is complete (step 5). This run is the round's result: compare its total with the run the round started from. It is also where the next round starts, and the last one is the report's "after".
 
 - **Stop** when the user's stop rule is met, after a round that removed nothing, or after round 10.
 - **At a plateau,** look at what is left. One more round is allowed, once, if a warning or error is still fixable in code within scope. Say so. That round counts toward the 10. Info findings, such as a low-coverage file or a missing docstring, go in the report and never extend the loop.
 - **Otherwise** go on. With a PR per round, hand this round over first (step 12). Once the user has landed it, start the next round on a fresh branch from the new `origin/main`. Then go to step 5.
 
-Done when the loop has stopped, or the next round has started.
+Done when the round's run is complete and compared, and the loop has stopped or the next round has started.
 
 ## 11. The report
 

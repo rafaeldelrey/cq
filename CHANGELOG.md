@@ -4,6 +4,17 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.4.1] - 2026-10-19
+
+### Changed
+
+- All of cq's output goes through one module, `cq/console.py`: a command's results on stdout,
+  progress on stderr, and its questions. Every command prints exactly what it printed before. This
+  is groundwork for `--quiet`, `--json` or colour, and it lets cq's own print rule leave out a
+  single file instead of four.
+
+No measurement changed: snapshots from 0.4.0 and 0.4.1 compare directly.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added

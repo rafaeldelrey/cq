@@ -6,10 +6,7 @@ targets without any setting. ``init`` adds what a repo keeps for good: a starter
 It also offers cq's Claude Code plugin, for the user or for the repo.
 """
 
-# aislop-ignore-file ai-slop/python-print-debug -- `cq init` talks to the user: its prints are the interface
-
 import shutil
-import sys
 from pathlib import Path
 
 from cq import plugin
@@ -24,7 +21,7 @@ from cq.config import (
     Target,
     find_config,
 )
-from cq.doctor import confirm
+from cq.console import ask, confirm, is_terminal, out
 
 # The gate's recommended blocking list: what a branch should never add.
 BLOCK = (
@@ -75,11 +72,11 @@ def target_detail(target: Target) -> str:
 
 def describe(settings: Settings) -> None:
     """What cq would measure in this repo."""
-    print(f"Repo: {settings.repo_root}")
-    print(f"Settings: {settings.config_file or 'none (targets detected)'}")
+    out(f"Repo: {settings.repo_root}")
+    out(f"Settings: {settings.config_file or 'none (targets detected)'}")
     for t in settings.targets:
-        print(f"  {t.name} ({t.kind}, root {t.root}){target_detail(t)}")
-    print(f"Data: {settings.data_dir} (history/ and runs/, never committed)")
+        out(f"  {t.name} ({t.kind}, root {t.root}){target_detail(t)}")
+    out(f"Data: {settings.data_dir} (history/ and runs/, never committed)")
 
 
 def add_settings(settings: Settings, *, assume_yes: bool) -> None:
@@ -87,7 +84,7 @@ def add_settings(settings: Settings, *, assume_yes: bool) -> None:
     root = settings.repo_root
     _, source = find_config(root)
     if source is not None:
-        print(f"Settings already in {source.name}.")
+        out(f"Settings already in {source.name}.")
         return
     pyproject = root / "pyproject.toml"
     target, prefix = (pyproject, "tool.cq.") if pyproject.exists() else (root / CONFIG_FILE, "")
@@ -95,7 +92,7 @@ def add_settings(settings: Settings, *, assume_yes: bool) -> None:
         return
     with target.open("a") as fh:
         fh.write(starter(prefix))
-    print(f"Wrote cq's settings to {target.name}.")
+    out(f"Wrote cq's settings to {target.name}.")
 
 
 def add_qlty(settings: Settings, *, assume_yes: bool) -> None:
@@ -103,7 +100,7 @@ def add_qlty(settings: Settings, *, assume_yes: bool) -> None:
     folder = settings.repo_root / QLTY_DIR
     config, ignore = folder / QLTY_CONFIG, folder / QLTY_IGNORE
     if config.exists():
-        print("qlty config already in .qlty/qlty.toml.")
+        out("qlty config already in .qlty/qlty.toml.")
         add_qlty_gitignore(ignore, assume_yes=assume_yes)
         return
     question = (
@@ -115,10 +112,10 @@ def add_qlty(settings: Settings, *, assume_yes: bool) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     shutil.copy2(DEFAULTS_DIR / QLTY_CONFIG, config)
     if ignore.exists():  # a repo's own .gitignore is kept as it is
-        print("Wrote .qlty/qlty.toml; kept the repo's .qlty/.gitignore.")
+        out("Wrote .qlty/qlty.toml; kept the repo's .qlty/.gitignore.")
         return
     shutil.copy2(DEFAULTS_DIR / QLTY_IGNORE_DEFAULT, ignore)
-    print("Wrote .qlty/qlty.toml and .qlty/.gitignore.")
+    out("Wrote .qlty/qlty.toml and .qlty/.gitignore.")
 
 
 def add_qlty_gitignore(dest: Path, *, assume_yes: bool) -> None:
@@ -129,7 +126,7 @@ def add_qlty_gitignore(dest: Path, *, assume_yes: bool) -> None:
     if not confirm(question, assume_yes=assume_yes):
         return
     shutil.copy2(DEFAULTS_DIR / QLTY_IGNORE_DEFAULT, dest)
-    print("Wrote .qlty/.gitignore.")
+    out("Wrote .qlty/.gitignore.")
 
 
 SCOPE_NOTES: tuple[tuple[str, plugin.Scope, str], ...] = (
@@ -140,17 +137,17 @@ SCOPE_NOTES: tuple[tuple[str, plugin.Scope, str], ...] = (
 
 def ask_scope() -> str:
     """Where to install the plugin: user, project or none; none without a terminal to ask on."""
-    print("\nInstall the cq skills for Claude Code (/code-quality, /setup-cq)?")
+    out("\nInstall the cq skills for Claude Code (/code-quality, /setup-cq)?")
     for key, scope, note in SCOPE_NOTES:
         runs = " && ".join(" ".join(cmd) for cmd in plugin.commands("claude", scope))
-        print(f"  {key}  {note}\n       runs: {runs}")
-    print("  s  skip")
-    if not sys.stdin.isatty():
-        print("[u/p/s] s (not a terminal: pass --skills user|project|none)")
+        out(f"  {key}  {note}\n       runs: {runs}")
+    out("  s  skip")
+    if not is_terminal():
+        out("[u/p/s] s (not a terminal: pass --skills user|project|none)")
         return "none"
-    answer = input("[u/p/s] ").strip().lower()[:1]
+    answer = ask("[u/p/s] ").strip().lower()[:1]
     if answer not in ANSWERS:
-        print(f"{answer or 'No answer'}: not u, p or s, so skipped.")
+        out(f"{answer or 'No answer'}: not u, p or s, so skipped.")
     return ANSWERS.get(answer, "none")
 
 
@@ -158,7 +155,7 @@ def add_plugin(settings: Settings, *, skills: str | None, assume_yes: bool) -> N
     """Offer cq's Claude Code plugin, unless it's already installed for this repo or the user."""
     claude = plugin.claude_cli()
     if claude is None:
-        print(
+        out(
             f"\nThe cq skills come as a Claude Code plugin. Claude Code isn't on the PATH here; in Claude Code:\n{plugin.PASTE}"
         )
         return
@@ -168,28 +165,28 @@ def add_plugin(settings: Settings, *, skills: str | None, assume_yes: bool) -> N
     # .claude/settings.json) already gives it; a user or local one (settings.local.json) doesn't.
     if found and (skills != "project" or "project" in found):
         where = "for this repo" if here else "for you"
-        print(f"\ncq's Claude Code plugin is already installed {where}.")
+        out(f"\ncq's Claude Code plugin is already installed {where}.")
         return
     choice = skills or ("user" if assume_yes else ask_scope())
     if choice == "none":
-        print("Skipped the Claude Code plugin; run `cq init` again to install it.")
+        out("Skipped the Claude Code plugin; run `cq init` again to install it.")
         return
     scope: plugin.Scope = "project" if choice == "project" else "user"
     if not plugin.install(claude, scope, settings.repo_root):
-        print(f"The plugin wasn't installed (see claude's output above). In Claude Code instead:\n{plugin.PASTE}")
+        out(f"The plugin wasn't installed (see claude's output above). In Claude Code instead:\n{plugin.PASTE}")
         return
     if scope == "project":
-        print("Installed for this repo: commit .claude/settings.json, and the team gets the skills.")
+        out("Installed for this repo: commit .claude/settings.json, and the team gets the skills.")
     else:
-        print("Installed for you: /code-quality and /setup-cq work in every repo.")
+        out("Installed for you: /code-quality and /setup-cq work in every repo.")
 
 
 def init(settings: Settings, *, assume_yes: bool = False, skills: str | None = None) -> int:
     """Describe the repo, then offer the settings, qlty's config and the Claude Code plugin."""
     describe(settings)
-    print()
+    out()
     add_settings(settings, assume_yes=assume_yes)
     add_qlty(settings, assume_yes=assume_yes)
     add_plugin(settings, skills=skills, assume_yes=assume_yes)
-    print("\nNext: `cq doctor`, then `cq run`.")
+    out("\nNext: `cq doctor`, then `cq run`.")
     return 0

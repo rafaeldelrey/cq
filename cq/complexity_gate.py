@@ -21,8 +21,6 @@ at the repo root), and the limit defaults to the settings' ``complexity_limit``.
              after a refactor; growing it needs a reason in the PR (Codex flags it).
 """
 
-# aislop-ignore-file ai-slop/python-print-debug -- `cq complexity` prints its report and verdict
-
 import argparse
 import ast
 import json
@@ -30,6 +28,8 @@ import subprocess
 from pathlib import Path
 
 from radon.complexity import cc_rank, cc_visit_ast
+
+from cq.console import out
 
 FunctionNode = ast.FunctionDef | ast.AsyncFunctionDef
 
@@ -128,12 +128,12 @@ def cmd_check(root: Path, baseline_file: Path, paths: list[str], limit: int) -> 
     stale = sorted(k for k in baseline if in_paths(k, paths) and k not in measured)
     failures.extend(f"  {k}: in the baseline but no longer exists — remove it (`baseline`)" for k in stale)
     if failures:
-        print(f"Complexity gate FAILED (max CC {limit}, radon):")
-        print("\n".join(failures))
-        print("Split the function, or — for a legacy function only — explain in the PR why it cannot shrink yet.")
+        out(f"Complexity gate FAILED (max CC {limit}, radon):")
+        out("\n".join(failures))
+        out("Split the function, or — for a legacy function only — explain in the PR why it cannot shrink yet.")
         return 1
     legacy = sum(1 for k in baseline if in_paths(k, paths))
-    print(f"Complexity gate passed: {len(measured)} functions, max CC {limit}, {legacy} grandfathered.")
+    out(f"Complexity gate passed: {len(measured)} functions, max CC {limit}, {legacy} grandfathered.")
     return 0
 
 
@@ -171,10 +171,10 @@ def cmd_report(root: Path, paths: list[str], base: str) -> None:
                 continue
             rows.append(f"| `{rel}::{name}` | {cell(old)} | {cell(new)} |")
     if not rows:
-        print("No function changed complexity.")
+        out("No function changed complexity.")
         return
-    print("| Function | Before | After |\n|---|---|---|")
-    print("\n".join(rows))
+    out("| Function | Before | After |\n|---|---|---|")
+    out("\n".join(rows))
 
 
 def cmd_baseline(root: Path, baseline_file: Path, paths: list[str], limit: int) -> int:
@@ -183,7 +183,7 @@ def cmd_baseline(root: Path, baseline_file: Path, paths: list[str], limit: int) 
     over = {k: v for k, v in measure_paths(root, paths).items() if v > limit}
     functions = dict(sorted({**kept, **over}.items()))
     baseline_file.write_text(json.dumps({"max": limit, "functions": functions}, indent=2) + "\n")
-    print(f"Baseline: {len(functions)} grandfathered functions written to {baseline_file.name}.")
+    out(f"Baseline: {len(functions)} grandfathered functions written to {baseline_file.name}.")
     return 0
 
 

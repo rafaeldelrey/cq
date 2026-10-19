@@ -28,6 +28,7 @@ from cq import complexity_gate
 from cq.backfill import backfill, commits_to_measure
 from cq.collectors import COLLECTORS
 from cq.config import Settings, load_gate, load_settings
+from cq.console import note, out
 from cq.doctor import doctor, setup
 from cq.gate import run_gate
 from cq.init import SKILLS_CHOICES, init
@@ -94,20 +95,20 @@ def cmd_run(settings: Settings, args: argparse.Namespace) -> int:
     names = {t.name for t in settings.targets}
     unknown = sorted(set(args.target or []) - names)
     if unknown:
-        print(f"unknown target(s) {', '.join(unknown)}; this repo has {', '.join(sorted(names))}", file=sys.stderr)
+        note(f"unknown target(s) {', '.join(unknown)}; this repo has {', '.join(sorted(names))}")
         return 2
-    print(f"Measuring {args.rev}…", file=sys.stderr)
+    note(f"Measuring {args.rev}…")
     snap = snapshot(settings, rev=args.rev, targets=args.target, tools=args.tool)
     to_history = not snap["partial"] and not args.no_history
     for path in save(snap, settings, to_history=to_history):
-        print(f"wrote {path}", file=sys.stderr)
+        note(f"wrote {path}")
     if snap["errors"]:
-        print(f"{len(snap['errors'])} tool error(s): {', '.join(snap['errors'])}", file=sys.stderr)
+        note(f"{len(snap['errors'])} tool error(s): {', '.join(snap['errors'])}")
     run_dir = settings.runs_dir / snap["run_id"]
     write_reports(run_dir, settings.history_dir, name=settings.name)
-    print(f"report:    {run_dir / 'report.md'}\ndashboard: {run_dir / 'dashboard.html'}", file=sys.stderr)
+    note(f"report:    {run_dir / 'report.md'}\ndashboard: {run_dir / 'dashboard.html'}")
     if args.print:
-        print(json.dumps(snap, indent=1))
+        out(json.dumps(snap, indent=1))
     return 0
 
 
@@ -115,7 +116,7 @@ def cmd_report(settings: Settings, args: argparse.Namespace) -> int:
     """Pick the run, render, print."""
     run_dir = settings.runs_dir / args.run if args.run else latest_run(settings.runs_dir)
     if run_dir is None or not (run_dir / "snapshot.json").exists():
-        print("No run found: take one with `cq run` first.", file=sys.stderr)
+        note("No run found: take one with `cq run` first.")
         return 1
     text = write_reports(
         run_dir,
@@ -125,24 +126,24 @@ def cmd_report(settings: Settings, args: argparse.Namespace) -> int:
         analysis=args.analysis,
         name=settings.name,
     )
-    print(text)
-    print(f"wrote {run_dir / 'report.md'}\nwrote {run_dir / 'dashboard.html'}", file=sys.stderr)
+    out(text)
+    note(f"wrote {run_dir / 'report.md'}\nwrote {run_dir / 'dashboard.html'}")
     return 0
 
 
 def cmd_backfill(settings: Settings, args: argparse.Namespace) -> int:
     """Pick the commits, then measure each one."""
     if not args.since and not args.rev:
-        print("give --since or --rev", file=sys.stderr)
+        note("give --since or --rev")
         return 2
     if args.every < 1:
-        print(f"--every must be at least 1 (days), not {args.every}", file=sys.stderr)
+        note(f"--every must be at least 1 (days), not {args.every}")
         return 2
     todo = commits_to_measure(settings, args.rev, args.since, args.every, force=args.force, branch=args.branch)
     for sha in todo:
-        print(git("show", "-s", "--format=%h %cs %s", sha, cwd=settings.repo_root), file=sys.stderr)
+        note(git("show", "-s", "--format=%h %cs %s", sha, cwd=settings.repo_root))
     if args.dry_run or not todo:
-        print(f"{len(todo)} commit(s) to measure.", file=sys.stderr)
+        note(f"{len(todo)} commit(s) to measure.")
         return 0
     backfill(settings, todo)
     return 0
@@ -156,8 +157,8 @@ def cmd_init(settings: Settings, args: argparse.Namespace) -> int:
 def cmd_gate(settings: Settings, args: argparse.Namespace) -> int:
     """Judge what HEAD adds over the base, and print the summary."""
     outcome = run_gate(settings, load_gate(settings), args.base, report_only=args.report_only)
-    print(outcome.summary)
-    print(f"\ngate run: {outcome.out_dir}")
+    out(outcome.summary)
+    out(f"\ngate run: {outcome.out_dir}")
     return outcome.exit_code
 
 
@@ -197,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         return MACHINE_COMMANDS[args.command](args)
     repo = args.repo.resolve()
     if not (repo / ".git").exists():
-        print(f"{repo} is not the root of a git repository: run cq there, or pass --repo", file=sys.stderr)
+        note(f"{repo} is not the root of a git repository: run cq there, or pass --repo")
         return 2
     os.chdir(repo)  # git and the tools run in the measured repo
     config = repo / args.config if args.config and not args.config.is_absolute() else args.config

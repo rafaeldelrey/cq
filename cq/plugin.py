@@ -8,9 +8,10 @@ repo's .claude/settings.json, committed, so the team gets it).
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Literal
+
+from cq.console import flush, out
 
 MARKETPLACE = "rafaeldelrey/cq"
 PLUGIN = "cq@cq"
@@ -36,13 +37,12 @@ def capture(cmd: list[str], cwd: Path) -> str | None:
 
 def call(cmd: list[str], cwd: Path) -> int:
     """Run a command with its output going straight to the terminal, as it would by hand."""
-    sys.stdout.flush()  # what cq printed so far comes first, even through a pipe
+    flush()  # what cq printed so far comes first, even through a pipe
     try:
         return subprocess.run(cmd, cwd=cwd, check=False, timeout=600).returncode
     except subprocess.TimeoutExpired:  # a clone or download that stalled: that step failed, init goes on
         step = " ".join(cmd[:3])
-        # aislop-ignore-next-line ai-slop/python-print-debug -- tells the user, mid-install, which step stalled
-        print(f"{step} timed out after 10 minutes.")  # nosemgrep: cq-no-print - tells the user which step stalled
+        out(f"{step} timed out after 10 minutes.")
         return 1
 
 

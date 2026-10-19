@@ -5,7 +5,6 @@ import importlib.metadata
 import json
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import tomllib
@@ -17,6 +16,7 @@ from pathlib import Path
 
 from cq.collectors import COLLECTORS
 from cq.config import PINS, QLTY_CACHE, QLTY_DIR, SCHEMA_VERSION, Settings, Target, ensure_data_dir
+from cq.console import note
 from cq.context import Context
 from cq.proc import ToolError, log, log_to, run
 from cq.toolconfig import used_configs
@@ -157,8 +157,7 @@ class RunLog:
 
     def __call__(self, text: str, end: str = "\n") -> None:
         """Write ``text`` to both."""
-        # aislop-ignore-next-line ai-slop/python-print-debug -- RunLog is the run's progress on stderr
-        print(text, end=end, flush=True, file=sys.stderr)  # nosemgrep: cq-no-print - RunLog is the run's progress
+        note(text, end=end)
         with self.path.open("a") as fh:
             fh.write(text + end)
 

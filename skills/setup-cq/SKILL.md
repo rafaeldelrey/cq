@@ -14,7 +14,7 @@ let them commit.
 Check with `cq --version` (or `command -v cq`). If it is missing:
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.4.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.4.1
 ```
 
 Use the newest release tag (`git ls-remote --tags git@github.com:rafaeldelrey/cq.git`): a tag pins

@@ -27,7 +27,7 @@ class Context:
     settings: Settings
     full: bool = False  # the gate: every item, so a new finding never hides behind a report cap
     # The lists the running collector cut, by name, with their true lengths (see ``cap``).
-    cuts: dict[str, int] = field(default_factory=dict, compare=False, repr=False)
+    cuts: dict[str, int] = field(default_factory=dict, init=False, compare=False, repr=False)
 
     @property
     def app_dir(self) -> Path:

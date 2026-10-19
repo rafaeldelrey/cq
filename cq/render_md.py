@@ -246,11 +246,11 @@ def metrics_table(name: str, rows: list[Row], window_days: int) -> list[str]:
 
 
 def cut_section(cuts: list[dict]) -> list[str]:
-    """The lists a target's tools cut to fit, each as "kept of total": counts of their rows stop short."""
+    """The lists a target's tools kept short, each as "kept of total": counting their rows stops short."""
     if not cuts:
         return []
     parts = [f"`{c['tool']}` {c['list']} {c['shown']} of {c['total']}" for c in cuts]
-    return [f"**Lists cut to fit** (the snapshot's totals are the real counts): {'; '.join(parts)}", ""]
+    return [f"**Lists kept short** (count from the snapshot's totals, not the rows): {'; '.join(parts)}", ""]
 
 
 def header(history: list[dict], window_days: int) -> list[str]:

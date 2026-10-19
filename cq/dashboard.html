@@ -446,7 +446,7 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
     return FINDINGS.filter((f) => (fstate.app === "all" || f.target === fstate.app) && fstate.sevs.has(f.severity) &&
       (!fstate.newOnly || f.new === true));
   }
-  // The lists the collectors cut to fit (a result's "truncated"): their findings here stop short.
+  // The lists the collectors kept short (a result's "truncated"): counting their rows stops short.
   function cutNote() {
     const kept = (result, name) => {
       const node = name.split(".").reduce((n, k) => (n && typeof n === "object" ? n[k] : undefined), result);
@@ -461,7 +461,7 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
           parts.push(`${tool} ${name}: ${kept(result, name)} of ${total} kept`));
       });
     });
-    return parts.length ? `Cut to fit, so the findings above stop short: ${parts.join("; ")}.` : "";
+    return parts.length ? `Lists kept short in this run (count from the snapshot's totals, not the rows): ${parts.join("; ")}.` : "";
   }
 
   function renderFindings() {

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from cq.collectors.size import python_files
 from cq.context import Context
+from cq.tally import ranked
 
 KINDS = ("python", "typescript")
 
@@ -63,12 +64,10 @@ def collect(ctx: Context) -> dict:
                             "text": comment[:160],
                         }
                     )
-    by_kind: dict[str, int] = {}
-    for item in items:
-        by_kind[item["kind"]] = by_kind.get(item["kind"], 0) + 1
+    by_kind = ranked(i["kind"] for i in items)
     return {
         "total": len(items),
         "without_reason": sum(1 for i in items if not i["reason"]),
-        "by_kind": dict(sorted(by_kind.items(), key=lambda kv: -kv[1])),
+        "by_kind": by_kind,
         "items": sorted(items, key=lambda i: (i["reason"], i["file"], i["line"]))[:150],
     }

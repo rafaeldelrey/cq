@@ -11,6 +11,7 @@ import shutil
 
 from cq.context import Context
 from cq.proc import ToolError, run
+from cq.tally import ranked
 
 KINDS = ("repo",)
 
@@ -38,13 +39,11 @@ def collect(ctx: Context) -> dict:
         for source, errors in data["error_map"].items()
         for e in errors
     ]
-    by_file: dict[str, int] = {}
-    for item in items:
-        by_file[item["file"]] = by_file.get(item["file"], 0) + 1
+    by_file = ranked(i["file"] for i in items)
     return {
         "checked": data.get("total", 0),
         "broken": len(items),
         "files_with_broken": len(by_file),
-        "by_file": dict(sorted(by_file.items(), key=lambda kv: -kv[1])[:20]),
+        "by_file": dict(list(by_file.items())[:20]),
         "items": items[:150],
     }

@@ -24,6 +24,7 @@ from pathlib import Path
 from cq.config import DEFAULTS_DIR
 from cq.context import Context
 from cq.proc import ToolError, require, run
+from cq.tally import ranked
 from cq.toolconfig import gitleaks_config
 
 KINDS = ("repo",)
@@ -275,9 +276,6 @@ def collect(ctx: Context) -> dict:
     tree = scan_tree(ctx)
     history = scan_history(ctx)
     verified = scan_verified(ctx)
-    by_rule: dict[str, int] = {}
-    for f in history:
-        by_rule[f["rule"]] = by_rule.get(f["rule"], 0) + 1
     # One row per credential, its newest occurrence, newest first: the cap counts keys, not places.
     newest: dict[str, dict] = {}
     for r in sorted((r for r in verified if r["verified"]), key=lambda r: r["date"]):
@@ -290,7 +288,7 @@ def collect(ctx: Context) -> dict:
         "in_history": len(history),
         "verified_live": len(live),
         "unverifiable": sum(1 for r in verified if r["unverifiable"]),
-        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "by_rule": ranked(f["rule"] for f in history),
         "tree_items": [{"file": f["file"], "line": f["line"], "code": f["rule"]} for f in tree[:60]],
         "items": [
             {

@@ -454,7 +454,11 @@ def test_live_items_put_the_newest_keys_first(tmp_path: Path, monkeypatch: pytes
 def test_a_rotated_live_key_is_a_new_finding() -> None:
     item = {"file": "b.env", "line": 3, "code": "MongoDB", "commit": "aaaaaaa", "date": "2025-01-01"}
     rotated = item | {"commit": "bbbbbbb", "date": "2026-10-01"}
-    keys = [f["key"] for d in ({"live_items": [item]}, {"live_items": [rotated]}) for f in findings._secrets("repo", d)]
+    keys = [
+        f["key"]
+        for d in ({"live_items": [item]}, {"live_items": [rotated]})
+        for f in findings.extract("repo", "secrets", d)
+    ]
     assert keys[0] != keys[1]
 
 
@@ -467,7 +471,7 @@ def test_two_live_keys_in_one_commit_and_file_are_both_kept(tmp_path: Path, monk
 
 def test_two_zizmor_findings_of_one_rule_get_distinct_keys() -> None:
     items = [{"file": "w.yml", "line": n, "code": "unpinned-uses", "msg": "m", "at": f"h{n}"} for n in (5, 9)]
-    keys = {f["key"] for f in findings._scripts("repo", {"workflow_security": {"items": items}})}
+    keys = {f["key"] for f in findings.extract("repo", "scripts", {"workflow_security": {"items": items}})}
     assert len(keys) == 2
 
 
@@ -476,7 +480,7 @@ def test_repeated_hits_in_one_file_get_distinct_stable_keys(tool: str) -> None:
     hit = {"file": "a.py", "code": "S1", "severity": "warning", "msg": "same", "match": "delve"}
     before = {"items": [hit | {"line": 10}]}
     after = {"items": [hit | {"line": 14}, hit | {"line": 40}]}  # lines shifted, and a second hit added
-    keys = [[f["key"] for f in findings.EXTRACTORS[tool]("repo", d)] for d in (before, after)]
+    keys = [[f["key"] for f in findings.extract("repo", tool, d)] for d in (before, after)]
     assert keys[0][0] == keys[1][0]
     assert len(set(keys[1])) == 2
 
@@ -494,8 +498,8 @@ def test_a_hit_prepended_above_an_old_one_is_the_new_finding() -> None:
     hit = {"file": "a.py", "code": "S1", "severity": "warning", "msg": "same", "match": "delve"}
     before = {"items": [hit | {"line": 10, "at": "old"}]}
     after = {"items": [hit | {"line": 4, "at": "new"}, hit | {"line": 12, "at": "old"}]}
-    old_keys = {f["key"] for f in findings._radarlint("repo", before)}
-    new = [f for f in findings._radarlint("repo", after) if f["key"] not in old_keys]
+    old_keys = {f["key"] for f in findings.extract("repo", "radarlint", before)}
+    new = [f for f in findings.extract("repo", "radarlint", after) if f["key"] not in old_keys]
     assert [f["line"] for f in new] == [4]
 
 
@@ -511,7 +515,7 @@ def test_fingerprint_follows_the_line_text_and_hides_it(tmp_path: Path) -> None:
 def test_two_clone_pairs_between_the_same_files_get_distinct_keys() -> None:
     pair = {"b": "y.py:30", "lines": 8, "similarity": 0.9, "type": 2}
     items = [pair | {"a": "x.py:5", "at": "1~2"}, pair | {"a": "x.py:50", "at": "3~4"}]
-    assert len({f["key"] for f in findings._pyscn("repo", {"items": items})}) == 2
+    assert len({f["key"] for f in findings.extract("repo", "pyscn", {"items": items})}) == 2
 
 
 def test_trufflehog_identity_is_a_hash_not_the_secret() -> None:
@@ -521,7 +525,7 @@ def test_trufflehog_identity_is_a_hash_not_the_secret() -> None:
 
 def test_cspell_keys_survive_lines_shifting(tmp_path: Path) -> None:
     item = {"file": "a.py", "at": "abc"}
-    keys = [next(findings._cspell("repo", {"items": [item | {"line": n}]}))["key"] for n in (3, 9)]
+    keys = [findings.extract("repo", "cspell", {"items": [item | {"line": n}]})[0]["key"] for n in (3, 9)]
     assert keys[0] == keys[1]
 
 
@@ -559,7 +563,7 @@ def test_aislop_scans_without_tests(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_fallow_functions_of_one_name_get_distinct_keys() -> None:
     fn = {"file": "a.ts", "function": "handle", "severity": "warning", "cyclomatic": 20, "cognitive": 30, "crap": 50}
     items = [fn | {"line": 5, "at": "classA"}, fn | {"line": 80, "at": "classB"}]
-    assert len({f["key"] for f in findings._fallow("repo", {"items": items})}) == 2
+    assert len({f["key"] for f in findings.extract("repo", "fallow", {"items": items})}) == 2
 
 
 def test_history_cache_is_keyed_by_the_betterleaks_version(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -581,7 +585,8 @@ def test_vale_never_reads_excluded_folders(tmp_path: Path) -> None:
 def test_zizmor_keys_survive_lines_shifting() -> None:
     item = {"file": "w.yml", "code": "unpinned-uses", "msg": "m", "at": "h"}
     keys = [
-        next(findings._scripts("repo", {"workflow_security": {"items": [item | {"line": n}]}}))["key"] for n in (5, 30)
+        findings.extract("repo", "scripts", {"workflow_security": {"items": [item | {"line": n}]}})[0]["key"]
+        for n in (5, 30)
     ]
     assert keys[0] == keys[1]
 
@@ -626,7 +631,7 @@ def test_history_findings_say_where_the_file_is_now() -> None:
     item = {"file": "nightscout/env", "head_file": "research/nightscout/env", "line": 5, "code": "MongoDB",
             "commit": "fdd3b6a", "date": "2025-10-25"}  # fmt: skip
     gone = item | {"head_file": "deleted"}
-    found = list(findings._secrets("repo", {"live_items": [item], "items": [gone]}))
+    found = list(findings.extract("repo", "secrets", {"live_items": [item], "items": [gone]}))
     by_rule = {f["rule"]: f for f in found}
     assert by_rule["live-MongoDB"]["head_file"] == "research/nightscout/env"
     assert "now research/nightscout/env" in by_rule["live-MongoDB"]["message"]

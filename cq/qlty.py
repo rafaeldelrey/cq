@@ -9,7 +9,6 @@ another version is a tool error, not a silent change.
 import json
 import re
 import shutil
-from collections import Counter
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -84,11 +83,6 @@ def results(sarif: dict) -> list[dict]:
                 }
             )
     return rows
-
-
-def count_by_rule(rows: list[dict]) -> dict[str, int]:
-    """How many rows each rule has, the most frequent first."""
-    return dict(Counter(r["rule"] for r in rows).most_common())
 
 
 def run_sarif(ctx: Context, args: list[str], name: str) -> list[dict]:

@@ -8,6 +8,7 @@ test files are dropped (float equality and empty blocks there are noise).
 
 from cq import qlty
 from cq.context import Context
+from cq.tally import ranked
 
 KINDS = ("python", "typescript")
 
@@ -24,7 +25,7 @@ def collect(ctx: Context) -> dict:
     return {
         "findings": len(kept),
         "warnings": sum(1 for r in kept if r["severity"] == "warning"),
-        "by_rule": qlty.count_by_rule(kept),
+        "by_rule": ranked(r["rule"] for r in kept),
         "items": ctx.with_fingerprints(
             [
                 {"file": r["file"], "line": r["line"], "code": r["rule"], "severity": r["severity"], "msg": r["msg"]}

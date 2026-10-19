@@ -7,6 +7,7 @@ Thresholds are qlty's defaults except parameters (8, in `.qlty/qlty.toml`). Test
 
 from cq import qlty
 from cq.context import Context
+from cq.tally import ranked
 
 KINDS = ("python", "typescript")
 
@@ -21,7 +22,7 @@ def collect(ctx: Context) -> dict:
         "smells": len(kept),
         "structure": sum(1 for r in kept if r["rule"] not in DUPLICATION),
         "duplication": sum(1 for r in kept if r["rule"] in DUPLICATION),
-        "by_rule": qlty.count_by_rule(kept),
+        "by_rule": ranked(r["rule"] for r in kept),
         "items": ctx.with_fingerprints(
             [
                 {"file": r["file"], "line": r["line"], "code": r["rule"], "msg": r["msg"]}

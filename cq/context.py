@@ -10,6 +10,7 @@ from cq.config import Settings, Target
 
 @lru_cache(maxsize=256)
 def _lines(path: Path) -> tuple[str, ...]:
+    """A file's lines, read once per run however many findings point into it."""
     try:
         return tuple(path.read_text(errors="replace").splitlines())
     except OSError:  # a file the tool named but the checkout doesn't have: no fingerprint

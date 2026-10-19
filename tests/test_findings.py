@@ -49,8 +49,8 @@ def test_from_snapshot_normalises_and_orders_by_severity() -> None:
 
 
 def test_key_ignores_line_numbers() -> None:
-    a = findings.make("app", "pyright", "error", "error", "bad type", "b.py", 4)
-    b = findings.make("app", "pyright", "error", "error", "bad type", "b.py", 40)
+    a = findings.Source("app", "pyright").finding("error", "error", "bad type", "b.py", 4)
+    b = findings.Source("app", "pyright").finding("error", "error", "bad type", "b.py", 40)
     assert a["key"] == b["key"]
 
 
@@ -73,7 +73,7 @@ def test_mark_new() -> None:
 
 def test_write_jsonl(tmp_path: Path) -> None:
     out = tmp_path / "f.jsonl"
-    findings.write_jsonl([findings.make("a", "t", "r", "info", "é")], out)
+    findings.write_jsonl([findings.Source("a", "t").finding("r", "info", "é")], out)
     assert out.read_text().count("\n") == 1
     assert "é" in out.read_text()
 

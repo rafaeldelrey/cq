@@ -69,6 +69,12 @@ def own(tool: str) -> str:
     return str(path) if path.exists() else tool
 
 
+def require_node_modules(app_dir: Path) -> None:
+    """The npm tools run from the app's own install: refuse without it, rather than measure nothing."""
+    if not (app_dir / "node_modules").exists():
+        raise ToolError("node_modules missing; run `npm ci` in the app first")
+
+
 def require(*tools: str) -> None:
     """A missing binary is a blind spot, never a clean result: fail with how to install it."""
     for tool in tools:

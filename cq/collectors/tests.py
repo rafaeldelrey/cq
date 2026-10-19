@@ -9,7 +9,7 @@ import re
 import tomllib
 
 from cq.context import Context
-from cq.proc import ToolError, run, run_app_tool
+from cq.proc import ToolError, require_node_modules, run, run_app_tool
 
 KINDS = ("python", "typescript")
 
@@ -140,8 +140,7 @@ def vitest_coverage(summary: dict, ctx: Context) -> dict:
 
 def collect_typescript(ctx: Context) -> dict:
     """vitest's JSON reporter, plus coverage when the app has a coverage provider installed."""
-    if not (ctx.app_dir / "node_modules").exists():
-        raise ToolError("node_modules missing; run `npm ci` in the app first")
+    require_node_modules(ctx.app_dir)
     out_file = ctx.raw_dir / "vitest.json"
     cov_dir = ctx.raw_dir / "coverage"
     with_coverage = (ctx.app_dir / "node_modules" / "@vitest" / "coverage-v8").exists()

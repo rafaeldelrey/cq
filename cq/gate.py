@@ -35,7 +35,7 @@ from cq.collectors import secrets
 from cq.collectors.vale import EXTENSIONS
 from cq.config import GateSettings, Settings, Target, ensure_data_dir
 from cq.context import Context
-from cq.findings import Finding, from_snapshot, make, mark_new, write_jsonl
+from cq.findings import Finding, Source, from_snapshot, mark_new, write_jsonl
 from cq.proc import ToolError
 from cq.runner import git, snapshot
 from cq.toolconfig import gitleaks_config
@@ -138,10 +138,11 @@ def line_level(ctx: Context, base_sha: str) -> list[Finding]:
     )
     smells = qlty.run_sarif(ctx, ["smells", "--upstream", base_sha, "--quiet"], "gate-smells")
     found = [
-        make("repo", "qlty", f"{r['plugin']}:{r['rule']}", r["severity"], r["msg"], r["file"], r["line"]) for r in check
+        Source("repo", "qlty").finding(f"{r['plugin']}:{r['rule']}", r["severity"], r["msg"], r["file"], r["line"])
+        for r in check
     ]
     found += [
-        make("repo", "smells", r["rule"], "warning", r["msg"], r["file"], r["line"])
+        Source("repo", "smells").finding(r["rule"], "warning", r["msg"], r["file"], r["line"])
         for r in smells
         if not qlty.is_test(r["file"]) and r["rule"] not in WHOLE_FILE_SMELLS and overlaps(r, lines)
     ]
@@ -154,9 +155,7 @@ def branch_secrets(settings: Settings, base_sha: str) -> list[Finding]:
         ["git", ".", f"--log-opts={base_sha}..HEAD"], settings.repo_root, gitleaks_config(settings)
     )
     return [
-        make(
-            "repo",
-            "secrets",
+        Source("repo", "secrets").finding(
             f"in-branch-{r['rule']}",
             "error",
             f"{r['rule']} committed on this branch (commit {r['commit']}): drop it from the branch and rotate it",
@@ -278,9 +277,7 @@ def cognitive_ratchet(target: str, head: dict, base: dict) -> list[Finding]:
         if was is None or score > was:
             change = "newly over the limit" if was is None else f"grew from {was}"
             out.append(
-                make(
-                    target,
-                    "ratchet",
+                Source(target, "ratchet").finding(
                     "cognitive",
                     "warning",
                     f"{function}: cognitive {score}, {change}",
@@ -308,7 +305,7 @@ def ratchets(head: dict, base: dict, locks: set[str]) -> list[Finding]:
             before = 0 if new_app else value(base, target, tool, field)
             if after is not None and before is not None and after > before:
                 message = f"{tool}.{field} went from {before:g} to {after:g}"
-                out.append(make(target, "ratchet", f"{tool}.{field}", "warning", message))
+                out.append(Source(target, "ratchet").finding(f"{tool}.{field}", "warning", message))
         out += cognitive_ratchet(target, head, base)
     return out
 

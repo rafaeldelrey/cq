@@ -11,6 +11,7 @@ from pathlib import Path
 
 from cq.context import Context
 from cq.proc import ToolError, parse_json, require, run
+from cq.tally import ranked
 from cq.toolconfig import vale_config
 
 KINDS = ("repo",)
@@ -96,14 +97,11 @@ def collect(ctx: Context) -> dict:
         for path, alerts in data.items()
         for a in alerts
     ]
-    by_match: dict[str, int] = {}
-    for item in items:
-        word = item["match"].lower()
-        by_match[word] = by_match.get(word, 0) + 1
+    by_match = ranked(i["match"].lower() for i in items)
     return {
         "findings": len(items),
         "stubs": sum(1 for i in items if i["code"] == "Stubs"),
         "prose": sum(1 for i in items if i["code"] == "Words"),
-        "by_match": dict(sorted(by_match.items(), key=lambda kv: -kv[1])),
+        "by_match": by_match,
         "items": ctx.with_fingerprints(ctx.cap(items, 120)),
     }

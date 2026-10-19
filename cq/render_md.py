@@ -253,6 +253,20 @@ def cut_section(cuts: list[dict]) -> list[str]:
     return [f"**Lists cut to fit** (the snapshot's totals are the real counts): {'; '.join(parts)}", ""]
 
 
+def header(history: list[dict], window_days: int) -> list[str]:
+    """The report's title (the measured commit) and what its delta columns mean."""
+    latest = history[-1]
+    dirty = ", dirty tree" if latest["dirty"] else ""
+    return [
+        f"# Code quality: {latest['commit_date'][:10]} ({latest['short']}{dirty})",
+        "",
+        f"{len(history)} snapshot(s), {history[0]['commit_date'][:10]} → {latest['commit_date'][:10]}. "
+        f"Δ prev = since the previous snapshot; Δ {window_days}d = since the last snapshot "
+        f"{window_days} days before this one; Δ first = since the first.",
+        "",
+    ]
+
+
 def detail_sections(target: dict, found: list[dict]) -> list[str]:
     """The worst offenders and the newer tools' findings for one target (the report's details)."""
     return [*hot_spots(target), *tool_sections(found)]
@@ -262,14 +276,7 @@ def render(history: list[dict], window_days: int = 30, details: bool = True) -> 
     """The whole report."""
     latest = history[-1]
     all_findings = findings.mark_new(findings.from_snapshot(latest), history[-2] if len(history) > 1 else None)
-    lines = [
-        f"# Code quality: {latest['commit_date'][:10]} ({latest['short']}{', dirty tree' if latest['dirty'] else ''})",
-        "",
-        f"{len(history)} snapshot(s), {history[0]['commit_date'][:10]} → {latest['commit_date'][:10]}. "
-        f"Δ prev = since the previous snapshot; Δ {window_days}d = since the last snapshot "
-        f"{window_days} days before this one; Δ first = since the first.",
-        "",
-    ]
+    lines = header(history, window_days)
     all_rows = {name: rows_for(history, name, window_days) for name in latest["targets"]}
     if len(history) > 1:
         lines += since_previous([r for rows in all_rows.values() for r in rows])

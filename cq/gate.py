@@ -83,17 +83,24 @@ def diff_lines(base_sha: str) -> tuple[dict[str, set[int]], dict[str, set[int]]]
     old_path = new_path = ""
     for line in git("diff", "--unified=0", "--no-color", base_sha, "HEAD").splitlines():
         if line.startswith("--- "):
-            old_path = line[6:] if line.startswith("--- a/") else ""
+            old_path = side_path(line, "--- a/")
         elif line.startswith("+++ "):
-            new_path = line[6:] if line.startswith("+++ b/") else ""
+            new_path = side_path(line, "+++ b/")
         elif m := HUNK_SIDES.match(line):
-            old_start, old_count = int(m["old"]), int(m["old_count"] or 1)
-            new_start, new_count = int(m["new"]), int(m["new_count"] or 1)
-            if new_path:
-                added.setdefault(new_path, set()).update(range(new_start, new_start + new_count))
-            if old_path:
-                removed.setdefault(old_path, set()).update(range(old_start, old_start + old_count))
+            note_lines(added, new_path, int(m["new"]), int(m["new_count"] or 1))
+            note_lines(removed, old_path, int(m["old"]), int(m["old_count"] or 1))
     return added, removed
+
+
+def side_path(header: str, prefix: str) -> str:
+    """The path a ``---``/``+++`` header names, or "" for /dev/null (a file added or deleted)."""
+    return header[len(prefix) :] if header.startswith(prefix) else ""
+
+
+def note_lines(lines: dict[str, set[int]], path: str, start: int, count: int) -> None:
+    """Add a hunk's ``count`` lines from ``start`` to ``path``'s set; a side with no path has none."""
+    if path:
+        lines.setdefault(path, set()).update(range(start, start + count))
 
 
 def changed_lines(base_sha: str) -> dict[str, set[int]]:

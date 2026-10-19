@@ -237,6 +237,14 @@ def first_parent_position(checkout: Path, commit: str, order: dict[str, int]) ->
     return (order[join], join) if join else (-1, "")
 
 
+def follow(path: str | None, moves: list[tuple[str, str, str]]) -> str | None:
+    """Where ``path`` ends up after the (status, old, new) renames and deletions, in order; None once deleted."""
+    for status, old, new in moves:
+        if old == path:
+            path = new if status == "R" else None
+    return path
+
+
 def head_paths(checkout: Path, found_at: set[tuple[str, str]]) -> dict[tuple[str, str], str]:
     """Where each (path, commit) is at HEAD, following only what happened to it after that commit,
     or "deleted".
@@ -253,15 +261,10 @@ def head_paths(checkout: Path, found_at: set[tuple[str, str]]) -> dict[tuple[str
     result = {}
     for path, commit in found_at:
         start, join = first_parent_position(checkout, commit, order)
-        current: str | None = path
         # A side-branch commit: first what its branch did to the file before it was joined in.
         branch = path_events(checkout, f"{commit}..{join}^2") if join else []
-        for _, status, old, new in branch:
-            if old == current:
-                current = new if status == "R" else None
-        for n, status, old, new in events:
-            if n > start and old == current:
-                current = new if status == "R" else None
+        current = follow(path, [(status, old, new) for _, status, old, new in branch])
+        current = follow(current, [(status, old, new) for n, status, old, new in events if n > start])
         result[(path, commit)] = current if current in tracked else DELETED
     return result
 

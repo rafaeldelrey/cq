@@ -177,6 +177,31 @@ def run_collector(ctx: Context, tool: str) -> tuple[dict | None, str | None]:
     return result, None
 
 
+def target_problem(target: Target, checkout: Path, settings: Settings) -> str | None:
+    """Why a target can't be measured at this checkout (absent, or its install failed), or None."""
+    if not target.app_dir(checkout).exists() or not target.source_paths(checkout):
+        return "not present at this commit"
+    return prepare(target, checkout, settings)
+
+
+def measure_target(ctx: Context, tools: list[str] | None, errors: dict[str, str | None], say: RunLog) -> dict:
+    """Every collector that applies to the target; a failed one goes into ``errors`` as ``<target>.<tool>``."""
+    name = ctx.target.name
+    measured: dict = {}
+    for tool, module in COLLECTORS.items():
+        if ctx.target.kind not in module.KINDS or (tools and tool not in tools):
+            continue
+        say(f"  {name:<17} {tool:<16}", end="")
+        result, error = run_collector(ctx, tool)
+        if error or result is None:
+            errors[f"{name}.{tool}"] = error
+            say(f"ERROR {(error or '').splitlines()[0][:100]}  (see {name}/{tool}.log)")
+        else:
+            measured[tool] = result
+            say(f"{result['seconds']:>6.1f}s")
+    return measured
+
+
 def snapshot(
     settings: Settings,
     rev: str = "HEAD",
@@ -207,28 +232,13 @@ def snapshot(
         for target in settings.targets:
             if targets and target.name not in targets:
                 continue
-            if not target.app_dir(checkout).exists() or not target.source_paths(checkout):
-                snap["errors"][target.name] = "not present at this commit"
-                continue
-            if install_error := prepare(target, checkout, settings):
-                snap["errors"][target.name] = install_error
+            if unmeasurable := target_problem(target, checkout, settings):
+                snap["errors"][target.name] = unmeasurable
                 continue
             raw_dir = settings.runs_dir / run_id / target.name
             raw_dir.mkdir(parents=True, exist_ok=True)
             ctx = Context(target=target, checkout=checkout, raw_dir=raw_dir, settings=settings, full=full)
-            measured: dict = {}
-            for tool, module in COLLECTORS.items():
-                if target.kind not in module.KINDS or (tools and tool not in tools):
-                    continue
-                say(f"  {target.name:<17} {tool:<16}", end="")
-                result, error = run_collector(ctx, tool)
-                if error or result is None:
-                    snap["errors"][f"{target.name}.{tool}"] = error
-                    say(f"ERROR {(error or '').splitlines()[0][:100]}  (see {target.name}/{tool}.log)")
-                else:
-                    measured[tool] = result
-                    say(f"{result['seconds']:>6.1f}s")
-            snap["targets"][target.name] = measured
+            snap["targets"][target.name] = measure_target(ctx, tools, snap["errors"], say)
     return snap
 
 

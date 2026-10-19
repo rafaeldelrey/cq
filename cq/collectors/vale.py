@@ -36,12 +36,24 @@ def files(ctx: Context, roots: list[str]) -> list[str]:
     found = []
     for root in roots:
         if (ctx.checkout / root).is_file():
-            found += [root] if root.endswith(EXTENSIONS) and not skipped(root, skip) else []
-            continue
-        for d, dirs, names in os.walk(ctx.checkout / root):
-            rel = Path(d).relative_to(ctx.checkout).as_posix()
-            dirs[:] = sorted(x for x in dirs if not skipped(f"{rel}/{x}", skip))
-            found += [f"{rel}/{n}" for n in sorted(names) if n.endswith(EXTENSIONS) and not skipped(f"{rel}/{n}", skip)]
+            found += [root] if wanted(root, skip) else []
+        else:
+            found += walk(ctx.checkout, root, skip)
+    return found
+
+
+def wanted(path: str, skip: tuple[str, ...]) -> bool:
+    """A file vale reads: one of its extensions, outside the skipped folders."""
+    return path.endswith(EXTENSIONS) and not skipped(path, skip)
+
+
+def walk(checkout: Path, root: str, skip: tuple[str, ...]) -> list[str]:
+    """The files vale reads under one folder, pruning skipped folders before descending into them."""
+    found = []
+    for d, dirs, names in os.walk(checkout / root):
+        rel = Path(d).relative_to(checkout).as_posix()
+        dirs[:] = sorted(x for x in dirs if not skipped(f"{rel}/{x}", skip))
+        found += [f"{rel}/{n}" for n in sorted(names) if wanted(f"{rel}/{n}", skip)]
     return found
 
 

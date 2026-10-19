@@ -65,49 +65,73 @@ def inline(text: str) -> str:
     return out
 
 
+HEADING = re.compile(r"^(#{1,4})\s+(.*)")
+LIST_ITEM = re.compile(r"^\s*([-*]|\d+\.)\s+(.*)")
+
+
+class HtmlBuilder:
+    """The HTML for markdown_to_html, built one Markdown line at a time."""
+
+    def __init__(self) -> None:
+        """An empty document: no open paragraph, no open list."""
+        self.out: list[str] = []
+        self.list_kind: str | None = None
+        self.para: list[str] = []
+
+    def end_paragraph(self) -> None:
+        """Close the open paragraph, if any."""
+        if self.para:
+            self.out.append(f"<p>{inline(' '.join(self.para))}</p>")
+            self.para.clear()
+
+    def end_list(self) -> None:
+        """Close the open list, if any."""
+        if self.list_kind:
+            self.out.append(f"</{self.list_kind}>")
+            self.list_kind = None
+
+    def blank(self) -> None:
+        """A blank line ends both the paragraph and the list."""
+        self.end_paragraph()
+        self.end_list()
+
+    def heading(self, m: re.Match[str]) -> None:
+        """``#`` to ``####`` become h3 to h6: the dashboard's own headings come first."""
+        self.blank()
+        level = min(len(m[1]) + 2, 6)
+        self.out.append(f"<h{level}>{inline(m[2])}</h{level}>")
+
+    def item(self, m: re.Match[str]) -> None:
+        """A list item, opening its list (numbered or not) when the kind changes."""
+        self.end_paragraph()
+        kind = "ol" if m[1][0].isdigit() else "ul"
+        if self.list_kind != kind:
+            self.end_list()
+            self.out.append(f"<{kind}>")
+            self.list_kind = kind
+        self.out.append(f"<li>{inline(m[2])}</li>")
+
+    def text(self, line: str) -> None:
+        """A line of a paragraph: it ends any list."""
+        self.end_list()
+        self.para.append(line.strip())
+
+
 def markdown_to_html(md: str) -> str:
     """The small Markdown subset the /code-quality analysis is written in: headings, lists, paragraphs."""
-    out: list[str] = []
-    in_list: str | None = None
-    para: list[str] = []
-
-    def flush() -> None:
-        nonlocal in_list
-        if para:
-            out.append(f"<p>{inline(' '.join(para))}</p>")
-            para.clear()
-        if in_list:
-            out.append(f"</{in_list}>")
-            in_list = None
-
+    html = HtmlBuilder()
     for raw in md.splitlines():
         line = raw.rstrip()
-        heading = re.match(r"^(#{1,4})\s+(.*)", line)
-        item = re.match(r"^\s*([-*]|\d+\.)\s+(.*)", line)
         if not line.strip():
-            flush()
-        elif heading:
-            flush()
-            level = min(len(heading[1]) + 2, 6)
-            out.append(f"<h{level}>{inline(heading[2])}</h{level}>")
-        elif item:
-            if para:
-                out.append(f"<p>{inline(' '.join(para))}</p>")
-                para.clear()
-            kind = "ol" if item[1][0].isdigit() else "ul"
-            if in_list != kind:
-                if in_list:
-                    out.append(f"</{in_list}>")
-                out.append(f"<{kind}>")
-                in_list = kind
-            out.append(f"<li>{inline(item[2])}</li>")
+            html.blank()
+        elif heading := HEADING.match(line):
+            html.heading(heading)
+        elif item := LIST_ITEM.match(line):
+            html.item(item)
         else:
-            if in_list:
-                out.append(f"</{in_list}>")
-                in_list = None
-            para.append(line.strip())
-    flush()
-    return "\n".join(out)
+            html.text(line)
+    html.blank()
+    return "\n".join(html.out)
 
 
 def build(

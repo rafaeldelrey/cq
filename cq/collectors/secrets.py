@@ -23,7 +23,7 @@ from pathlib import Path
 
 from cq.config import DEFAULTS_DIR
 from cq.context import Context
-from cq.proc import ToolError, require, run
+from cq.proc import ToolError, read_report, require, run
 from cq.tally import ranked
 from cq.toolconfig import gitleaks_config
 
@@ -65,7 +65,7 @@ def betterleaks(args: list[str], cwd: Path, config: Path = DEFAULT_CONFIG) -> li
             cwd,
             secret_output=True,
         )
-        return [slim(f) for f in json.loads(report.read_text() or "[]")]
+        return [slim(f) for f in json.loads(read_report(report, "betterleaks") or "[]")]
 
 
 def slim(f: dict) -> dict:

@@ -4,30 +4,36 @@ freshness, scripts and links. Binaries run for real on small inputs; a missing o
 import json
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 from cq import findings, runner
 from cq.collectors import (
+    cognitive,
     containers,
     dependencies,
+    duplication,
     eslint,
     freshness,
     hotspots,
     links,
     mutation,
     scripts,
+    secrets,
     semgrep,
     suppressions,
     typecheck,
+    vulnerabilities,
 )
 from cq.collectors import tests as tests_collector
-from cq.config import DEFAULTS_DIR, Settings, Target
+from cq.config import DEFAULTS_DIR, PINS, Settings, Target
 from cq.context import Context
-from cq.proc import ToolError, own
+from cq.proc import ToolError, own, read_report
 
 BRANCHY = """
 def branchy(x):
@@ -443,3 +449,83 @@ def test_scripts_without_its_linters_is_a_tool_error(tmp_path: Path, monkeypatch
     monkeypatch.setattr(scripts.shutil, "which", lambda tool: None if tool == "actionlint" else f"/bin/{tool}")
     with pytest.raises(ToolError, match="actionlint is not installed"):
         scripts.collect(make_ctx(tmp_path, kind="repo"))
+
+
+COPIED = (
+    "def total(a, b, c, d):\n" + "".join(f"    a = a * {n} + b - c  # step {n}\n" for n in range(14)) + "    return a\n"
+)
+
+
+def copied_app(root: Path) -> None:
+    """apps/demo/pkg with one function copied into two files: a clone jscpd finds."""
+    (root / "apps" / "demo" / "pkg").mkdir(parents=True)
+    for name in ("a.py", "b.py"):
+        (root / "apps" / "demo" / "pkg" / name).write_text(COPIED)
+
+
+@pytest.mark.skipif(shutil.which("npx") is None, reason="npx not installed")
+def test_duplication_under_a_folder_the_repo_ignores(tmp_path: Path) -> None:
+    root = tmp_path / "build" / "repo"  # the repo's own .gitignore names "build/"
+    copied_app(root)
+    (root / ".gitignore").write_text("build/\n")
+    result = duplication.collect(make_ctx(root, jscpd=PINS["jscpd"]))
+    assert result["clones"] == 1
+    assert result["top"][0]["a"].startswith("apps/demo/pkg/")
+
+
+@pytest.mark.skipif(shutil.which("npx") is None, reason="npx not installed")
+def test_duplication_that_measures_nothing_says_so(tmp_path: Path) -> None:
+    copied_app(tmp_path)
+    (tmp_path / ".gitignore").write_text("apps/\n")  # the repo ignores its own source
+    with pytest.raises(ToolError, match=r"jscpd wrote no report \(it measured no files under apps/demo/pkg\)"):
+        duplication.collect(make_ctx(tmp_path, jscpd=PINS["jscpd"]))
+
+
+def test_links_with_no_docs_is_skipped_without_lychee(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(links.shutil, "which", lambda name: None)  # not even needed
+    result = links.collect(make_ctx(tmp_path, kind="repo", link_paths=("README.md", "docs")))
+    assert result == {"skipped": "no docs to check (link_paths: README.md, docs)"}
+
+
+def writes_nothing(cmd: list[str], cwd: Path, **kwargs: object) -> str:
+    """A tool run that succeeds and writes no report (git answers with a fresh commit date)."""
+    return datetime.now(UTC).isoformat() if cmd[:2] == ["git", "show"] else ""
+
+
+def no_report_cases(tmp_path: Path) -> dict[str, tuple[ModuleType, Callable[[], object]]]:
+    """Each collector that reads a report its tool writes: (the module whose run is faked, the call)."""
+    ctx = make_ctx(tmp_path)
+    (tmp_path / "apps" / "demo" / "pkg").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "apps" / "demo" / "uv.lock").write_text("")
+    (tmp_path / "apps" / "demo" / "node_modules").mkdir(exist_ok=True)
+    (tmp_path / "wiki").mkdir(exist_ok=True)
+    out = tmp_path / "raw" / "semgrep.json"
+    return {
+        "complexipy": (cognitive, lambda: cognitive.collect(ctx)),
+        "trivy": (containers, lambda: containers.trivy(image_ctx(tmp_path))),
+        "deptry": (dependencies, lambda: dependencies.collect(ctx)),
+        "jscpd": (duplication, lambda: duplication.collect(ctx)),
+        "lychee": (links, lambda: links.collect(make_ctx(tmp_path, kind="repo", link_paths=("wiki",)))),
+        "betterleaks": (secrets, lambda: secrets.betterleaks(["dir", "."], tmp_path)),
+        "semgrep": (semgrep, lambda: semgrep.scan(ctx, ["rules"], ["pkg"], out, [])),
+        "vitest": (tests_collector, lambda: tests_collector.collect_typescript(make_ctx(tmp_path, kind="typescript"))),
+        "pip-audit": (vulnerabilities, lambda: vulnerabilities.collect(ctx)),
+    }
+
+
+@pytest.mark.parametrize(
+    "tool", ["complexipy", "trivy", "deptry", "jscpd", "lychee", "betterleaks", "semgrep", "vitest", "pip-audit"]
+)
+def test_a_tool_that_writes_no_report_is_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str) -> None:
+    module, call = no_report_cases(tmp_path)[tool]
+    monkeypatch.setattr(module, "run", writes_nothing)
+    monkeypatch.setattr(links.shutil, "which", lambda name: f"/bin/{name}")
+    with pytest.raises(ToolError, match=rf"^{tool} wrote no report"):
+        call()
+
+
+def test_read_report(tmp_path: Path) -> None:
+    (tmp_path / "out.json").write_text("[]")
+    assert read_report(tmp_path / "out.json", "tool") == "[]"
+    with pytest.raises(ToolError, match=r"^tool wrote no report \(nothing to scan\): .*missing\.json$"):
+        read_report(tmp_path / "missing.json", "tool", "nothing to scan")

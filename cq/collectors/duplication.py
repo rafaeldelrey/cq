@@ -1,6 +1,8 @@
 """Copy-pasted code (jscpd, via npx): the share of lines that are part of a clone."""
 
 import json
+import os
+from pathlib import Path
 
 from cq.context import Context
 from cq.proc import read_report, run
@@ -17,7 +19,7 @@ def collect(ctx: Context) -> dict:
     # Relative to the checkout (jscpd's working directory): with --gitignore, jscpd matches the repo's
     # ignore rules against the paths it's given, and an absolute path under a folder the repo ignores
     # (tmp/, build/) would match every file.
-    paths = [p.relative_to(ctx.checkout).as_posix() for p in ctx.sources]
+    paths = [Path(os.path.relpath(p, ctx.checkout)).as_posix() for p in ctx.sources]  # ".", or "../shared" too
     run(
         [
             "npx",

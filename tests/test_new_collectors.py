@@ -474,6 +474,19 @@ def test_duplication_under_a_folder_the_repo_ignores(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("npx") is None, reason="npx not installed")
+def test_duplication_of_an_app_at_the_repo_root(tmp_path: Path) -> None:
+    """A normal folder, and a target whose source is the repo itself ("."): the same clone and file names."""
+    (tmp_path / "a.py").write_text(COPIED)
+    (tmp_path / "b.py").write_text(COPIED)
+    target = Target(name="app", kind="python", root=".", source=(".",), tests=False)
+    ctx = make_ctx(tmp_path, jscpd=PINS["jscpd"])
+    ctx = replace(ctx, target=target, settings=replace(ctx.settings, targets=(target,)))
+    result = duplication.collect(ctx)
+    assert (result["clones"], result["duplicated_lines"]) == (1, 15)
+    assert {result["top"][0]["a"].split(":")[0], result["top"][0]["b"].split(":")[0]} == {"a.py", "b.py"}
+
+
+@pytest.mark.skipif(shutil.which("npx") is None, reason="npx not installed")
 def test_duplication_that_measures_nothing_says_so(tmp_path: Path) -> None:
     copied_app(tmp_path)
     (tmp_path / ".gitignore").write_text("apps/\n")  # the repo ignores its own source
@@ -519,7 +532,8 @@ def no_report_cases(tmp_path: Path) -> dict[str, tuple[ModuleType, Callable[[], 
 def test_a_tool_that_writes_no_report_is_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str) -> None:
     module, call = no_report_cases(tmp_path)[tool]
     monkeypatch.setattr(module, "run", writes_nothing)
-    monkeypatch.setattr(links.shutil, "which", lambda name: f"/bin/{name}")
+    if tool == "lychee":  # links checks that lychee is installed before running it
+        monkeypatch.setattr(links.shutil, "which", lambda name: f"/bin/{name}")
     with pytest.raises(ToolError, match=rf"^{tool} wrote no report"):
         call()
 

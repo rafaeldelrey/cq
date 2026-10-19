@@ -62,6 +62,7 @@ Done when the stop rule, the config policy, the landing and the scope are each a
 Run `cq run` in the worktree. Read the findings to work on with `jq` on `runs/<run>/findings.jsonl`.
 
 **Count from the snapshot, not from `findings.jsonl`.** cq lists only each tool's worst items in a snapshot (200 docstrings, 120 for several tools). Once those are fixed, the next ones fill the list, so a finding count can stay flat while the real number falls. Take each tool's total from its own count in `snapshot.json` (`docstrings.missing`, `smells.smells`, `aislop.findings`, `radarlint.findings`, …). Use the finding rows for tools that list everything. The rounds, the plateau and the report use these totals.
+- **Low-coverage files** are the worst 15 only. Covering them brings the next 15 up, so count the files under 50% from the app's own coverage report (coverage.py's JSON, or vitest's `coverage-summary.json`).
 
 Done when you have each tool's total from the snapshot, compared with the previous round's, and the list of findings this round will work on.
 
@@ -77,6 +78,9 @@ Work through the findings, most severe first.
 - **Image vulnerabilities** describe the published image, so cq's numbers move only after a deploy. A Dockerfile fix is checked on a local build that is never pushed, with `trivy image` before and after.
 
 **In a repo with several apps,** give each app its own fix agent, in parallel, in the same worktree. Each agent edits only its app's folder, proposes config instead of editing shared config, and runs that app's checks. It doesn't commit; you do, once all have reported.
+- **Each agent re-runs the relevant tools on its own folder before reporting,** so it catches the findings its new code adds. In angel-monitor's round 2, extracted modules brought in 6 cspell, 8 knip and 13 radarlint findings that the agent never saw.
+- **Every tool total that rises from one round to the next is a review finding** for that round.
+- **Commit each app's part of a round as its own commit,** and keep the evidence for "behaviour unchanged" (rendered-HTML diffs, golden outputs) for the PR body. One 13,000-line commit can't be reviewed.
 - **An agent that starts helpers reports only after every helper has finished.** In angel-monitor's round 2, a fix agent handed back while five helpers were still editing.
 - **Before you commit or measure,** check that no agent is still running, and that `git diff --stat` stays inside the agents' folders.
 
@@ -109,7 +113,7 @@ Compare this round's totals with the last round's.
 - **Stop** when the user's rule is met, at a plateau (when that was the rule), after a round that removed nothing, or after round 10.
 - **Otherwise** go back to step 5.
 
-At a plateau, look at every finding left. If one is still fixable in code within scope, do one more round for it, and say so.
+At a plateau, look at every finding left. If a **warning or error** is still fixable in code within scope, do one more round for it, and say so. Info findings (a low-coverage file, a missing docstring) are listed in the report. Covering one more file can always bring up the next, so they never extend the loop.
 
 Done when the rule says stop, or the next round has started.
 

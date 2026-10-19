@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from cq import plugin
-from cq.config import CONFIG_FILE, DEFAULTS_DIR, QLTY_DIR, Settings, Target, find_config
+from cq.config import CONFIG_FILE, DEFAULTS_DIR, QLTY_CONFIG, QLTY_DIR, QLTY_IGNORE, Settings, Target, find_config
 from cq.doctor import confirm
 
 # The gate's recommended blocking list: what a branch should never add.
@@ -91,9 +91,10 @@ def add_settings(settings: Settings, *, assume_yes: bool) -> None:
 def add_qlty(settings: Settings, *, assume_yes: bool) -> None:
     """cq's default .qlty/qlty.toml with qlty's .gitignore, when the repo has no qlty config."""
     folder = settings.repo_root / QLTY_DIR
-    if (folder / "qlty.toml").exists():
+    config, ignore = folder / QLTY_CONFIG, folder / QLTY_IGNORE
+    if config.exists():
         print("qlty config already in .qlty/qlty.toml.")
-        add_qlty_gitignore(folder, assume_yes=assume_yes)
+        add_qlty_gitignore(ignore, assume_yes=assume_yes)
         return
     question = (
         "Add qlty's config (.qlty/qlty.toml, cq's default, and qlty's .gitignore)?"
@@ -102,15 +103,14 @@ def add_qlty(settings: Settings, *, assume_yes: bool) -> None:
     if not confirm(question, assume_yes=assume_yes):
         return
     folder.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(DEFAULTS_DIR / "qlty.toml", folder / "qlty.toml")
-    if not (folder / ".gitignore").exists():  # a repo's own .gitignore is kept as it is
-        shutil.copy2(DEFAULTS_DIR / "qlty.gitignore", folder / ".gitignore")
+    shutil.copy2(DEFAULTS_DIR / QLTY_CONFIG, config)
+    if not ignore.exists():  # a repo's own .gitignore is kept as it is
+        shutil.copy2(DEFAULTS_DIR / "qlty.gitignore", ignore)
     print("Wrote .qlty/qlty.toml and .qlty/.gitignore.")
 
 
-def add_qlty_gitignore(folder: Path, *, assume_yes: bool) -> None:
+def add_qlty_gitignore(dest: Path, *, assume_yes: bool) -> None:
     """qlty's .gitignore for a repo that has qlty's config without it (set up by cq 0.3.0 or earlier)."""
-    dest = folder / ".gitignore"
     if dest.exists():
         return
     question = "Add .qlty/.gitignore? Without it qlty's cache shows up as untracked files"

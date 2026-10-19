@@ -16,6 +16,8 @@ CONFIG_FILE = "cq.toml"
 PYPROJECT = "pyproject.toml"
 DEFAULT_DATA_DIR = ".cq"
 QLTY_DIR = ".qlty"
+QLTY_CONFIG = "qlty.toml"
+QLTY_IGNORE = ".gitignore"
 # What qlty writes under .qlty/ when it runs: its cache links and plugin sources, never the repo's.
 QLTY_CACHE = ("logs", "out", "results", "plugin_cachedir", "sources")
 SCHEMA_VERSION = 1

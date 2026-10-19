@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cq import plugin
-from cq.config import PINS, QLTY_DIR
+from cq.config import PINS, QLTY_CONFIG, QLTY_DIR, QLTY_IGNORE
 from cq.proc import run
 
 
@@ -98,7 +98,7 @@ def plugin_line(width: int, folder: Path | None) -> str:
 def qlty_ignore_line(width: int, folder: Path | None) -> str | None:
     """A note when the repo has qlty's config but not its .gitignore; nothing otherwise. Never a failure."""
     qlty_dir = (folder or Path.cwd()) / QLTY_DIR
-    if not (qlty_dir / "qlty.toml").exists() or (qlty_dir / ".gitignore").exists():
+    if not (qlty_dir / QLTY_CONFIG).exists() or (qlty_dir / QLTY_IGNORE).exists():
         return None
     line = f"--  {QLTY_IGNORE_LABEL:<{width}}  missing in this repo"
     return f"{line}\n      qlty's cache shows up as untracked files without it: `cq init` adds it"

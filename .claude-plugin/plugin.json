@@ -1,14 +1,24 @@
 {
   "name": "cq",
-  "version": "0.2.3",
-  "description": "Code-quality snapshots, trends and a PR gate for a repository: /code-quality measures and writes the analysis, /setup-cq sets a repo up for cq.",
+  "version": "0.3.0",
+  "description": "Code-quality snapshots, trends and a PR gate for a repository: /code-quality measures and writes the analysis, /setup-cq sets a repo up for cq, /improve-code-quality improves a repo in measured rounds up to a ready PR.",
   "author": {
     "name": "Rafael Del Rey"
   },
   "repository": "https://github.com/rafaeldelrey/cq",
-  "keywords": ["code-quality", "coverage", "complexity", "dead-code", "duplication", "secrets", "ai-slop", "pr-gate"],
+  "keywords": [
+    "code-quality",
+    "coverage",
+    "complexity",
+    "dead-code",
+    "duplication",
+    "secrets",
+    "ai-slop",
+    "pr-gate"
+  ],
   "skills": [
     "./skills/code-quality",
-    "./skills/setup-cq"
+    "./skills/setup-cq",
+    "./skills/improve-code-quality"
   ]
 }

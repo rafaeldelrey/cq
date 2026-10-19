@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.2.3
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.3.0
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.2.3
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.3.0
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -135,7 +135,7 @@ Data: /Users/you/work/my-repo/.cq (history/ and runs/, never committed)
 2. **qlty's config.** It writes `.qlty/qlty.toml` when the repo has none. Without that file the
    qlty-based tools don't run: radarlint, smells, workflow security and the gate's line checks
    report an error saying "run `cq init`".
-3. **The Claude Code plugin** (the `/code-quality` and `/setup-cq` skills). It shows the two
+3. **The Claude Code plugin** (the `/code-quality`, `/setup-cq` and `/improve-code-quality` skills). It shows the two
    `claude` commands for each choice, then asks:
    - **u, just you:** installed for your user, in every repo, with nothing written to this one;
    - **p, this repo:** written to the repo's `.claude/settings.json`; commit it, and everyone who
@@ -251,7 +251,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.2.3"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.3.0"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -282,6 +282,12 @@ or, in Claude Code:
 - **`/code-quality`** runs cq and explains the result. It traces each regression to the commit
   that caused it, writes an analysis onto the dashboard, and ranks what to fix next.
   `/code-quality report`, `/code-quality backfill <since>` and `/code-quality gate` work too.
+- **`/improve-code-quality`** improves the repo in rounds, on its own branch: measure with cq, fix,
+  review the fixes, fix what the review finds, test, commit, until the stop rule you pick. It asks
+  four questions first (when to stop, whether it may silence false positives in config, how the
+  work lands, what's in scope). It ends with a report that separates what code fixed from what
+  config hid, and, if you chose a PR, with a PR that CI and Codex have already cleared. It never
+  merges. Only you start it: type it in the repo.
 
 To give a whole team the skills, install the plugin for the project: `cq init --skills project`,
 or `claude plugin install cq@cq --scope project`. Commit the `.claude/settings.json` it writes.
@@ -398,7 +404,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.2.3    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.3.0    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

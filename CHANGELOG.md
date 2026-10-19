@@ -4,6 +4,21 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.3.0] - 2026-10-19
+
+### Added
+
+- `/improve-code-quality`, a third skill in cq's Claude Code plugin. It improves a repo in rounds:
+  measure with cq, fix, review the fixes (Matt Pocock's `/code-review`, or Claude Code's own), fix
+  what the review finds, test, commit. It stops at the rule you pick: a plateau, targets, or 10
+  rounds at most. It first asks when to stop, whether config may silence false positives, how the work
+  lands, and what is in scope. It follows the repo's own ship rules when `AGENTS.md` has them,
+  and leaves alone the areas those rules say need evidence first. It ends with a report that
+  separates what code fixed from what config hid, and, for a PR, follows CI and the review (Codex,
+  or a fresh Claude review without it) until the PR is ready, then asks. It never merges.
+
+No measurement changed: snapshots from 0.2.3 and 0.3.0 compare directly.
+
 ## [0.2.3] - 2026-10-18
 
 ### Fixed

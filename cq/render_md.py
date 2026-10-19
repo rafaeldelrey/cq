@@ -267,9 +267,18 @@ def header(history: list[dict], window_days: int) -> list[str]:
     ]
 
 
-def detail_sections(target: dict, found: list[dict]) -> list[str]:
-    """The worst offenders and the newer tools' findings for one target (the report's details)."""
-    return [*hot_spots(target), *tool_sections(found)]
+def target_section(
+    latest: dict, name: str, rows: list[Row], found: list[dict], window_days: int, *, details: bool
+) -> list[str]:
+    """One target's part of the report: its metrics, its cut lists, its new findings and, with details,
+    its worst offenders and the newer tools' findings."""
+    mine = [f for f in found if f["target"] == name]
+    lines = metrics_table(name, rows, window_days)
+    lines += cut_section([c for c in findings.cut_lists(latest) if c["target"] == name])
+    lines += new_findings_section(mine)
+    if details:
+        lines += hot_spots(latest["targets"][name]) + tool_sections(mine)
+    return lines
 
 
 def render(history: list[dict], window_days: int = 30, details: bool = True) -> str:
@@ -281,11 +290,6 @@ def render(history: list[dict], window_days: int = 30, details: bool = True) -> 
     if len(history) > 1:
         lines += since_previous([r for rows in all_rows.values() for r in rows])
     lines += errors_section(latest["errors"])
-    cuts = findings.cut_lists(latest)
     for name, rows in all_rows.items():
-        mine = [f for f in all_findings if f["target"] == name]
-        lines += metrics_table(name, rows, window_days)
-        lines += cut_section([c for c in cuts if c["target"] == name])
-        lines += new_findings_section(mine)
-        lines += detail_sections(latest["targets"][name], mine) if details else []
+        lines += target_section(latest, name, rows, all_findings, window_days, details=details)
     return "\n".join(lines).rstrip() + "\n"

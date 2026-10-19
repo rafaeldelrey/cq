@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cq.collectors import complexity, dead_code, maintainability, size
+from cq.collectors import complexity, dead_code, maintainability, size, vulnerabilities
 from cq.collectors import tests as tests_collector
 from cq.collectors.tests import parse_pytest_summary
 from cq.config import Settings, Target
@@ -139,3 +139,8 @@ def test_vitest_coverage_and_floor(ctx: Context) -> None:
     assert (cov["percent"], cov["branch_percent"], cov["missing_branches"]) == (40.0, 25.0, 6)
     assert (cov["fail_under"], cov["branch_floor"]) == (35.05, 26.45)
     assert cov["worst_files"] == [{"file": "apps/demo/src/a.ts", "percent": 40.0, "missing": 6}]
+
+
+@pytest.mark.parametrize(("fix", "label"), [({"version": "2.0.1"}, "2.0.1"), ({}, "yes"), (True, "yes"), (False, "no")])
+def test_npm_audit_fix_label(fix: object, label: str) -> None:
+    assert vulnerabilities.fix_label(fix) == label

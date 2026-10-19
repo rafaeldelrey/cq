@@ -25,6 +25,7 @@ import json
 import os
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from fnmatch import fnmatch
 from pathlib import Path
@@ -363,8 +364,17 @@ def attempt(name: str, errors: dict[str, str], step: Callable[..., list[Finding]
         return []
 
 
-def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: bool = False) -> int:
-    """Run the gate for HEAD against ``base``; the exit code CI uses."""
+@dataclass(frozen=True)
+class GateOutcome:
+    """What one gate run decided: the exit code CI uses, the Markdown summary, and the run folder."""
+
+    exit_code: int
+    summary: str
+    out_dir: Path
+
+
+def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: bool = False) -> GateOutcome:
+    """Run the gate for HEAD against ``base``: the summary is written to the run folder and returned."""
     base_sha = git("merge-base", base, "HEAD")
     head_short = git("rev-parse", "--short", "HEAD")
     changed, touched, renames = diff_status(base_sha)
@@ -404,9 +414,5 @@ def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: 
     if step_summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with Path(step_summary).open("a") as fh:
             fh.write(text + "\n")
-    # aislop-ignore-next-line ai-slop/python-print-debug -- `cq gate` prints its summary: the CLI output
-    print(text)  # nosemgrep: cq-no-print - the gate's summary is its output
-    # aislop-ignore-next-line ai-slop/python-print-debug -- `cq gate` prints its summary: the CLI output
-    print(f"\ngate run: {out_dir}")  # nosemgrep: cq-no-print - the gate's summary is its output
     failed = any(f["blocking"] for f in findings) or bool(errors)
-    return 1 if mode == "block" and failed else 0
+    return GateOutcome(1 if mode == "block" and failed else 0, text, out_dir)

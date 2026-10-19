@@ -178,3 +178,10 @@ def test_measurement_changes_compare_versions_and_configs() -> None:
     ]
     assert render_md.step_section([]) == []
     assert render_md.step_section(["x"])[-2] == "- x"
+
+
+def test_a_finding_line_says_where_when_it_can() -> None:
+    base = {"severity": "warning", "tool": "ruff", "rule": "F401", "message": "unused", "symbol": ""}
+    assert render_md.finding_line(base | {"file": "a.py", "line": 3}) == "- ⚠️ **ruff/F401** `a.py:3` unused"
+    assert render_md.finding_line(base | {"file": "a.py", "line": None}) == "- ⚠️ **ruff/F401** `a.py` unused"
+    assert render_md.finding_line(base | {"file": "", "line": None}) == "- ⚠️ **ruff/F401**  unused"

@@ -245,7 +245,7 @@ def test_exit_code_by_mode(
     summary_file = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
     gate_settings = GateSettings(mode=mode, block=("smells:*",))
-    assert gate.run_gate(settings, gate_settings, "origin/main", report_only=report_only) == code
+    assert gate.run_gate(settings, gate_settings, "origin/main", report_only=report_only).exit_code == code
     assert "**1 blocking**" in summary_file.read_text()
     out_dir = next(settings.runs_dir.glob("*_gate_head123"))
     row = json.loads((out_dir / "gate-findings.jsonl").read_text())
@@ -255,7 +255,7 @@ def test_exit_code_by_mode(
 def test_a_clean_branch_passes_in_block_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     settings = fake_run(monkeypatch, tmp_path, [])
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
-    assert gate.run_gate(settings, GateSettings(mode="block"), "origin/main") == 0
+    assert gate.run_gate(settings, GateSettings(mode="block"), "origin/main").exit_code == 0
     assert "Nothing new" in next(settings.runs_dir.glob("*_gate_*/gate.md")).read_text()
     assert (settings.data_dir / ".gitignore").read_text().endswith("*\n")  # a new data folder ignores itself
 
@@ -270,7 +270,7 @@ def test_a_tool_that_did_not_run_fails_block_mode(monkeypatch: pytest.MonkeyPatc
         snap({"app": {"semgrep": {"scan_errors": 1}}}),
     ])  # fmt: skip
     monkeypatch.setattr(gate, "snapshot", lambda *a, **k: next(snapshots))
-    assert gate.run_gate(settings, GateSettings(mode="block"), "origin/main") == 1
+    assert gate.run_gate(settings, GateSettings(mode="block"), "origin/main").exit_code == 1
     text = next(settings.runs_dir.glob("*_gate_*/gate.md")).read_text()
     assert "app.aislop" in text and "base: app.semgrep" in text
 

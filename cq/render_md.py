@@ -104,9 +104,12 @@ SEVERITY_MARK = {"error": "⛔", "warning": "⚠️", "info": "·"}
 
 def finding_line(f: dict) -> str:
     """One finding as a Markdown list item."""
-    where = f"`{f['file']}:{f['line']}`" if f.get("line") else f"`{f['file']}`"
     if not f["file"]:
         where = ""
+    elif f.get("line"):
+        where = f"`{f['file']}:{f['line']}`"
+    else:
+        where = f"`{f['file']}`"
     symbol = f" `{f['symbol']}`" if f.get("symbol") and f["tool"] in ("complexity", "cognitive") else ""
     return f"- {SEVERITY_MARK[f['severity']]} **{f['tool']}/{f['rule']}** {where}{symbol} {f['message']}".rstrip()
 

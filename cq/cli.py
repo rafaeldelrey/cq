@@ -154,8 +154,11 @@ def cmd_init(settings: Settings, args: argparse.Namespace) -> int:
 
 
 def cmd_gate(settings: Settings, args: argparse.Namespace) -> int:
-    """Judge what HEAD adds over the base."""
-    return run_gate(settings, load_gate(settings), args.base, report_only=args.report_only)
+    """Judge what HEAD adds over the base, and print the summary."""
+    outcome = run_gate(settings, load_gate(settings), args.base, report_only=args.report_only)
+    print(outcome.summary)
+    print(f"\ngate run: {outcome.out_dir}")
+    return outcome.exit_code
 
 
 def cmd_complexity(settings: Settings, args: argparse.Namespace) -> int:

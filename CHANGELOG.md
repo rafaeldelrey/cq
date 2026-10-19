@@ -4,6 +4,31 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.2.2] - 2026-10-18
+
+cq measured on itself went from 348 findings to 19 (121 warnings to 2), over five rounds of
+measuring, fixing and reviewing (#5).
+
+### Fixed
+
+- A collector that returns no result is recorded as a tool error with a message. Before, the error
+  was empty, and rendering the report failed.
+
+### Changed
+
+- cq's code is reorganized, with no change to any metric or any finding's key. The keys are
+  checked against 96 stored snapshots (angel-monitor's history included), and a committed fixture
+  now covers every tool.
+  - `findings` is split into `finding` (a finding's shape and key), `extractors` (one per tool) and
+    `findings` (a snapshot's list).
+  - `gate` is split into `diff` (what git says changed), `compare` (head against base) and `gate`.
+  - No function is over cyclomatic or cognitive complexity 15, and the complexity baseline is empty.
+  - Every function has a docstring. Near-duplicate code went from 5.9% to 0.
+- cq's own repo has its own tool config: `cspell.json`, `[tool.deptry]`, `.semgrep/` (cq's rules,
+  without the print rule for the CLI's modules), `[tool.cq]` and `.qlty/qlty.toml`.
+
+No measurement changed: snapshots from 0.2.1 and 0.2.2 compare directly.
+
 ## [0.2.1] - 2026-10-17
 
 ### Fixed

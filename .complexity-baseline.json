@@ -1,7 +1,4 @@
 {
   "max": 15,
-  "functions": {
-    "cq/collectors/containers.py::trivy": 18,
-    "cq/render_md.py::render": 18
-  }
+  "functions": {}
 }

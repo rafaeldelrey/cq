@@ -3,32 +3,33 @@
 import json
 
 from cq.context import Context
-from cq.proc import ToolError, run
+from cq.proc import require_node_modules, run
+from cq.tally import ranked
 
 KINDS = ("typescript",)
 
 
+def rule_of(message: dict) -> str:
+    """An eslint message's rule; a parse error has none."""
+    return message.get("ruleId") or "parse"
+
+
 def collect(ctx: Context) -> dict:
     """eslint -f json; exit 1 means it found errors, still a measurement."""
-    if not (ctx.app_dir / "node_modules").exists():
-        raise ToolError("node_modules missing; run `npm ci` in the app first")
+    require_node_modules(ctx.app_dir)
     out = run(["npx", "eslint", "-f", "json", "."], ctx.app_dir, ok_codes=(0, 1))
     (ctx.raw_dir / "eslint.json").write_text(out)
     files = json.loads(out)
-    by_rule: dict[str, int] = {}
-    items = []
-    for f in files:
-        for m in f["messages"]:
-            rule = m.get("ruleId") or "parse"
-            by_rule[rule] = by_rule.get(rule, 0) + 1
-            if len(items) < 30:
-                items.append(
-                    {"file": ctx.rel(f["filePath"]), "line": m.get("line"), "code": rule, "msg": m["message"][:200]}
-                )
+    messages = [(f["filePath"], m) for f in files for m in f["messages"]]
+    by_rule = ranked(rule_of(m) for _, m in messages)
+    items = [
+        {"file": ctx.rel(path), "line": m.get("line"), "code": rule_of(m), "msg": m["message"][:200]}
+        for path, m in messages[:30]
+    ]
     return {
         "errors": sum(f["errorCount"] for f in files),
         "warnings": sum(f["warningCount"] for f in files),
         "files": len(files),
-        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "by_rule": by_rule,
         "items": items,
     }

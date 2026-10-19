@@ -24,6 +24,7 @@ from pathlib import Path
 from cq.config import DEFAULTS_DIR
 from cq.context import Context
 from cq.proc import ToolError, require, run
+from cq.tally import ranked
 from cq.toolconfig import gitleaks_config
 
 KINDS = ("repo",)
@@ -47,11 +48,23 @@ def betterleaks(args: list[str], cwd: Path, config: Path = DEFAULT_CONFIG) -> li
     with tempfile.TemporaryDirectory(prefix="cq-secrets-") as tmp:
         report = Path(tmp) / "report.json"
         run(
-            ["betterleaks", *args, "--config", str(config), "--redact", "--no-banner", "--exit-code", "0",
-             "--report-format", "json", "--report-path", str(report)],
+            [
+                "betterleaks",
+                *args,
+                "--config",
+                str(config),
+                "--redact",
+                "--no-banner",
+                "--exit-code",
+                "0",
+                "--report-format",
+                "json",
+                "--report-path",
+                str(report),
+            ],
             cwd,
             secret_output=True,
-        )  # fmt: skip
+        )
         return [slim(f) for f in json.loads(report.read_text() or "[]")]
 
 
@@ -201,10 +214,10 @@ def path_events(checkout: Path, revisions: str = "HEAD") -> list[tuple[str, str,
         token = field.lstrip("\n")
         if token.startswith("@"):
             commit = token[1:]
-        elif token[:1] == "R":
+        elif token.startswith("R"):
             old, new = next(fields), next(fields)
             events.append((commit, "R", old, new))
-        elif token[:1] == "D":
+        elif token.startswith("D"):
             old = next(fields)
             events.append((commit, "D", old, old))
     return events
@@ -225,12 +238,20 @@ def first_parent_position(checkout: Path, commit: str, order: dict[str, int]) ->
     return (order[join], join) if join else (-1, "")
 
 
+def follow(path: str | None, moves: list[tuple[str, str, str]]) -> str | None:
+    """Where ``path`` ends up after the (status, old, new) renames and deletions, in order; None once deleted."""
+    for status, old, new in moves:
+        if old == path:
+            path = new if status == "R" else None
+    return path
+
+
 def head_paths(checkout: Path, found_at: set[tuple[str, str]]) -> dict[tuple[str, str], str]:
     """Where each (path, commit) is at HEAD, following only what happened to it after that commit,
     or "deleted".
 
     Secrets in history are reported at the path of the commit that added them, which a later
-    move (e.g. nightscout/ into research/ on 2026-03-21) can leave pointing at nothing. Tracing
+    move (a folder renamed, or moved under another) can leave pointing at nothing. Tracing
     from the finding's own commit keeps a path that was deleted and later reused by another file
     from being reported as unchanged.
     """
@@ -241,15 +262,10 @@ def head_paths(checkout: Path, found_at: set[tuple[str, str]]) -> dict[tuple[str
     result = {}
     for path, commit in found_at:
         start, join = first_parent_position(checkout, commit, order)
-        current: str | None = path
         # A side-branch commit: first what its branch did to the file before it was joined in.
         branch = path_events(checkout, f"{commit}..{join}^2") if join else []
-        for _, status, old, new in branch:
-            if old == current:
-                current = new if status == "R" else None
-        for n, status, old, new in events:
-            if n > start and old == current:
-                current = new if status == "R" else None
+        current = follow(path, [(status, old, new) for _, status, old, new in branch])
+        current = follow(current, [(status, old, new) for n, status, old, new in events if n > start])
         result[(path, commit)] = current if current in tracked else DELETED
     return result
 
@@ -260,9 +276,6 @@ def collect(ctx: Context) -> dict:
     tree = scan_tree(ctx)
     history = scan_history(ctx)
     verified = scan_verified(ctx)
-    by_rule: dict[str, int] = {}
-    for f in history:
-        by_rule[f["rule"]] = by_rule.get(f["rule"], 0) + 1
     # One row per credential, its newest occurrence, newest first: the cap counts keys, not places.
     newest: dict[str, dict] = {}
     for r in sorted((r for r in verified if r["verified"]), key=lambda r: r["date"]):
@@ -275,7 +288,7 @@ def collect(ctx: Context) -> dict:
         "in_history": len(history),
         "verified_live": len(live),
         "unverifiable": sum(1 for r in verified if r["unverifiable"]),
-        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "by_rule": ranked(f["rule"] for f in history),
         "tree_items": [{"file": f["file"], "line": f["line"], "code": f["rule"]} for f in tree[:60]],
         "items": [
             {

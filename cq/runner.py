@@ -56,9 +56,15 @@ def tool_versions(settings: Settings, checkout: Path) -> dict[str, str]:
     """Every measuring tool's version for this snapshot: a change in one explains a step in the trend."""
     pinned = {"cq": importlib.metadata.version("cq")} | {t: importlib.metadata.version(t) for t in PINNED_TOOLS}
     specs = {
-        "jscpd": settings.jscpd, "knip": settings.knip, "mutmut": PINS["mutmut"], "qlty (pinned)": settings.qlty,
-        "aislop": settings.aislop, "pyscn": settings.pyscn, "fallow": settings.fallow, "cspell": settings.cspell,
-    }  # fmt: skip
+        "jscpd": settings.jscpd,
+        "knip": settings.knip,
+        "mutmut": PINS["mutmut"],
+        "qlty (pinned)": settings.qlty,
+        "aislop": settings.aislop,
+        "pyscn": settings.pyscn,
+        "fallow": settings.fallow,
+        "cspell": settings.cspell,
+    }
     binaries = {tool: binary_version(tool, flag) for tool, flag in BINARIES.items()}
     return pinned | specs | binaries | qlty_plugin_versions(checkout)
 
@@ -151,7 +157,7 @@ class RunLog:
     def __call__(self, text: str, end: str = "\n") -> None:
         """Write ``text`` to both."""
         # aislop-ignore-next-line ai-slop/python-print-debug -- RunLog is the run's progress on stderr
-        print(text, end=end, flush=True, file=sys.stderr)
+        print(text, end=end, flush=True, file=sys.stderr)  # nosemgrep: cq-no-print - RunLog is the run's progress
         with self.path.open("a") as fh:
             fh.write(text + end)
 
@@ -169,6 +175,32 @@ def run_collector(ctx: Context, tool: str) -> tuple[dict | None, str | None]:
             return None, f"{type(exc).__name__}: {exc}"[:2000]
     result["seconds"] = round(time.monotonic() - started, 2)
     return result, None
+
+
+def target_problem(target: Target, checkout: Path, settings: Settings) -> str | None:
+    """Why a target can't be measured at this checkout (absent, or its install failed), or None."""
+    if not target.app_dir(checkout).exists() or not target.source_paths(checkout):
+        return "not present at this commit"
+    return prepare(target, checkout, settings)
+
+
+def measure_target(ctx: Context, tools: list[str] | None, say: RunLog) -> tuple[dict, dict[str, str]]:
+    """Every collector that applies to the target: the results by tool, and the errors as ``<target>.<tool>``."""
+    name = ctx.target.name
+    measured: dict = {}
+    errors: dict[str, str] = {}
+    for tool, module in COLLECTORS.items():
+        if ctx.target.kind not in module.KINDS or (tools and tool not in tools):
+            continue
+        say(f"  {name:<17} {tool:<16}", end="")
+        result, error = run_collector(ctx, tool)
+        if error or result is None:
+            errors[f"{name}.{tool}"] = error or "the collector returned no result"
+            say(f"ERROR {errors[f'{name}.{tool}'].splitlines()[0][:100]}  (see {name}/{tool}.log)")
+        else:
+            measured[tool] = result
+            say(f"{result['seconds']:>6.1f}s")
+    return measured, errors
 
 
 def snapshot(
@@ -201,28 +233,14 @@ def snapshot(
         for target in settings.targets:
             if targets and target.name not in targets:
                 continue
-            if not target.app_dir(checkout).exists() or not target.source_paths(checkout):
-                snap["errors"][target.name] = "not present at this commit"
-                continue
-            if install_error := prepare(target, checkout, settings):
-                snap["errors"][target.name] = install_error
+            if unmeasurable := target_problem(target, checkout, settings):
+                snap["errors"][target.name] = unmeasurable
                 continue
             raw_dir = settings.runs_dir / run_id / target.name
             raw_dir.mkdir(parents=True, exist_ok=True)
             ctx = Context(target=target, checkout=checkout, raw_dir=raw_dir, settings=settings, full=full)
-            measured: dict = {}
-            for tool, module in COLLECTORS.items():
-                if target.kind not in module.KINDS or (tools and tool not in tools):
-                    continue
-                say(f"  {target.name:<17} {tool:<16}", end="")
-                result, error = run_collector(ctx, tool)
-                if error or result is None:
-                    snap["errors"][f"{target.name}.{tool}"] = error
-                    say(f"ERROR {(error or '').splitlines()[0][:100]}  (see {target.name}/{tool}.log)")
-                else:
-                    measured[tool] = result
-                    say(f"{result['seconds']:>6.1f}s")
-            snap["targets"][target.name] = measured
+            snap["targets"][target.name], errors = measure_target(ctx, tools, say)
+            snap["errors"] |= errors
     return snap
 
 

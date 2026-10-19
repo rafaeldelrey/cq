@@ -9,6 +9,7 @@ import re
 
 from cq.context import Context
 from cq.proc import own, run
+from cq.tally import ranked
 from cq.toolconfig import vulture_config, vulture_whitelist
 
 KINDS = ("python",)
@@ -46,13 +47,11 @@ def collect(ctx: Context) -> dict:
     out = run([own("vulture"), *paths, "--config", str(config), "--exclude", "tests"], ctx.checkout, ok_codes=(0, 3))
     (ctx.raw_dir / "vulture.txt").write_text(out)
     items = parse(out, ctx)
-    by_type: dict[str, int] = {}
-    for item in items:
-        by_type[item["type"]] = by_type.get(item["type"], 0) + 1
+    by_type = ranked(i["type"] for i in items)
     high = [i for i in items if i["confidence"] >= HIGH_CONFIDENCE]
     return {
         "total": len(items),
         "high": len(high),
-        "by_type": dict(sorted(by_type.items(), key=lambda kv: -kv[1])),
+        "by_type": by_type,
         "items": sorted(items, key=lambda i: -i["confidence"])[:40],
     }

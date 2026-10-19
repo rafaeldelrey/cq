@@ -49,53 +49,83 @@ def changes(rows: list[Row]) -> tuple[list[str], list[str]]:
     return better, worse
 
 
+def titled_list(title: str, lines: list[str]) -> list[str]:
+    """A bold title over a bullet list, or nothing when the list is empty."""
+    return [f"**{title}**", *(f"- {line}" for line in lines), ""] if lines else []
+
+
+def tool_result(target: dict, tool: str) -> dict:
+    """A tool's result in one target; empty when the tool didn't run (its error is listed in the report)."""
+    return target.get(tool, {})
+
+
+def tool_list(target: dict, tool: str, key: str) -> list[dict]:
+    """One list from a tool's result; empty when the tool didn't run or listed nothing."""
+    return tool_result(target, tool).get(key, [])
+
+
+def complexity_spots(target: dict) -> list[tuple[str, list[str]]]:
+    """The most complex functions and the least maintainable files."""
+    limit = tool_result(target, "complexity").get("limit")
+    return [
+        (
+            f"Highest cyclomatic complexity (limit {limit})",
+            [f"`{w['function']}` CC {w['cc']} ({w['rank']})" for w in tool_list(target, "complexity", "worst")[:8]],
+        ),
+        (
+            "Highest cognitive complexity",
+            [f"`{w['function']}` {w['score']}" for w in tool_list(target, "cognitive", "worst")[:8]],
+        ),
+        (
+            "Lowest maintainability",
+            [
+                f"`{w['file']}` MI {w['mi']} ({w['lines']} lines)"
+                for w in tool_list(target, "maintainability", "worst")[:5]
+            ],
+        ),
+    ]
+
+
+def hygiene_spots(target: dict) -> list[tuple[str, list[str]]]:
+    """The least-covered files, high-confidence dead code, the largest clones and the missing docstrings."""
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
+    coverage = tool_result(target, "tests").get("coverage", {}).get("worst_files", [])
+    dead = [i for i in tool_list(target, "dead_code", "items") if i["confidence"] >= 90]
+    return [
+        (
+            "Least-covered files",
+            [f"`{w['file']}` {w['percent']}% ({w['missing']} lines missing)" for w in coverage[:8]],
+        ),
+        ("Dead code, high confidence", [f"`{i['file']}:{i['line']}` {i['msg']} ({i['confidence']}%)" for i in dead]),
+        (
+            "Largest clones",
+            [f"{c['lines']} lines: `{c['a']}` ≈ `{c['b']}`" for c in tool_list(target, "duplication", "top")[:6]],
+        ),
+        (
+            "Most missing docstrings",
+            [f"`{f['file']}` {f['missing']} missing" for f in tool_list(target, "docstrings", "worst_files")[:6]],
+        ),
+    ]
+
+
+def checker_spots(target: dict) -> list[tuple[str, list[str]]]:
+    """The first findings of the linters and type checkers."""
+    return [
+        (
+            f"{tool} findings",
+            [
+                f"`{i['file']}:{i['line']}` {i.get('code') or ''} {i['msg']}"
+                for i in tool_list(target, tool, "items")[:10]
+            ],
+        )
+        for tool in ("ruff", "pyright", "eslint", "typecheck")
+    ]
+
+
 def hot_spots(target: dict) -> list[str]:
     """The worst offenders of the latest snapshot, a few per tool."""
-    out: list[str] = []
-
-    def section(title: str, lines: list[str]) -> None:
-        if lines:
-            out.append(f"**{title}**")
-            out.extend(f"- {line}" for line in lines)
-            out.append("")
-
-    cx = target.get("complexity", {})
-    section(
-        f"Highest cyclomatic complexity (limit {cx.get('limit')})",
-        [f"`{w['function']}` CC {w['cc']} ({w['rank']})" for w in cx.get("worst", [])[:8]],
-    )
-    cog = target.get("cognitive", {})
-    section("Highest cognitive complexity", [f"`{w['function']}` {w['score']}" for w in cog.get("worst", [])[:8]])
-    mi = target.get("maintainability", {})
-    section(
-        "Lowest maintainability", [f"`{w['file']}` MI {w['mi']} ({w['lines']} lines)" for w in mi.get("worst", [])[:5]]
-    )
-    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
-    cov = target.get("tests", {}).get("coverage", {})
-    section(
-        "Least-covered files",
-        [f"`{w['file']}` {w['percent']}% ({w['missing']} lines missing)" for w in cov.get("worst_files", [])[:8]],
-    )
-    dead = target.get("dead_code", {})
-    section(
-        "Dead code, high confidence",
-        [
-            f"`{i['file']}:{i['line']}` {i['msg']} ({i['confidence']}%)"
-            for i in dead.get("items", [])
-            if i["confidence"] >= 90
-        ],
-    )
-    dup = target.get("duplication", {})
-    section("Largest clones", [f"{c['lines']} lines: `{c['a']}` ≈ `{c['b']}`" for c in dup.get("top", [])[:6]])
-    doc = target.get("docstrings", {})
-    section(
-        "Most missing docstrings", [f"`{f['file']}` {f['missing']} missing" for f in doc.get("worst_files", [])[:6]]
-    )
-    for tool in ("ruff", "pyright", "eslint", "typecheck"):
-        # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
-        items = target.get(tool, {}).get("items", [])
-        section(f"{tool} findings", [f"`{i['file']}:{i['line']}` {i.get('code') or ''} {i['msg']}" for i in items[:10]])
-    return out
+    sections = [*complexity_spots(target), *hygiene_spots(target), *checker_spots(target)]
+    return [line for title, lines in sections for line in titled_list(title, lines)]
 
 
 NEW_TOOLS = ("semgrep", "imports", "dependencies", "vulnerabilities", "secrets", "mutation")
@@ -104,7 +134,12 @@ SEVERITY_MARK = {"error": "⛔", "warning": "⚠️", "info": "·"}
 
 def finding_line(f: dict) -> str:
     """One finding as a Markdown list item."""
-    where = f"`{f['file']}{':' + str(f['line']) if f.get('line') else ''}`" if f["file"] else ""
+    if not f["file"]:
+        where = ""
+    elif f.get("line"):
+        where = f"`{f['file']}:{f['line']}`"
+    else:
+        where = f"`{f['file']}`"
     symbol = f" `{f['symbol']}`" if f.get("symbol") and f["tool"] in ("complexity", "cognitive") else ""
     return f"- {SEVERITY_MARK[f['severity']]} **{f['tool']}/{f['rule']}** {where}{symbol} {f['message']}".rstrip()
 
@@ -134,6 +169,15 @@ def tool_sections(found: list[dict]) -> list[str]:
     return out
 
 
+def change_verb(before: dict | None, after: dict | None) -> str:
+    """How a config moved between two snapshots: added, removed or changed."""
+    if before is None:
+        return "added"
+    if after is None:
+        return "removed"
+    return "changed"
+
+
 def measurement_changes(previous: dict, latest: dict) -> list[str]:
     """What changed in how the two snapshots were measured: tool versions and the configs read.
 
@@ -151,8 +195,7 @@ def measurement_changes(previous: dict, latest: dict) -> list[str]:
             before, after = old.get(name), new.get(name)
             if before is None or after is None or before["hash"] != after["hash"]:
                 source = (after or before or {}).get("file", "")
-                verb = "added" if before is None else "removed" if after is None else "changed"
-                notes.append(f"{name} config {verb} ({source})")
+                notes.append(f"{name} config {change_verb(before, after)} ({source})")
     return notes
 
 
@@ -170,6 +213,38 @@ def step_section(notes: list[str]) -> list[str]:
     ]
 
 
+def since_previous(rows: list[Row]) -> list[str]:
+    """What got worse and what got better since the previous snapshot."""
+    better, worse = changes(rows)
+    lines = ["## Since the previous snapshot", ""]
+    lines += [f"- 🔻 {w}" for w in worse] or ["- No metric got worse."]
+    return [*lines, *(f"- ✅ {b}" for b in better), ""]
+
+
+def errors_section(errors: dict[str, str]) -> list[str]:
+    """The tools that didn't run, each with the first line of its error."""
+    if not errors:
+        return []
+    return ["## Tool errors", "", *(f"- `{k}`: {v.splitlines()[0][:200]}" for k, v in errors.items()), ""]
+
+
+def metrics_table(name: str, rows: list[Row], window_days: int) -> list[str]:
+    """One target's metrics: now, the three deltas and the trend."""
+    lines = [
+        f"## {name}",
+        "",
+        f"| Metric | Now | Δ prev | Δ {window_days}d | Δ first | Trend |",
+        "|---|--:|--:|--:|--:|---|",
+    ]
+    for r in rows:
+        spark = sparkline([v for _, v in r.points])
+        lines.append(
+            f"| {r.metric.label} | {fmt(r.now, r.metric)} | {fmt_delta(r, r.prev)} | "
+            f"{fmt_delta(r, r.window)} | {fmt_delta(r, r.first)} | {spark} |"
+        )
+    return [*lines, ""]
+
+
 def render(history: list[dict], window_days: int = 30, details: bool = True) -> str:
     """The whole report."""
     latest = history[-1]
@@ -183,29 +258,11 @@ def render(history: list[dict], window_days: int = 30, details: bool = True) -> 
         "",
     ]
     all_rows = {name: rows_for(history, name, window_days) for name in latest["targets"]}
-    better, worse = changes([r for rows in all_rows.values() for r in rows])
     if len(history) > 1:
-        lines += ["## Since the previous snapshot", ""]
-        lines += [f"- 🔻 {w}" for w in worse] or ["- No metric got worse."]
-        lines += [f"- ✅ {b}" for b in better]
-        lines.append("")
-    if latest["errors"]:
-        lines += ["## Tool errors", ""] + [f"- `{k}`: {v.splitlines()[0][:200]}" for k, v in latest["errors"].items()]
-        lines.append("")
+        lines += since_previous([r for rows in all_rows.values() for r in rows])
+    lines += errors_section(latest["errors"])
     for name, rows in all_rows.items():
-        lines += [
-            f"## {name}",
-            "",
-            f"| Metric | Now | Δ prev | Δ {window_days}d | Δ first | Trend |",
-            "|---|--:|--:|--:|--:|---|",
-        ]
-        for r in rows:
-            spark = sparkline([v for _, v in r.points])
-            lines.append(
-                f"| {r.metric.label} | {fmt(r.now, r.metric)} | {fmt_delta(r, r.prev)} | "
-                f"{fmt_delta(r, r.window)} | {fmt_delta(r, r.first)} | {spark} |"
-            )
-        lines.append("")
+        lines += metrics_table(name, rows, window_days)
         mine = [f for f in all_findings if f["target"] == name]
         lines += new_findings_section(mine)
         if details:

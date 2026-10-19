@@ -12,6 +12,7 @@ reported (it still counts them); the counts here don't.
 
 from cq.context import Context
 from cq.proc import parse_json, require, run
+from cq.tally import ranked
 
 KINDS = ("python", "typescript")
 
@@ -31,14 +32,12 @@ def collect(ctx: Context) -> dict:
     (ctx.raw_dir / "aislop.json").write_text(out)
     data = parse_json(out, "aislop")
     kept = [d for d in data.get("diagnostics", []) if d.get("rule") not in DROPPED]
-    by_rule: dict[str, int] = {}
-    for d in kept:
-        by_rule[d["rule"]] = by_rule.get(d["rule"], 0) + 1
+    by_rule = ranked(d["rule"] for d in kept)
     return {
         "score": data.get("score"),
         "findings": len(kept),
         "slop": sum(1 for d in kept if d.get("engine") == "ai-slop"),
-        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "by_rule": by_rule,
         "items": ctx.with_fingerprints(
             [
                 {

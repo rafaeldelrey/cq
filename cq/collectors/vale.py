@@ -11,6 +11,7 @@ from pathlib import Path
 
 from cq.context import Context
 from cq.proc import ToolError, parse_json, require, run
+from cq.tally import ranked
 from cq.toolconfig import vale_config
 
 KINDS = ("repo",)
@@ -36,12 +37,24 @@ def files(ctx: Context, roots: list[str]) -> list[str]:
     found = []
     for root in roots:
         if (ctx.checkout / root).is_file():
-            found += [root] if root.endswith(EXTENSIONS) and not skipped(root, skip) else []
-            continue
-        for d, dirs, names in os.walk(ctx.checkout / root):
-            rel = Path(d).relative_to(ctx.checkout).as_posix()
-            dirs[:] = sorted(x for x in dirs if not skipped(f"{rel}/{x}", skip))
-            found += [f"{rel}/{n}" for n in sorted(names) if n.endswith(EXTENSIONS) and not skipped(f"{rel}/{n}", skip)]
+            found += [root] if wanted(root, skip) else []
+        else:
+            found += walk(ctx.checkout, root, skip)
+    return found
+
+
+def wanted(path: str, skip: tuple[str, ...]) -> bool:
+    """A file vale reads: one of its extensions, outside the skipped folders."""
+    return path.endswith(EXTENSIONS) and not skipped(path, skip)
+
+
+def walk(checkout: Path, root: str, skip: tuple[str, ...]) -> list[str]:
+    """The files vale reads under one folder, pruning skipped folders before descending into them."""
+    found = []
+    for d, dirs, names in os.walk(checkout / root):
+        rel = Path(d).relative_to(checkout).as_posix()
+        dirs[:] = sorted(x for x in dirs if not skipped(f"{rel}/{x}", skip))
+        found += [f"{rel}/{n}" for n in sorted(names) if wanted(f"{rel}/{n}", skip)]
     return found
 
 
@@ -84,14 +97,11 @@ def collect(ctx: Context) -> dict:
         for path, alerts in data.items()
         for a in alerts
     ]
-    by_match: dict[str, int] = {}
-    for item in items:
-        word = item["match"].lower()
-        by_match[word] = by_match.get(word, 0) + 1
+    by_match = ranked(i["match"].lower() for i in items)
     return {
         "findings": len(items),
         "stubs": sum(1 for i in items if i["code"] == "Stubs"),
         "prose": sum(1 for i in items if i["code"] == "Words"),
-        "by_match": dict(sorted(by_match.items(), key=lambda kv: -kv[1])),
+        "by_match": by_match,
         "items": ctx.with_fingerprints(ctx.cap(items, 120)),
     }

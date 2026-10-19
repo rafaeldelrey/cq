@@ -12,7 +12,7 @@ import shutil
 import sys
 
 from cq import plugin
-from cq.config import CONFIG_FILE, DEFAULTS_DIR, Settings, find_config
+from cq.config import CONFIG_FILE, DEFAULTS_DIR, Settings, Target, find_config
 from cq.doctor import confirm
 
 # The gate's recommended blocking list: what a branch should never add.
@@ -54,13 +54,20 @@ block = [
 """
 
 
+def target_detail(target: Target) -> str:
+    """An app's production paths, and tests/ when it has tests; nothing for the repo target."""
+    if target.kind == "repo":
+        return ""
+    tests = ", tests/" if target.tests else ""
+    return f": {', '.join(target.source)}{tests}"
+
+
 def describe(settings: Settings) -> None:
     """What cq would measure in this repo."""
     print(f"Repo: {settings.repo_root}")
     print(f"Settings: {settings.config_file or 'none (targets detected)'}")
     for t in settings.targets:
-        detail = "" if t.kind == "repo" else f": {', '.join(t.source)}{', tests/' if t.tests else ''}"
-        print(f"  {t.name} ({t.kind}, root {t.root}){detail}")
+        print(f"  {t.name} ({t.kind}, root {t.root}){target_detail(t)}")
     print(f"Data: {settings.data_dir} (history/ and runs/, never committed)")
 
 

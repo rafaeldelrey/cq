@@ -1,0 +1,15 @@
+{
+  "$comment": "cq's own words: the measuring tools, their flags and file names, and project terms. Anything else cspell flags is a typo to fix.",
+  "version": "0.2",
+  "language": "en,en-GB",
+  "words": [
+    "ACMR", "addopts", "aislop", "cacheprovider", "complexipy", "coveragerc", "deptry", "Dockerfiles",
+    "docstrings", "htmlcov", "importlinter", "knip", "lcom", "libyear", "libyears", "lloc", "lockfiles",
+    "mutmut", "noopener", "nosemgrep", "noxfile", "outputjson", "pyrightconfig", "pyscn", "qlty", "qltysh",
+    "quotepath", "radarlint", "rafaeldelrey", "sarif", "semgrep", "shellcheck", "sloc", "SonarQube",
+    "sparkline", "timespec", "toolconfig", "Tornhill", "typegen", "vitest", "vulns", "worktrees", "xfailed",
+    "xpassed", "zizmor"
+  ],
+  "ignoreRegExpList": ["xǁ\\w+", "\\\\x[0-9a-fA-F]{2}"],
+  "ignorePaths": ["**/node_modules/**", "**/.venv/**", "**/dist/**", "**/build/**"]
+}

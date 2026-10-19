@@ -16,6 +16,7 @@ from pathlib import Path
 
 from cq.context import Context
 from cq.proc import own, run
+from cq.tally import ranked
 from cq.toolconfig import semgrep_rules
 
 KINDS = ("python", "typescript")
@@ -120,9 +121,7 @@ def collect(ctx: Context) -> dict:
     found = scan_all(ctx, folder)
     items = [i for i in found if "scan_error" not in i]
     house = house_rule_ids(folder)
-    by_rule: dict[str, int] = {}
-    for item in items:
-        by_rule[item["code"]] = by_rule.get(item["code"], 0) + 1
+    by_rule = ranked(i["code"] for i in items)
     return {
         "findings": len(items),
         "errors": sum(1 for i in items if i["severity"] == "error"),
@@ -130,7 +129,7 @@ def collect(ctx: Context) -> dict:
         "house_rules": sum(1 for i in items if i["code"] in house),
         "mock_only_tests": sum(n for rule, n in by_rule.items() if rule.endswith(MOCK_ONLY_TESTS)),
         "scan_errors": len(found) - len(items),
-        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "by_rule": by_rule,
         "items": ctx.with_fingerprints(
             ctx.cap(
                 sorted(items, key=lambda i: (("error", "warning", "info").index(i["severity"]), i["file"], i["line"])),

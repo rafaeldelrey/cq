@@ -1,6 +1,6 @@
 [project]
 name = "cq"
-version = "0.2.1"
+version = "0.2.2"
 description = "Code-quality snapshots of a repository, stored as history and reported as trends, plus a PR gate"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -71,3 +71,29 @@ source = ["cq"]
 
 [tool.coverage.report]
 fail_under = 85
+
+[tool.deptry.per_rule_ignores]
+# cq runs these as commands (`uv run <tool>` in its own environment), never imports them: they are
+# dependencies so that an installed cq brings its measuring tools along.
+DEP002 = ["vulture", "interrogate", "complexipy", "semgrep", "pip-audit", "deptry", "import-linter"]
+
+[tool.cq]
+name = "cq"
+# Targets are detected: the pyproject at the root is one Python app (cq/), plus the repo target.
+
+[tool.cq.gate]
+mode = "warn"  # report-only for now (AGENTS.md: dogfood)
+block = [
+    "secrets:*",
+    "aislop:ai-slop/*",
+    "vale:Stubs",
+    "semgrep:cq-*",
+    "qlty:zizmor:*",
+    "qlty:shellcheck:*",
+    "qlty:hadolint:*",
+    "qlty:osv-scanner:*",
+    "smells:*",
+    "pyscn:*",
+    "ratchet:*",
+    "docstrings:missing-docstring",
+]

@@ -17,6 +17,7 @@ from cq.proc import ToolError, run
 KINDS = ("python", "typescript")
 
 TRIVY_LEVELS = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN")
+HIGH_LEVELS = ("CRITICAL", "HIGH")  # the levels listed one by one; the rest are counted
 IMAGE_MAX_AGE = timedelta(days=7)  # older commits don't get today's image judged against them
 
 
@@ -55,6 +56,28 @@ def image_metadata(data: dict) -> dict:
     }
 
 
+def high_items(vulns: list[dict]) -> list[dict]:
+    """The critical and high vulnerabilities, worst first, once per package and advisory."""
+    seen: set[tuple[str, str]] = set()
+    items = []
+    for v in sorted(vulns, key=lambda v: TRIVY_LEVELS.index(v.get("Severity", "UNKNOWN"))):
+        key = (v["PkgName"], v["VulnerabilityID"])
+        if key in seen or v.get("Severity") not in HIGH_LEVELS:
+            continue
+        seen.add(key)
+        items.append(
+            {
+                "package": v["PkgName"],
+                "version": v.get("InstalledVersion", ""),
+                "id": v["VulnerabilityID"],
+                "severity": v["Severity"].lower(),
+                "fix": v.get("FixedVersion") or "none yet",
+                "title": (v.get("Title") or "")[:160],
+            }
+        )
+    return items
+
+
 def trivy(ctx: Context) -> dict:
     """Known vulnerabilities in the published image, by severity."""
     image = ctx.target.image
@@ -71,28 +94,13 @@ def trivy(ctx: Context) -> dict:
     data = json.loads(out_file.read_text())
     vulns = [v for r in data.get("Results", []) for v in (r.get("Vulnerabilities") or [])]
     counts = {level.lower(): sum(1 for v in vulns if v.get("Severity") == level) for level in TRIVY_LEVELS}
-    fixable = [v for v in vulns if v.get("FixedVersion") and v.get("Severity") in ("CRITICAL", "HIGH")]
-    seen: set[tuple[str, str]] = set()
-    items = []
-    for v in sorted(vulns, key=lambda v: TRIVY_LEVELS.index(v.get("Severity", "UNKNOWN"))):
-        key = (v["PkgName"], v["VulnerabilityID"])
-        if key in seen or v.get("Severity") not in ("CRITICAL", "HIGH"):
-            continue
-        seen.add(key)
-        items.append({
-            "package": v["PkgName"],
-            "version": v.get("InstalledVersion", ""),
-            "id": v["VulnerabilityID"],
-            "severity": v["Severity"].lower(),
-            "fix": v.get("FixedVersion") or "none yet",
-            "title": (v.get("Title") or "")[:160],
-        })  # fmt: skip
+    fixable = [v for v in vulns if v.get("FixedVersion") and v.get("Severity") in HIGH_LEVELS]
     return {
         "image": image,
         **image_metadata(data),
         **counts,
         "fixable_high": len({(v["PkgName"], v["VulnerabilityID"]) for v in fixable}),
-        "items": items[:80],
+        "items": high_items(vulns)[:80],
     }
 
 

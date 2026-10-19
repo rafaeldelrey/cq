@@ -16,6 +16,7 @@ from pathlib import Path
 from cq.config import PINS
 from cq.context import Context
 from cq.proc import run, uv_app
+from cq.tally import ranked
 
 KINDS = ("python",)
 
@@ -64,14 +65,12 @@ def collect(ctx: Context) -> dict:
         statuses = {m["name"]: m["status"].strip() for m in map(RESULT.match, results.splitlines()) if m}
         survivors = [n for n, s in statuses.items() if s == "survived"]
         diffs = {n: run(mutmut(workspace, "show", n), workspace).strip() for n in survivors[:SHOW_LIMIT]}
-    counts: dict[str, int] = {}
+    counts: dict[str, int] = {}  # in the order mutmut reports them, unlike the ranked by_function
     for status in statuses.values():
         counts[status] = counts.get(status, 0) + 1
     killed = counts.get("killed", 0)
     judged = killed + counts.get("survived", 0)
-    by_function: dict[str, int] = {}
-    for n in survivors:
-        by_function[function_of(n)] = by_function.get(function_of(n), 0) + 1
+    by_function = ranked(function_of(n) for n in survivors)
     return {
         "paths": paths,
         "mutants": len(statuses),
@@ -79,6 +78,6 @@ def collect(ctx: Context) -> dict:
         "survived": counts.get("survived", 0),
         "score": round(100 * killed / judged, 2) if judged else None,
         "by_status": counts,
-        "by_function": dict(sorted(by_function.items(), key=lambda kv: -kv[1])),
+        "by_function": by_function,
         "items": [{"mutant": n, "function": function_of(n), "diff": diffs.get(n, "")[-1200:]} for n in survivors[:80]],
     }

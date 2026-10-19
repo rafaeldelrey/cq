@@ -13,7 +13,7 @@ import hashlib
 import tomllib
 from pathlib import Path
 
-from cq.config import DEFAULTS_DIR, Settings, Target
+from cq.config import DEFAULTS_DIR, PYPROJECT, Settings, Target
 
 
 def named(settings: Settings, value: str) -> Path | None:
@@ -37,7 +37,7 @@ def pyproject_tool(settings: Settings, target: Target, tool: str, setting: str) 
     """A tool configured in a toml: the file the settings name, the app's or the root's pyproject, or cq's default."""
     if named_file := named(settings, setting):
         return named_file
-    for pyproject in (target.app_dir(settings.repo_root) / "pyproject.toml", settings.repo_root / "pyproject.toml"):
+    for pyproject in (target.app_dir(settings.repo_root) / PYPROJECT, settings.repo_root / PYPROJECT):
         if has_table(pyproject, tool):
             return pyproject
     return DEFAULTS_DIR / f"{tool}.toml"
@@ -103,8 +103,8 @@ def import_contracts(settings: Settings, target: Target) -> Path | None:
         config = folder / f"{target.name}.ini"
         return config if config.exists() else None
     app = target.app_dir(settings.repo_root)
-    if has_table(app / "pyproject.toml", "importlinter"):
-        return app / "pyproject.toml"
+    if has_table(app / PYPROJECT, "importlinter"):
+        return app / PYPROJECT
     return first_existing(app, (".importlinter",))
 
 
@@ -116,11 +116,26 @@ def qlty_config(settings: Settings) -> Path | None:
 # What the tools run in an app's own environment read: its configs, and the lockfile that pins the
 # tools themselves (ruff, pyright, pytest, eslint, tsc, vitest), so a version bump shows as a change.
 APP_INPUTS = (
-    "pyproject.toml", "uv.lock", "pyrightconfig.json", "ruff.toml", ".ruff.toml", "setup.cfg", "tox.ini",
-    "pytest.ini", ".coveragerc", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
-    "tsconfig.json", "eslint.config.js", "eslint.config.mjs", ".eslintrc.json", "vitest.config.ts",
+    PYPROJECT,
+    "uv.lock",
+    "pyrightconfig.json",
+    "ruff.toml",
+    ".ruff.toml",
+    "setup.cfg",
+    "tox.ini",
+    "pytest.ini",
+    ".coveragerc",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "tsconfig.json",
+    "eslint.config.js",
+    "eslint.config.mjs",
+    ".eslintrc.json",
+    "vitest.config.ts",
     "vitest.config.mts",
-)  # fmt: skip
+)
 
 
 def app_inputs(settings: Settings, target: Target) -> dict[str, Path]:

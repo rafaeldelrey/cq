@@ -4,6 +4,7 @@ import json
 
 from cq.context import Context
 from cq.proc import ToolError, run_app_tool
+from cq.tally import ranked
 
 KINDS = ("python",)
 
@@ -19,15 +20,12 @@ def collect(ctx: Context) -> dict:
     summary = data["summary"]
     diagnostics = data.get("generalDiagnostics", [])
     errors = [d for d in diagnostics if d.get("severity") == "error"]
-    by_rule: dict[str, int] = {}
-    for d in errors:
-        rule = d.get("rule", "other")
-        by_rule[rule] = by_rule.get(rule, 0) + 1
+    by_rule = ranked(d.get("rule", "other") for d in errors)
     return {
         "errors": summary["errorCount"],
         "warnings": summary["warningCount"],
         "files": summary["filesAnalyzed"],
-        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "by_rule": by_rule,
         "items": [
             {"file": ctx.rel(d["file"]), "line": d["range"]["start"]["line"] + 1, "msg": d["message"][:200]}
             for d in errors[:30]

@@ -20,7 +20,7 @@ VIOLATION = re.compile(r"^-\s+(?P<chain>[A-Za-z_][\w.]*(?: ->\s*\S+)?)")
 PROTECTED = re.compile(r"^Illegal imports of protected package (?P<package>[\w.]+):$")
 CYCLE = re.compile(r"^No cycles are allowed in (?P<ancestor>[\w.]+)\.$")
 # "It could be made acyclic by removing N dependencies:" lists at most five, then "(and M more)".
-CYCLE_TOTAL = re.compile(r"^It could be made acyclic by removing (?P<n>\d+) dependenc")
+CYCLE_TOTAL = re.compile(r"^It could be made acyclic by removing (?P<n>\d+) (?:dependency|dependencies)")
 CYCLE_EDGE = re.compile(r"^-\s+\.(?P<src>[\w.]+) -> \.(?P<dst>[\w.]+)")
 
 

@@ -7,7 +7,7 @@ the hotspots collector. Its dead-code view overlaps knip, so it isn't run.
 """
 
 from cq.context import Context
-from cq.proc import ToolError, parse_json, require, run
+from cq.proc import parse_json, require, require_node_modules, run
 
 KINDS = ("typescript",)
 
@@ -25,8 +25,7 @@ def run_fallow(ctx: Context, command: str) -> dict:
 def collect(ctx: Context) -> dict:
     """Duplication and function health for the UI."""
     require("npx")
-    if not (ctx.app_dir / "node_modules").exists():
-        raise ToolError("node_modules missing; run `npm ci` in the app first")
+    require_node_modules(ctx.app_dir)
     dupes = run_fallow(ctx, "dupes")
     health = run_fallow(ctx, "health")
     stats = dupes.get("stats", {})

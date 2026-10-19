@@ -1,10 +1,11 @@
 """Shared test setup."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from cq import plugin
+from cq import diff, gate, plugin
 
 
 @pytest.fixture(autouse=True)
@@ -21,3 +22,14 @@ def no_real_claude(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(plugin, "claude_cli", lambda: None)
     monkeypatch.setattr(plugin, "capture", refuse)
     monkeypatch.setattr(plugin, "call", refuse)
+
+
+@pytest.fixture
+def use_git(monkeypatch: pytest.MonkeyPatch) -> Callable[[Callable[..., str]], None]:
+    """Answer every git call the gate makes (in cq.gate and cq.diff) with a fake."""
+
+    def install(fake: Callable[..., str]) -> None:
+        monkeypatch.setattr(gate, "git", fake)
+        monkeypatch.setattr(diff, "git", fake)
+
+    return install

@@ -28,12 +28,22 @@ def collect(ctx: Context) -> dict:
         for p in ctx.sources
     ]
     out = run(
-        ["npx", "-y", ctx.settings.cspell, "lint", "--config", str(cspell_config(ctx.settings)), "--no-progress", "--no-summary",
-         "--no-color", *globs],
+        [
+            "npx",
+            "-y",
+            ctx.settings.cspell,
+            "lint",
+            "--config",
+            str(cspell_config(ctx.settings)),
+            "--no-progress",
+            "--no-summary",
+            "--no-color",
+            *globs,
+        ],
         ctx.checkout,
         ok_codes=(0, 1),
         secret_output=True,  # the words can be names or key fragments: not in a log that may be served to others
-    )  # fmt: skip
+    )
     hits = [m.groupdict() for m in map(LINE.match, out.splitlines()) if m]
     return {
         "unknown_words": len({h["word"] for h in hits}),

@@ -29,8 +29,8 @@ def backfill(settings: Settings, todo: list[str]) -> None:
     cleanup_worktrees(settings)
     for i, sha in enumerate(todo, 1):
         # aislop-ignore-next-line ai-slop/python-print-debug -- progress to stderr
-        print(f"[{i}/{len(todo)}] measuring {sha[:7]}", file=sys.stderr)
+        print(f"[{i}/{len(todo)}] measuring {sha[:7]}", file=sys.stderr)  # nosemgrep: cq-no-print - progress to stderr
         snap = snapshot(settings, rev=sha)
         for path in save(snap, settings, to_history=bool(snap["targets"])):
             # aislop-ignore-next-line ai-slop/python-print-debug -- progress to stderr
-            print(f"wrote {path}", file=sys.stderr)
+            print(f"wrote {path}", file=sys.stderr)  # nosemgrep: cq-no-print - progress to stderr

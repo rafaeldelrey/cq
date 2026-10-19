@@ -40,8 +40,9 @@ def call(cmd: list[str], cwd: Path) -> int:
     try:
         return subprocess.run(cmd, cwd=cwd, check=False, timeout=600).returncode
     except subprocess.TimeoutExpired:  # a clone or download that stalled: that step failed, init goes on
+        step = " ".join(cmd[:3])
         # aislop-ignore-next-line ai-slop/python-print-debug -- tells the user, mid-install, which step stalled
-        print(f"{' '.join(cmd[:3])} timed out after 10 minutes.")
+        print(f"{step} timed out after 10 minutes.")  # nosemgrep: cq-no-print - tells the user which step stalled
         return 1
 
 

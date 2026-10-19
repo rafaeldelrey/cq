@@ -13,7 +13,17 @@ import sys
 from pathlib import Path
 
 from cq import plugin
-from cq.config import CONFIG_FILE, DEFAULTS_DIR, QLTY_CONFIG, QLTY_DIR, QLTY_IGNORE, Settings, Target, find_config
+from cq.config import (
+    CONFIG_FILE,
+    DEFAULTS_DIR,
+    QLTY_CONFIG,
+    QLTY_DIR,
+    QLTY_IGNORE,
+    QLTY_IGNORE_DEFAULT,
+    Settings,
+    Target,
+    find_config,
+)
 from cq.doctor import confirm
 
 # The gate's recommended blocking list: what a branch should never add.
@@ -104,8 +114,10 @@ def add_qlty(settings: Settings, *, assume_yes: bool) -> None:
         return
     folder.mkdir(parents=True, exist_ok=True)
     shutil.copy2(DEFAULTS_DIR / QLTY_CONFIG, config)
-    if not ignore.exists():  # a repo's own .gitignore is kept as it is
-        shutil.copy2(DEFAULTS_DIR / "qlty.gitignore", ignore)
+    if ignore.exists():  # a repo's own .gitignore is kept as it is
+        print("Wrote .qlty/qlty.toml; kept the repo's .qlty/.gitignore.")
+        return
+    shutil.copy2(DEFAULTS_DIR / QLTY_IGNORE_DEFAULT, ignore)
     print("Wrote .qlty/qlty.toml and .qlty/.gitignore.")
 
 
@@ -116,7 +128,7 @@ def add_qlty_gitignore(dest: Path, *, assume_yes: bool) -> None:
     question = "Add .qlty/.gitignore? Without it qlty's cache shows up as untracked files"
     if not confirm(question, assume_yes=assume_yes):
         return
-    shutil.copy2(DEFAULTS_DIR / "qlty.gitignore", dest)
+    shutil.copy2(DEFAULTS_DIR / QLTY_IGNORE_DEFAULT, dest)
     print("Wrote .qlty/.gitignore.")
 
 

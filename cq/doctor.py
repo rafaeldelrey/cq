@@ -85,7 +85,7 @@ def check(tool: Tool) -> Check:
 
 
 PLUGIN_LABEL = "claude plugin"
-QLTY_IGNORE_LABEL = ".qlty/.gitignore"
+QLTY_IGNORE_LABEL = f"{QLTY_DIR}/{QLTY_IGNORE}"
 
 
 def plugin_line(width: int, folder: Path | None) -> str:

@@ -10,7 +10,7 @@ import pytest
 
 from cq import cli, complexity_gate, gate, runner
 from cq.backfill import commits_to_measure
-from cq.config import DEFAULTS_DIR, Target, load_settings
+from cq.config import DEFAULTS_DIR, QLTY_IGNORE_DEFAULT, Target, load_settings
 from cq.proc import ToolError
 from cq.report import latest_run
 
@@ -372,7 +372,7 @@ def fill_qlty_cache(repo: Path, cache: Path) -> None:
 
 def test_init_keeps_qltys_cache_out_of_git(repo: Path, tmp_path: Path) -> None:
     assert run_cq(repo, "init", "--yes", "--skills", "none") == 0
-    assert (repo / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / "qlty.gitignore").read_text()
+    assert (repo / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / QLTY_IGNORE_DEFAULT).read_text()
     git(repo, "add", ".qlty")
     git(repo, "commit", "-q", "-m", "qlty config")
     fill_qlty_cache(repo, tmp_path / "qlty-cache")
@@ -392,3 +392,7 @@ def test_qltys_cache_never_makes_a_run_dirty(repo: Path, tmp_path: Path) -> None
     assert runner.commit_info("HEAD", settings)["dirty"] is False
     (repo / ".qlty" / "qlty.toml").write_text('config_version = "1"\n')
     assert runner.commit_info("HEAD", settings)["dirty"] is True  # the repo's own qlty config still counts
+    git(repo, "checkout", "-q", "--", ".qlty/qlty.toml")
+    (repo / ".qlty" / "configs").mkdir()
+    (repo / ".qlty" / "configs" / ".ruff.toml").write_text("line-length = 100\n")
+    assert runner.commit_info("HEAD", settings)["dirty"] is True  # and so do its plugin configs

@@ -18,7 +18,9 @@ DEFAULT_DATA_DIR = ".cq"
 QLTY_DIR = ".qlty"
 QLTY_CONFIG = "qlty.toml"
 QLTY_IGNORE = ".gitignore"
-# What qlty writes under .qlty/ when it runs: its cache links and plugin sources, never the repo's.
+QLTY_IGNORE_DEFAULT = "qlty.gitignore"  # in cq/defaults/: what `qlty init` writes as .qlty/.gitignore
+# What qlty writes under .qlty/ when it runs: its cache links and plugin sources. The dirty check
+# leaves these out; a repo that commits files under these names would see their changes ignored there.
 QLTY_CACHE = ("logs", "out", "results", "plugin_cachedir", "sources")
 SCHEMA_VERSION = 1
 

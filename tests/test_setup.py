@@ -11,7 +11,7 @@ import pytest
 
 from cq import doctor, init, proc
 from cq.collectors import containers, pyscn, scripts, vulnerabilities
-from cq.config import DEFAULTS_DIR, PINS, Settings, Target, load_settings
+from cq.config import DEFAULTS_DIR, PINS, QLTY_IGNORE_DEFAULT, Settings, Target, load_settings
 from cq.context import Context
 
 QLTY_LINE = f"qlty {PINS['qlty']} macos-arm64 (abc 2026-10-13)"
@@ -305,12 +305,13 @@ def test_a_pnpm_or_yarn_app_is_skipped_by_the_audit_with_the_reason(tmp_path: Pa
     }
 
 
-def test_init_keeps_a_repos_own_qlty_gitignore(tmp_path: Path) -> None:
+def test_init_keeps_a_repos_own_qlty_gitignore(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (tmp_path / ".qlty").mkdir()
     (tmp_path / ".qlty" / ".gitignore").write_text("# ours\nlogs\n")
     init.add_qlty(load_settings(tmp_path), assume_yes=True)
     assert (tmp_path / ".qlty" / "qlty.toml").exists()
     assert (tmp_path / ".qlty" / ".gitignore").read_text() == "# ours\nlogs\n"
+    assert "kept the repo's .qlty/.gitignore" in capsys.readouterr().out
 
 
 def test_init_offers_the_gitignore_to_a_repo_set_up_before(
@@ -323,5 +324,5 @@ def test_init_offers_the_gitignore_to_a_repo_set_up_before(
     assert not (tmp_path / ".qlty" / ".gitignore").exists()
     assert "Add .qlty/.gitignore?" in capsys.readouterr().out
     init.add_qlty(load_settings(tmp_path), assume_yes=True)
-    assert (tmp_path / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / "qlty.gitignore").read_text()
+    assert (tmp_path / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / QLTY_IGNORE_DEFAULT).read_text()
     assert (tmp_path / ".qlty" / "qlty.toml").read_text() == 'config_version = "0"\n'  # the config is kept

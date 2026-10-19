@@ -7,7 +7,7 @@ dependencies only (``--omit=dev``): what ships in the image.
 import json
 
 from cq.context import Context
-from cq.proc import ToolError, own, run
+from cq.proc import ToolError, own, read_report, run
 
 KINDS = ("python", "typescript")
 
@@ -31,7 +31,7 @@ def collect_python(ctx: Context) -> dict:
         ctx.checkout,
         ok_codes=(0, 1),
     )
-    deps = json.loads(out.read_text())["dependencies"]
+    deps = json.loads(read_report(out, "pip-audit"))["dependencies"]
     vulnerable = [d for d in deps if d.get("vulns")]
     return {
         "packages": len(deps),

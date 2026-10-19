@@ -4,6 +4,21 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.3.2] - 2026-10-19
+
+### Fixed
+
+- Duplication is measured for a repo that sits under a folder its own `.gitignore` names (`tmp/`,
+  `build/`, …). jscpd now gets the source paths relative to the repo; with absolute paths its
+  `--gitignore` matched every file, so it measured nothing and cq failed. Numbers for a repo that
+  measured fine before are unchanged.
+- A repo with no docs to check gets `links: skipped` with the reason, instead of a tool error.
+- When a tool writes no report (complexipy, trivy, deptry, jscpd, lychee, betterleaks, semgrep,
+  vitest, pip-audit), the tool error names the tool and the file, instead of a bare
+  `FileNotFoundError`.
+
+No measurement changed: snapshots from 0.3.1 and 0.3.2 compare directly.
+
 ## [0.3.1] - 2026-10-19
 
 ### Fixed

@@ -12,7 +12,7 @@ import shutil
 from datetime import UTC, datetime, timedelta
 
 from cq.context import Context
-from cq.proc import ToolError, run
+from cq.proc import ToolError, read_report, run
 
 KINDS = ("python", "typescript")
 
@@ -91,7 +91,7 @@ def trivy(ctx: Context) -> dict:
         ["trivy", "image", "--quiet", "--scanners", "vuln", "--format", "json", "--output", str(out_file), image],
         ctx.checkout,
     )
-    data = json.loads(out_file.read_text())
+    data = json.loads(read_report(out_file, "trivy"))
     vulns = [v for r in data.get("Results", []) for v in (r.get("Vulnerabilities") or [])]
     counts = {level.lower(): sum(1 for v in vulns if v.get("Severity") == level) for level in TRIVY_LEVELS}
     fixable = [v for v in vulns if v.get("FixedVersion") and v.get("Severity") in HIGH_LEVELS]

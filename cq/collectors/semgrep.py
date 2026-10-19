@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 from cq.context import Context
-from cq.proc import own, run
+from cq.proc import own, read_report, run
 from cq.tally import ranked
 from cq.toolconfig import semgrep_rules
 
@@ -60,7 +60,7 @@ def scan(ctx: Context, configs: list[str], paths: list[str], out_file: Path, exc
         ctx.checkout,
         ok_codes=(0, 1),
     )
-    data = json.loads(out_file.read_text())
+    data = json.loads(read_report(out_file, "semgrep"))
     items = []
     for r in data["results"]:
         rule = r["check_id"].rsplit(".", 1)[-1]

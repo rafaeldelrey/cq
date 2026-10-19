@@ -11,7 +11,7 @@ from pathlib import Path
 
 from cq.config import PINS, has_python
 from cq.context import Context
-from cq.proc import has_dev_extra, run, uv_app
+from cq.proc import has_dev_extra, read_report, run, uv_app
 
 KINDS = ("python", "typescript")
 
@@ -71,7 +71,7 @@ def collect_python(ctx: Context) -> dict:
         ctx.app_dir,
         ok_codes=(0, 1),
     )
-    rows = json.loads(out.read_text())
+    rows = json.loads(read_report(out, "deptry"))
     counts: dict[str, int] = dict.fromkeys(DEPTRY_LABELS.values(), 0)
     modules: dict[tuple[str, str], dict] = {}
     for r in rows:

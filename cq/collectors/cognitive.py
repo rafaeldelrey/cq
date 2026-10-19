@@ -8,7 +8,7 @@ import json
 from statistics import mean
 
 from cq.context import Context
-from cq.proc import ToolError, own, run
+from cq.proc import own, read_report, run
 
 KINDS = ("python",)
 
@@ -33,9 +33,7 @@ def collect(ctx: Context) -> dict:
         ctx.checkout,
         ok_codes=(0, 1),  # 1: some function is over complexipy's limit — still a measurement
     )
-    if not out_file.exists():
-        raise ToolError("complexipy wrote no output file")
-    rows = json.loads(out_file.read_text())
+    rows = json.loads(read_report(out_file, "complexipy"))
     limit = ctx.settings.cognitive_limit
     scores = [r["complexity"] for r in rows]
     worst = sorted(rows, key=lambda r: -r["complexity"])[:15]

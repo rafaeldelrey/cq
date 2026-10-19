@@ -82,6 +82,14 @@ def require(*tools: str) -> None:
             raise ToolError(f"{tool} is not installed")
 
 
+def read_report(path: Path, tool: str, what: str = "") -> str:
+    """The report a tool was told to write. None written is a blind spot, said plainly as a ToolError."""
+    if not path.exists():
+        hint = f" ({what})" if what else ""
+        raise ToolError(f"{tool} wrote no report{hint}: {path}")
+    return path.read_text()
+
+
 def parse_json(out: str, tool: str) -> Any:
     """A tool's JSON output, or a ToolError quoting the end of what it printed instead."""
     try:

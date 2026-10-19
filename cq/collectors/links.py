@@ -10,7 +10,7 @@ import json
 import shutil
 
 from cq.context import Context
-from cq.proc import ToolError, run
+from cq.proc import ToolError, read_report, run
 from cq.tally import ranked
 
 KINDS = ("repo",)
@@ -18,9 +18,11 @@ KINDS = ("repo",)
 
 def collect(ctx: Context) -> dict:
     """Run lychee over the configured paths; list every broken link with the file it is in."""
+    paths = [p for p in ctx.settings.link_paths if (ctx.checkout / p).exists()]
+    if not paths:  # with no inputs lychee checks nothing and writes no report
+        return {"skipped": f"no docs to check (link_paths: {', '.join(ctx.settings.link_paths) or 'none'})"}
     if shutil.which("lychee") is None:
         raise ToolError("lychee is not installed (brew install lychee)")
-    paths = [p for p in ctx.settings.link_paths if (ctx.checkout / p).exists()]
     excludes = [arg for p in ctx.settings.link_exclude for arg in ("--exclude-path", p)]
     out_file = ctx.raw_dir / "lychee.json"
     run(
@@ -28,7 +30,7 @@ def collect(ctx: Context) -> dict:
         ctx.checkout,
         ok_codes=(0, 2),  # 2: broken links found
     )
-    data = json.loads(out_file.read_text())
+    data = json.loads(read_report(out_file, "lychee"))
     root = f"file://{ctx.checkout.resolve()}/"
     items = [
         {

@@ -9,7 +9,7 @@ import re
 import tomllib
 
 from cq.context import Context
-from cq.proc import ToolError, require_node_modules, run, run_app_tool
+from cq.proc import ToolError, read_report, require_node_modules, run, run_app_tool
 
 KINDS = ("python", "typescript")
 
@@ -160,7 +160,7 @@ def collect_typescript(ctx: Context) -> dict:
         ctx.app_dir,
         ok_codes=(0, 1),
     )
-    data = json.loads(out_file.read_text())
+    data = json.loads(read_report(out_file, "vitest"))
     duration = None
     if data.get("testResults"):
         ends = [r.get("endTime", 0) for r in data["testResults"]]

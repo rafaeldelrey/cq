@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cq import plugin
-from cq.config import PINS
+from cq.config import PINS, QLTY_CONFIG, QLTY_DIR, QLTY_IGNORE
 from cq.proc import run
 
 
@@ -85,6 +85,7 @@ def check(tool: Tool) -> Check:
 
 
 PLUGIN_LABEL = "claude plugin"
+QLTY_IGNORE_LABEL = f"{QLTY_DIR}/{QLTY_IGNORE}"
 
 
 def plugin_line(width: int, folder: Path | None) -> str:
@@ -92,6 +93,15 @@ def plugin_line(width: int, folder: Path | None) -> str:
     ok, found, fix = plugin.status(folder or Path.cwd())
     line = f"{'ok ' if ok else '-- '} {PLUGIN_LABEL:<{width}}  {found}"
     return f"{line}\n      for /code-quality and /setup-cq: {fix}" if fix else line
+
+
+def qlty_ignore_line(width: int, folder: Path | None) -> str | None:
+    """A note when the repo has qlty's config but not its .gitignore; nothing otherwise. Never a failure."""
+    qlty_dir = (folder or Path.cwd()) / QLTY_DIR
+    if not (qlty_dir / QLTY_CONFIG).exists() or (qlty_dir / QLTY_IGNORE).exists():
+        return None
+    line = f"--  {QLTY_IGNORE_LABEL:<{width}}  missing in this repo"
+    return f"{line}\n      qlty's cache shows up as untracked files without it: `cq init` adds it"
 
 
 def status_mark(ok: bool, *, optional: bool) -> str:
@@ -116,6 +126,8 @@ def doctor(folder: Path | None = None) -> int:
         line = f"{mark} {c.tool.name:<{width}}  {state}"
         print(f"{line}\n      for {c.tool.needed_for}: {c.fix}" if c.fix else line)
     print(plugin_line(width, folder))
+    if note := qlty_ignore_line(width, folder):
+        print(note)
     missing = [c for c in checks if not c.ok and not c.tool.optional]
     if missing:
         print(f"\n{len(missing)} required tool(s) missing or off their pin: `cq setup` installs them.")

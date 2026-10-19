@@ -4,7 +4,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from cq.config import DEFAULTS_DIR
+from cq.config import DEFAULTS_DIR, QLTY_IGNORE_DEFAULT
 
 ROOT = Path(__file__).resolve().parent.parent
 CLI_MODULES = '"cq/cli.py", "cq/init.py", "cq/doctor.py", "cq/complexity_gate.py"'
@@ -42,3 +42,7 @@ def test_every_install_line_names_this_version() -> None:
     }
     assert pins, "no pinned install line found"
     assert {tag for _, tag in pins} == {f"v{version}"}, sorted(pins)
+
+
+def test_cqs_qlty_gitignore_is_the_one_cq_init_writes() -> None:
+    assert (ROOT / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / QLTY_IGNORE_DEFAULT).read_text()

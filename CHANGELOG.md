@@ -4,6 +4,20 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.3.1] - 2026-10-19
+
+### Fixed
+
+- `cq init` writes qlty's `.qlty/.gitignore` with `.qlty/qlty.toml`, the same file `qlty init`
+  writes. Before, every run of a qlty-based tool (radarlint, smells, workflow security, the gate's
+  line checks) left qlty's cache under `.qlty/` as untracked files. A repo set up by an earlier cq,
+  with the config but no `.gitignore`, is offered one by `cq init`, and `cq doctor` points it out.
+  A repo's own `.qlty/.gitignore` is never changed.
+- qlty's cache under `.qlty/` no longer makes a snapshot dirty, even in a repo without that
+  `.gitignore`. Changes to the repo's own qlty config still do.
+
+No measurement changed: snapshots from 0.3.0 and 0.3.1 compare directly.
+
 ## [0.3.0] - 2026-10-19
 
 ### Added

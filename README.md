@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.3.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.3.1
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.3.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.3.1
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -132,9 +132,11 @@ Data: /Users/you/work/my-repo/.cq (history/ and runs/, never committed)
 
 1. **Settings.** It adds a starter `[tool.cq]` to `pyproject.toml`, or writes `cq.toml` when the
    repo has no pyproject. The starter holds the PR gate in `warn` mode. Targets stay detected.
-2. **qlty's config.** It writes `.qlty/qlty.toml` when the repo has none. Without that file the
-   qlty-based tools don't run: radarlint, smells, workflow security and the gate's line checks
-   report an error saying "run `cq init`".
+2. **qlty's config.** It writes `.qlty/qlty.toml` when the repo has none, with the `.qlty/.gitignore`
+   `qlty init` writes: qlty's cache stays out of git, and its config, plugin configs and hooks stay
+   in. Without `qlty.toml` the qlty-based tools don't run: radarlint, smells, workflow security and
+   the gate's line checks report an error saying "run `cq init`". A repo that already has the config
+   but no `.gitignore` is offered one; `cq doctor` points it out.
 3. **The Claude Code plugin** (the `/code-quality`, `/setup-cq` and `/improve-code-quality`
    skills). It shows the two `claude` commands for each choice, then asks:
    - **u, just you:** installed for your user, in every repo, with nothing written to this one;
@@ -251,7 +253,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.3.0"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.3.1"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -404,7 +406,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.3.0    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.3.1    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

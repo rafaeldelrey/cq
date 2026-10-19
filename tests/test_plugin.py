@@ -299,3 +299,24 @@ def test_doctor_says_a_disabled_plugin_is_not_ready(repo: Path, monkeypatch: pyt
     on_here = {"id": "cq@cq", "scope": "project", "version": "0.2.0", "projectPath": str(repo), "enabled": True}
     use(monkeypatch, FakeClaude(installed=[off, on_here]))
     assert plugin.status(repo)[0] is True  # enabled for this repo: the skills work here
+
+
+def test_doctor_points_out_a_missing_qlty_gitignore(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(
+        doctor, "version_line", lambda name, flag: f"qlty {doctor.PINS['qlty']}" if name == "qlty" else "1.0"
+    )
+    assert doctor.doctor() == 0
+    assert ".qlty/.gitignore" not in capsys.readouterr().out  # no qlty config here: nothing to say
+    (repo / ".qlty").mkdir()
+    (repo / ".qlty" / "qlty.toml").write_text('config_version = "0"\n')
+    assert doctor.doctor() == 0  # a note, never a failure
+    out = capsys.readouterr().out
+    assert "--  .qlty/.gitignore  missing in this repo" in out
+    assert "`cq init` adds it" in out
+    (repo / ".qlty" / ".gitignore").write_text("*\n")
+    assert doctor.doctor() == 0
+    assert ".qlty/.gitignore" not in capsys.readouterr().out
+    assert (repo / ".qlty" / ".gitignore").read_text() == "*\n"  # doctor changed nothing

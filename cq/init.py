@@ -10,9 +10,20 @@ It also offers cq's Claude Code plugin, for the user or for the repo.
 
 import shutil
 import sys
+from pathlib import Path
 
 from cq import plugin
-from cq.config import CONFIG_FILE, DEFAULTS_DIR, Settings, Target, find_config
+from cq.config import (
+    CONFIG_FILE,
+    DEFAULTS_DIR,
+    QLTY_CONFIG,
+    QLTY_DIR,
+    QLTY_IGNORE,
+    QLTY_IGNORE_DEFAULT,
+    Settings,
+    Target,
+    find_config,
+)
 from cq.doctor import confirm
 
 # The gate's recommended blocking list: what a branch should never add.
@@ -88,17 +99,37 @@ def add_settings(settings: Settings, *, assume_yes: bool) -> None:
 
 
 def add_qlty(settings: Settings, *, assume_yes: bool) -> None:
-    """cq's default .qlty/qlty.toml, when the repo has no qlty config."""
-    dest = settings.repo_root / ".qlty" / "qlty.toml"
-    if dest.exists():
+    """cq's default .qlty/qlty.toml with qlty's .gitignore, when the repo has no qlty config."""
+    folder = settings.repo_root / QLTY_DIR
+    config, ignore = folder / QLTY_CONFIG, folder / QLTY_IGNORE
+    if config.exists():
         print("qlty config already in .qlty/qlty.toml.")
+        add_qlty_gitignore(ignore, assume_yes=assume_yes)
         return
-    question = "Add qlty's config (.qlty/qlty.toml, cq's default)? Without it radarlint, smells and the gate's line checks don't run"
+    question = (
+        "Add qlty's config (.qlty/qlty.toml, cq's default, and qlty's .gitignore)?"
+        " Without it radarlint, smells and the gate's line checks don't run"
+    )
     if not confirm(question, assume_yes=assume_yes):
         return
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(DEFAULTS_DIR / "qlty.toml", dest)
-    print("Wrote .qlty/qlty.toml.")
+    folder.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(DEFAULTS_DIR / QLTY_CONFIG, config)
+    if ignore.exists():  # a repo's own .gitignore is kept as it is
+        print("Wrote .qlty/qlty.toml; kept the repo's .qlty/.gitignore.")
+        return
+    shutil.copy2(DEFAULTS_DIR / QLTY_IGNORE_DEFAULT, ignore)
+    print("Wrote .qlty/qlty.toml and .qlty/.gitignore.")
+
+
+def add_qlty_gitignore(dest: Path, *, assume_yes: bool) -> None:
+    """qlty's .gitignore for a repo that has qlty's config without it (set up by cq 0.3.0 or earlier)."""
+    if dest.exists():
+        return
+    question = "Add .qlty/.gitignore? Without it qlty's cache shows up as untracked files"
+    if not confirm(question, assume_yes=assume_yes):
+        return
+    shutil.copy2(DEFAULTS_DIR / QLTY_IGNORE_DEFAULT, dest)
+    print("Wrote .qlty/.gitignore.")
 
 
 SCOPE_NOTES: tuple[tuple[str, plugin.Scope, str], ...] = (

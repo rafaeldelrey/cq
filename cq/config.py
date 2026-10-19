@@ -15,6 +15,13 @@ DEFAULTS_DIR = Path(__file__).resolve().parent / "defaults"
 CONFIG_FILE = "cq.toml"
 PYPROJECT = "pyproject.toml"
 DEFAULT_DATA_DIR = ".cq"
+QLTY_DIR = ".qlty"
+QLTY_CONFIG = "qlty.toml"
+QLTY_IGNORE = ".gitignore"
+QLTY_IGNORE_DEFAULT = "qlty.gitignore"  # in cq/defaults/: what `qlty init` writes as .qlty/.gitignore
+# What qlty writes under .qlty/ when it runs: its cache links and plugin sources. The dirty check
+# leaves these out; a repo that commits files under these names would see their changes ignored there.
+QLTY_CACHE = ("logs", "out", "results", "plugin_cachedir", "sources")
 SCHEMA_VERSION = 1
 
 # The measuring tools that run outside cq's own environment, pinned by the cq release so a

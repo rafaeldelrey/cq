@@ -23,7 +23,7 @@ PATTERNS: dict[str, re.Pattern[str]] = {
     "no-cover": re.compile(r"#\s*pragma:\s*no\s*cover\b"),
     "fmt-skip": re.compile(r"#\s*fmt:\s*(skip|off)\b"),
     "gitleaks-allow": re.compile(r"gitleaks\x3aallow\b"),
-    "eslint-disable": re.compile(r"eslint\x2ddisable"),
+    "eslint\x2ddisable": re.compile(r"eslint\x2ddisable"),
     "ts-ignore": re.compile(r"@ts-(ignore|nocheck)\b"),
     "ts-expect-error": re.compile(r"@ts-expect\x2derror\b"),
 }

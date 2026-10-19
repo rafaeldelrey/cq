@@ -23,5 +23,5 @@ def collect(ctx: Context) -> dict:
         "structure": sum(1 for r in kept if r["rule"] not in DUPLICATION),
         "duplication": sum(1 for r in kept if r["rule"] in DUPLICATION),
         "by_rule": ranked(r["rule"] for r in kept),
-        "items": qlty.items(ctx, sorted(kept, key=lambda r: -(r["properties"].get("actual") or 0))),
+        "items": qlty.report_items(ctx, sorted(kept, key=lambda r: -(r["properties"].get("actual") or 0))),
     }

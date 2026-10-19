@@ -90,8 +90,9 @@ def production(rows: list[dict]) -> list[dict]:
     return [r for r in rows if not is_test(r["file"])]
 
 
-def items(ctx: Context, rows: list[dict], *fields: str) -> list[dict]:
-    """The first 120 rows as report items (file, line, code, message, and ``fields``), each fingerprinted."""
+def report_items(ctx: Context, rows: list[dict], *, with_severity: bool = False) -> list[dict]:
+    """The first 120 rows as report items (file, line, code, message, and the severity when asked), fingerprinted."""
+    fields = ("severity",) if with_severity else ()
     return ctx.with_fingerprints(
         [
             {"file": r["file"], "line": r["line"], "code": r["rule"], "msg": r["msg"], **{f: r[f] for f in fields}}

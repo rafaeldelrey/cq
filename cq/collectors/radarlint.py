@@ -26,5 +26,5 @@ def collect(ctx: Context) -> dict:
         "findings": len(kept),
         "warnings": sum(1 for r in kept if r["severity"] == "warning"),
         "by_rule": ranked(r["rule"] for r in kept),
-        "items": qlty.items(ctx, kept, "severity"),
+        "items": qlty.report_items(ctx, kept, with_severity=True),
     }

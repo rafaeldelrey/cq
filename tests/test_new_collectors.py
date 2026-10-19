@@ -409,3 +409,35 @@ def test_mutation_counts_survivors_by_function(tmp_path: Path, monkeypatch: pyte
     assert (result["mutants"], result["killed"], result["survived"], result["score"]) == (3, 1, 2, 33.33)
     assert result["by_function"] == {"pkg.mod.f": 1, "pkg.mod.g": 1}
     assert result["items"][0]["diff"] == "- return 1\n+ return 2"
+
+
+def test_workflow_linters_skip_a_repo_without_workflows(tmp_path: Path) -> None:
+    ctx = make_ctx(tmp_path, kind="repo")
+    assert scripts.actionlint(ctx) == {"skipped": "no workflows"}
+    assert scripts.zizmor(ctx) == {"skipped": "no workflows"}
+
+
+def test_actionlint_and_zizmor_findings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    rows = [{"filepath": ".github/workflows/ci.yml", "line": 7, "kind": "expression", "message": "undefined"}]
+    monkeypatch.setattr(scripts, "run", lambda cmd, cwd, ok_codes: json.dumps(rows))
+    sarif = [{"file": ".github/workflows/ci.yml", "line": 9, "rule": "unpinned-uses", "msg": "pin it"}]
+    monkeypatch.setattr(scripts.qlty, "run_sarif", lambda ctx, args, name: sarif)
+    ctx = make_ctx(tmp_path, kind="repo")
+    assert scripts.actionlint(ctx) == {
+        "findings": 1,
+        "items": [{"file": ".github/workflows/ci.yml", "line": 7, "code": "expression", "msg": "undefined"}],
+    }
+    security = scripts.zizmor(ctx)
+    assert security["findings"] == 1
+    assert {k: security["items"][0][k] for k in ("file", "line", "code")} == {
+        "file": ".github/workflows/ci.yml",
+        "line": 9,
+        "code": "unpinned-uses",
+    }
+
+
+def test_scripts_without_its_linters_is_a_tool_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(scripts.shutil, "which", lambda tool: None if tool == "actionlint" else f"/bin/{tool}")
+    with pytest.raises(ToolError, match="actionlint is not installed"):
+        scripts.collect(make_ctx(tmp_path, kind="repo"))

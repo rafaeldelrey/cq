@@ -5,17 +5,25 @@ planted-slop branch is in the PR's Tests section.
 """
 
 import json
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 
 import pytest
 
-from cq import gate, qlty
+from cq import compare, diff, gate, qlty
 from cq.collectors import docstrings, secrets
 from cq.config import GateSettings, Settings, Target, load_gate, load_settings
 from cq.context import Context
 from cq.proc import ToolError
+
+
+def use_git(monkeypatch: pytest.MonkeyPatch, fake: Callable[..., str]) -> None:
+    """Answer every git call the gate makes (in cq.gate and cq.diff) with ``fake``."""
+    monkeypatch.setattr(gate, "git", fake)
+    monkeypatch.setattr(diff, "git", fake)
+
 
 APP = Target(name="app", kind="python", root="apps/app", source=("app",), tests=False)
 UI = Target(name="ui", kind="typescript", root="apps/ui", source=("src",), tests=False)
@@ -59,15 +67,15 @@ def item(file: str, line: int, at: str, code: str = "ai-slop/todo-stub") -> dict
 
 
 def test_changed_lines_reads_hunks_and_ignores_deletions(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(gate, "git", lambda *a: DIFF)
-    assert gate.changed_lines("base") == {"apps/app/app/a.py": {4, 5, 12}}
+    use_git(monkeypatch, lambda *a: DIFF)
+    assert diff.changed_lines("base") == {"apps/app/app/a.py": {4, 5, 12}}
 
 
 def test_a_smell_counts_only_when_its_span_covers_a_changed_line() -> None:
     lines = {"a.py": {12}}
-    assert gate.overlaps({"file": "a.py", "line": 10, "end_line": 14}, lines)
-    assert not gate.overlaps({"file": "a.py", "line": 20, "end_line": 22}, lines)
-    assert not gate.overlaps({"file": "b.py", "line": 12, "end_line": None}, lines)
+    assert diff.overlaps({"file": "a.py", "line": 10, "end_line": 14}, lines)
+    assert not diff.overlaps({"file": "a.py", "line": 20, "end_line": 22}, lines)
+    assert not diff.overlaps({"file": "b.py", "line": 12, "end_line": None}, lines)
 
 
 def test_affected_targets_and_lockfiles() -> None:
@@ -91,7 +99,7 @@ def test_line_level_keeps_checks_and_the_smells_on_changed_lines(monkeypatch: py
             row | {"rule": "function-parameters", "file": "apps/app/tests/test_a.py", "line": 4, "end_line": 4},
         ],
     }
-    monkeypatch.setattr(gate, "git", lambda *a: DIFF)
+    use_git(monkeypatch, lambda *a: DIFF)
     monkeypatch.setattr(qlty, "run_sarif", lambda ctx, args, name: sarif[name])
     found = gate.line_level(None, "base")  # type: ignore[arg-type]
     assert [(f["tool"], f["rule"], f["line"]) for f in found] == [
@@ -123,28 +131,28 @@ def test_compared_findings_are_new_by_key_and_in_changed_files() -> None:
             )
         }
     )
-    new = gate.new_compared(head, base, {"apps/app/app/a.py"})
+    new = compare.new_compared(head, base, {"apps/app/app/a.py"})
     assert [(f["file"], f["line"]) for f in new] == [("apps/app/app/a.py", 4)]
 
 
 def test_an_app_the_base_lacks_has_all_its_findings_new() -> None:
     head = snap({"app": aislop_items(item("apps/app/app/a.py", 4, "x"))})
     base = snap({}, errors={"app": "not present at this commit"})
-    assert len(gate.new_compared(head, base, {"apps/app/app/a.py"})) == 1
-    assert gate.base_errors(base) == {}
+    assert len(compare.new_compared(head, base, {"apps/app/app/a.py"})) == 1
+    assert compare.base_errors(base) == {}
 
 
 def test_a_tool_that_failed_on_the_base_is_reported_not_compared() -> None:
     head = snap({"app": aislop_items(item("apps/app/app/a.py", 4, "x"))})
     base = snap({"app": {}}, errors={"app.aislop": "npx failed"})
-    assert gate.new_compared(head, base, {"apps/app/app/a.py"}) == []
-    assert gate.base_errors(base) == {"base: app.aislop": "npx failed"}
+    assert compare.new_compared(head, base, {"apps/app/app/a.py"}) == []
+    assert compare.base_errors(base) == {"base: app.aislop": "npx failed"}
 
 
 def test_a_clone_partner_is_matched_by_path_not_substring() -> None:
     clone = {"tool": "pyscn", "file": "x/old.py", "message": "8 lines 90% similar: x/old.py:3 and x/data.py:40"}
-    assert gate.touches(clone, {"x/data.py"})
-    assert not gate.touches(clone, {"a.py"})  # "a.py" is inside "data.py"
+    assert compare.touches(clone, {"x/data.py"})
+    assert not compare.touches(clone, {"a.py"})  # "a.py" is inside "data.py"
 
 
 def test_a_clone_of_changed_code_counts_from_its_unchanged_side() -> None:
@@ -152,7 +160,7 @@ def test_a_clone_of_changed_code_counts_from_its_unchanged_side() -> None:
              "similarity": 0.9, "type": 2}  # fmt: skip
     head = snap({"app": {"pyscn": {"items": [clone]}}})
     base = snap({"app": {"pyscn": {"items": []}}})
-    assert len(gate.new_compared(head, base, {"apps/app/app/a.py"})) == 1
+    assert len(compare.new_compared(head, base, {"apps/app/app/a.py"})) == 1
 
 
 # ── ratchets ──────────────────────────────────────────────────────────────────────────────────
@@ -176,16 +184,16 @@ def counts(suppressions: int, critical: int = 0, over: dict | None = None) -> di
 def test_ratchets_flag_what_got_worse() -> None:
     base = counts(3, over={"a.py::f": 20, "a.py::g": 18})
     head = counts(4, critical=1, over={"a.py::f": 20, "a.py::g": 19, "a.py::h": 16})
-    found = gate.ratchets(head, base, locks=set())
+    found = compare.ratchets(head, base, locks=set())
     assert sorted(f["rule"] for f in found) == ["cognitive", "cognitive", "suppressions.total"]
     assert {f["symbol"] for f in found if f["rule"] == "cognitive"} == {"a.py::g", "a.py::h"}
     # the vulnerability ratchet runs only when the app's lockfile changed
-    assert "vulnerabilities.critical" in {f["rule"] for f in gate.ratchets(head, base, locks={"app"})}
+    assert "vulnerabilities.critical" in {f["rule"] for f in compare.ratchets(head, base, locks={"app"})}
 
 
 def test_ratchets_skip_tools_that_failed_on_the_base() -> None:
     base = snap({"app": {}}, errors={"app.suppressions": "boom", "app.cognitive": "boom", "app.dependencies": "boom"})
-    assert gate.ratchets(counts(9, over={"a.py::f": 20}), base, locks=set()) == []
+    assert compare.ratchets(counts(9, over={"a.py::f": 20}), base, locks=set()) == []
 
 
 # ── blocking, summary and exit code ───────────────────────────────────────────────────────────
@@ -226,7 +234,7 @@ def test_a_tool_error_is_recorded_not_raised() -> None:
 def fake_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, found: list[dict]) -> Settings:
     """run_gate over stubbed git, line level, secrets and snapshots; the settings write under tmp_path."""
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123"}
-    monkeypatch.setattr(gate, "git", lambda *a: answers.get(a[:1], ""))
+    use_git(monkeypatch, lambda *a: answers.get(a[:1], ""))
     monkeypatch.setattr(gate, "line_level", lambda ctx, base: found)
     monkeypatch.setattr(gate, "branch_secrets", lambda settings, base: [])
     return replace(SETTINGS, repo_root=tmp_path, data_dir=tmp_path / ".cq")
@@ -263,7 +271,7 @@ def test_a_clean_branch_passes_in_block_mode(monkeypatch: pytest.MonkeyPatch, tm
 def test_a_tool_that_did_not_run_fails_block_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     settings = fake_run(monkeypatch, tmp_path, [])
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123", ("diff",): "M\tapps/app/app/a.py"}
-    monkeypatch.setattr(gate, "git", lambda *a: answers.get(a[:1], ""))
+    use_git(monkeypatch, lambda *a: answers.get(a[:1], ""))
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     snapshots = iter([
         snap({"app": {}}, errors={"app.aislop": "npx failed"}),
@@ -286,8 +294,8 @@ def test_diff_status_keeps_deletions_and_renames_apart(monkeypatch: pytest.Monke
     status = (
         "M\tapps/app/app/a.py\nD\tapps/app/app/gone.py\nR100\tapps/app/app/old.py\tapps/app/app/new.py\nA\twiki/x.md"
     )
-    monkeypatch.setattr(gate, "git", lambda *a: status)
-    changed, touched, renames = gate.diff_status("base")
+    use_git(monkeypatch, lambda *a: status)
+    changed, touched, renames = diff.diff_status("base")
     assert changed == ["apps/app/app/a.py", "apps/app/app/new.py", "wiki/x.md"]
     assert "apps/app/app/gone.py" in touched and "apps/app/app/old.py" in touched
     assert renames == {"apps/app/app/old.py": "apps/app/app/new.py"}
@@ -305,15 +313,15 @@ def test_a_renamed_file_keeps_its_findings_old() -> None:
     base = snap({"app": aislop_items(item("apps/app/app/old.py", 5, "same"))})
     head = snap({"app": aislop_items(item("apps/app/app/new.py", 5, "same"))})
     changed = {"apps/app/app/new.py"}
-    assert gate.new_compared(head, base, changed, {"apps/app/app/old.py": "apps/app/app/new.py"}) == []
-    assert len(gate.new_compared(head, base, changed)) == 1  # without the rename map it would look new
+    assert compare.new_compared(head, base, changed, {"apps/app/app/old.py": "apps/app/app/new.py"}) == []
+    assert len(compare.new_compared(head, base, changed)) == 1  # without the rename map it would look new
 
 
 def test_python_advisories_ratchet_on_their_total() -> None:
     def py(n: int) -> dict:
         return snap({"app": {"vulnerabilities": {"vulnerabilities": n}}})
 
-    found = gate.ratchets(py(1), py(0), locks={"app"})
+    found = compare.ratchets(py(1), py(0), locks={"app"})
     assert [f["rule"] for f in found] == ["vulnerabilities.vulnerabilities"]
 
 
@@ -326,18 +334,20 @@ def test_gate_runs_keep_every_item(tmp_path: Path) -> None:
 
 def test_a_new_app_ratchets_from_zero() -> None:
     base = snap({}, errors={"app": "not present at this commit"})
-    found = gate.ratchets(counts(2, over={"a.py::f": 20}), base, locks=set())
+    found = compare.ratchets(counts(2, over={"a.py::f": 20}), base, locks=set())
     assert sorted(f["rule"] for f in found) == ["cognitive", "dependencies.issues", "suppressions.total"]
 
 
 def test_a_renamed_file_keeps_its_cognitive_scores() -> None:
-    base = gate.renamed(counts(0, over={"apps/app/app/old.py::f": 20}), {"apps/app/app/old.py": "apps/app/app/new.py"})
-    assert gate.ratchets(counts(0, over={"apps/app/app/new.py::f": 20}), base, locks=set()) == []
+    base = compare.renamed(
+        counts(0, over={"apps/app/app/old.py::f": 20}), {"apps/app/app/old.py": "apps/app/app/new.py"}
+    )
+    assert compare.ratchets(counts(0, over={"apps/app/app/new.py::f": 20}), base, locks=set()) == []
 
 
 def test_a_partial_semgrep_scan_is_a_tool_error() -> None:
     head = snap({"app": {"semgrep": {"scan_errors": 2}}, "ui": {"semgrep": {"scan_errors": 0}}})
-    assert list(gate.partial_scans(head)) == ["app.semgrep"]
+    assert list(compare.partial_scans(head)) == ["app.semgrep"]
 
 
 def test_a_deleted_lockfile_still_triggers_the_audit() -> None:
@@ -394,7 +404,7 @@ def test_docstrings_count_new_and_changed_symbols_only() -> None:
         symbol("last_in_file", 70, 80),  # an old function at the end of the file, changed on line 75
     )
     changed = {"apps/app/app/a.py"}
-    found = gate.new_compared(head, base, changed, lines={"apps/app/app/a.py": {12, 55, 75}})
+    found = compare.new_compared(head, base, changed, lines={"apps/app/app/a.py": {12, 55, 75}})
     assert sorted(f["symbol"] for f in found) == ["brand_new", "last_in_file", "old_touched"]
 
 
@@ -402,7 +412,7 @@ def test_the_coverage_count_is_not_a_gate_finding() -> None:
     per_file = {"file": "apps/app/app/a.py", "missing": 3, "percent": 50.0}
     head = snap({"app": {"docstrings": {"items": [], "worst_files": [per_file]}}})
     base = snap({"app": {"docstrings": {"items": [], "worst_files": [per_file | {"missing": 2}]}}})
-    assert gate.new_compared(head, base, {"apps/app/app/a.py"}) == []
+    assert compare.new_compared(head, base, {"apps/app/app/a.py"}) == []
 
 
 def test_docstrings_collector_lists_symbols_with_real_interrogate(tmp_path: Path) -> None:
@@ -425,9 +435,9 @@ def test_syntax_ends_stop_at_the_function_not_at_the_next_assignment(tmp_path: P
 
 
 def test_diff_lines_split_head_and_base_sides(monkeypatch: pytest.MonkeyPatch) -> None:
-    diff = "--- a/a.py\n+++ b/a.py\n@@ -14,2 +13,0 @@ def f():\n-    x = 1\n-    y = 2\n@@ -20 +18,2 @@\n"
-    monkeypatch.setattr(gate, "git", lambda *a: diff)
-    assert gate.diff_lines("base") == ({"a.py": {18, 19}}, {"a.py": {14, 15, 20}})
+    patch_text = "--- a/a.py\n+++ b/a.py\n@@ -14,2 +13,0 @@ def f():\n-    x = 1\n-    y = 2\n@@ -20 +18,2 @@\n"
+    use_git(monkeypatch, lambda *a: patch_text)
+    assert diff.diff_lines("base") == ({"a.py": {18, 19}}, {"a.py": {14, 15, 20}})
 
 
 def test_a_deletion_counts_only_inside_the_symbol_on_the_base() -> None:
@@ -435,7 +445,7 @@ def test_a_deletion_counts_only_inside_the_symbol_on_the_base() -> None:
     beside = symbol("beside", 30, 31)
     base = docstring_snap(inside, beside)
     head = docstring_snap(symbol("decorated", 9, 19), symbol("beside", 29, 30))  # one line shorter now
-    found = gate.new_compared(head, base, {"apps/app/app/a.py"}, lines={}, removed={"apps/app/app/a.py": {9, 32}})
+    found = compare.new_compared(head, base, {"apps/app/app/a.py"}, lines={}, removed={"apps/app/app/a.py": {9, 32}})
     # line 9 (the decorator) was inside "decorated"; line 32 was the blank line after "beside"
     assert [f["symbol"] for f in found] == ["decorated"]
 

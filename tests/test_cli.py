@@ -2,16 +2,24 @@
 
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 
-from cq import cli, complexity_gate, gate, runner
+from cq import cli, complexity_gate, diff, gate, runner
 from cq.backfill import commits_to_measure
 from cq.config import Target, load_settings
 from cq.proc import ToolError
 from cq.report import latest_run
+
+
+def use_git(monkeypatch: pytest.MonkeyPatch, fake: Callable[..., str]) -> None:
+    """Answer every git call the gate makes (in cq.gate and cq.diff) with ``fake``."""
+    monkeypatch.setattr(gate, "git", fake)
+    monkeypatch.setattr(diff, "git", fake)
+
 
 PRICING = '''"""Pricing."""
 
@@ -330,7 +338,7 @@ def test_init_runs_from_the_command_line(repo: Path, capsys: pytest.CaptureFixtu
 
 def test_gate_runs_from_the_command_line(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123"}
-    monkeypatch.setattr(gate, "git", lambda *a: answers.get(a[:1], ""))
+    use_git(monkeypatch, lambda *a: answers.get(a[:1], ""))
     monkeypatch.setattr(gate, "branch_secrets", lambda settings, base: [])
     monkeypatch.setattr(gate, "line_level", Mock(side_effect=ToolError("qlty printed no SARIF")))
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)

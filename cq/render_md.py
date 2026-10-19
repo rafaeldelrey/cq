@@ -136,6 +136,15 @@ def tool_sections(found: list[dict]) -> list[str]:
     return out
 
 
+def change_verb(before: dict | None, after: dict | None) -> str:
+    """How a config moved between two snapshots: added, removed or changed."""
+    if before is None:
+        return "added"
+    if after is None:
+        return "removed"
+    return "changed"
+
+
 def measurement_changes(previous: dict, latest: dict) -> list[str]:
     """What changed in how the two snapshots were measured: tool versions and the configs read.
 
@@ -153,8 +162,7 @@ def measurement_changes(previous: dict, latest: dict) -> list[str]:
             before, after = old.get(name), new.get(name)
             if before is None or after is None or before["hash"] != after["hash"]:
                 source = (after or before or {}).get("file", "")
-                verb = "added" if before is None else ("removed" if after is None else "changed")
-                notes.append(f"{name} config {verb} ({source})")
+                notes.append(f"{name} config {change_verb(before, after)} ({source})")
     return notes
 
 

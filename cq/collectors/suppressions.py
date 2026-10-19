@@ -12,8 +12,8 @@ from cq.context import Context
 
 KINDS = ("python", "typescript")
 
-# A one-character class ([:], [-]) matches the same text, and keeps this file's own patterns from
-# counting as suppressions when cq measures itself.
+# The split literals ("gitleaks" ":allow") keep this file's own patterns from counting as
+# suppressions when cq measures itself.
 PATTERNS: dict[str, re.Pattern[str]] = {
     "noqa": re.compile(r"#\s*noqa\b"),
     "type-ignore": re.compile(r"#\s*type:\s*ignore\b"),
@@ -21,10 +21,10 @@ PATTERNS: dict[str, re.Pattern[str]] = {
     "nosemgrep": re.compile(r"(#|//)\s*nosemgrep\b"),
     "no-cover": re.compile(r"#\s*pragma:\s*no\s*cover\b"),
     "fmt-skip": re.compile(r"#\s*fmt:\s*(skip|off)\b"),
-    "gitleaks-allow": re.compile(r"gitleaks[:]allow\b"),
-    "eslint-disable": re.compile(r"eslint[-]disable"),
+    "gitleaks-allow": re.compile(r"gitleaks" r":allow\b"),
+    "eslint-disable": re.compile(r"eslint" r"-disable"),
     "ts-ignore": re.compile(r"@ts-(ignore|nocheck)\b"),
-    "ts-expect-error": re.compile(r"@ts-expect[-]error\b"),
+    "ts-expect-error": re.compile(r"@ts-expect" r"-error\b"),
 }
 REASON = re.compile(r"(\s-\s|—|:\s+\w+.*\w{3})")  # a reason after " - ", an em dash, or a "code: words" comment
 TS_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mts"}

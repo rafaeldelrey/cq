@@ -3,7 +3,7 @@
   "version": "0.2",
   "language": "en,en-GB",
   "words": [
-    "ACMR", "addopts", "aislop", "cacheprovider", "complexipy", "coveragerc", "deptry", "Dockerfiles",
+    "ACMR", "addopts", "aislop", "cachedir", "cacheprovider", "complexipy", "coveragerc", "deptry", "Dockerfiles",
     "docstrings", "htmlcov", "importlinter", "knip", "lcom", "libyear", "libyears", "lloc", "lockfiles",
     "mutmut", "noopener", "nosemgrep", "noxfile", "outputjson", "pyrightconfig", "pyscn", "qlty", "qltysh",
     "quotepath", "radarlint", "rafaeldelrey", "sarif", "semgrep", "shellcheck", "sloc", "SonarQube",

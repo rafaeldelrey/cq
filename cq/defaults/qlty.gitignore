@@ -1,0 +1,9 @@
+# What `qlty init` writes (qlty 0.654): qlty's cache, logs and plugin sources stay out of git;
+# its config, plugin configs (configs/) and hooks are the repo's. cq init writes it with qlty.toml.
+*
+!configs
+!configs/**
+!hooks
+!hooks/**
+!qlty.toml
+!.gitignore

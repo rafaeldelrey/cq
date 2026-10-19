@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from cq.collectors import COLLECTORS
-from cq.config import PINS, SCHEMA_VERSION, Settings, Target, ensure_data_dir
+from cq.config import PINS, QLTY_CACHE, QLTY_DIR, SCHEMA_VERSION, Settings, Target, ensure_data_dir
 from cq.context import Context
 from cq.proc import ToolError, log, log_to, run
 from cq.toolconfig import used_configs
@@ -82,12 +82,13 @@ def commit_info(rev: str, settings: Settings) -> dict:
     }
     if rev == "HEAD":
         # The whole tree: the repo target measures root files too (docs, scripts, workflows, secrets).
-        # cq's own output never makes it dirty, wherever its data folder is.
+        # cq's own output never makes it dirty, wherever its data folder is, and neither does the cache
+        # qlty writes under .qlty/ when cq runs it (a repo without qlty's .gitignore would show it).
         produced = [
             f":(exclude){p.relative_to(root)}"
             for p in (settings.history_dir, settings.runs_dir)
             if p.is_relative_to(root)
-        ]
+        ] + [f":(exclude){QLTY_DIR}/{entry}" for entry in QLTY_CACHE]
         info["dirty"] = bool(git("status", "--porcelain", "--", ".", *produced, cwd=root))
     return info
 

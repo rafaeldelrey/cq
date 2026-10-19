@@ -15,6 +15,9 @@ DEFAULTS_DIR = Path(__file__).resolve().parent / "defaults"
 CONFIG_FILE = "cq.toml"
 PYPROJECT = "pyproject.toml"
 DEFAULT_DATA_DIR = ".cq"
+QLTY_DIR = ".qlty"
+# What qlty writes under .qlty/ when it runs: its cache links and plugin sources, never the repo's.
+QLTY_CACHE = ("logs", "out", "results", "plugin_cachedir", "sources")
 SCHEMA_VERSION = 1
 
 # The measuring tools that run outside cq's own environment, pinned by the cq release so a

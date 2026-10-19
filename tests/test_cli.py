@@ -10,7 +10,7 @@ import pytest
 
 from cq import cli, complexity_gate, gate, runner
 from cq.backfill import commits_to_measure
-from cq.config import Target, load_settings
+from cq.config import DEFAULTS_DIR, Target, load_settings
 from cq.proc import ToolError
 from cq.report import latest_run
 
@@ -358,3 +358,37 @@ def test_a_collector_that_fails_is_listed_as_a_tool_error(
     assert "acme.size" not in snap["targets"]["acme"]
     assert "## Tool errors\n\n- `acme.size`: RuntimeError: the tool crashed" in (run_dir / "report.md").read_text()
     assert "ERROR RuntimeError: the tool crashed  (see acme/size.log)" in (run_dir / "run.log").read_text()
+
+
+def fill_qlty_cache(repo: Path, cache: Path) -> None:
+    """What qlty leaves under .qlty/ when it runs: links into its own cache, and plugin sources."""
+    (repo / ".qlty").mkdir(exist_ok=True)
+    for name in ("logs", "out", "results", "plugin_cachedir"):
+        (cache / name).mkdir(parents=True, exist_ok=True)
+        (repo / ".qlty" / name).symlink_to(cache / name)
+    (repo / ".qlty" / "sources").mkdir(exist_ok=True)
+    (repo / ".qlty" / "sources" / "plugin.toml").write_text("x = 1\n")
+
+
+def test_init_keeps_qltys_cache_out_of_git(repo: Path, tmp_path: Path) -> None:
+    assert run_cq(repo, "init", "--yes", "--skills", "none") == 0
+    assert (repo / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / "qlty.gitignore").read_text()
+    git(repo, "add", ".qlty")
+    git(repo, "commit", "-q", "-m", "qlty config")
+    fill_qlty_cache(repo, tmp_path / "qlty-cache")
+    assert git(repo, "status", "--porcelain", "--", ".qlty") == ""
+    (repo / ".qlty" / "configs").mkdir()
+    (repo / ".qlty" / "configs" / ".ruff.toml").write_text("line-length = 100\n")
+    assert git(repo, "status", "--porcelain", "--", ".qlty") == "?? .qlty/configs/"  # a plugin config is the repo's
+
+
+def test_qltys_cache_never_makes_a_run_dirty(repo: Path, tmp_path: Path) -> None:
+    (repo / ".qlty").mkdir()
+    (repo / ".qlty" / "qlty.toml").write_text('config_version = "0"\n')
+    git(repo, "add", ".qlty")
+    git(repo, "commit", "-q", "-m", "qlty config, no .gitignore")
+    settings = load_settings(repo)
+    fill_qlty_cache(repo, tmp_path / "qlty-cache")  # untracked: this repo has no .qlty/.gitignore
+    assert runner.commit_info("HEAD", settings)["dirty"] is False
+    (repo / ".qlty" / "qlty.toml").write_text('config_version = "1"\n')
+    assert runner.commit_info("HEAD", settings)["dirty"] is True  # the repo's own qlty config still counts

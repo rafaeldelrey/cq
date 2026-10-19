@@ -42,3 +42,7 @@ def test_every_install_line_names_this_version() -> None:
     }
     assert pins, "no pinned install line found"
     assert {tag for _, tag in pins} == {f"v{version}"}, sorted(pins)
+
+
+def test_cqs_qlty_gitignore_is_the_one_cq_init_writes() -> None:
+    assert (ROOT / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / "qlty.gitignore").read_text()

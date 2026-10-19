@@ -31,14 +31,16 @@ from pathlib import Path
 
 from radon.complexity import cc_rank, cc_visit_ast
 
+FunctionNode = ast.FunctionDef | ast.AsyncFunctionDef
 
-def iter_functions(tree: ast.AST, prefix: str = "") -> list[tuple[str, ast.AST]]:
+
+def iter_functions(tree: ast.AST, prefix: str = "") -> list[tuple[str, FunctionNode]]:
     """Every function in the tree with its qualified name.
 
     Methods, nested classes, closures and classes inside functions are all included, once
     each. (radon's own ``cc_visit`` lists methods twice and skips nested classes.)
     """
-    out: list[tuple[str, ast.AST]] = []
+    out: list[tuple[str, FunctionNode]] = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             name = f"{prefix}{node.name}"
@@ -51,9 +53,9 @@ def iter_functions(tree: ast.AST, prefix: str = "") -> list[tuple[str, ast.AST]]
     return out
 
 
-def function_complexity(node: ast.AST) -> int:
+def function_complexity(node: FunctionNode) -> int:
     """radon's cyclomatic complexity for one function, measured on its own."""
-    module = ast.Module(body=[node], type_ignores=[])  # type: ignore[list-item]
+    module = ast.Module(body=[node], type_ignores=[])
     return cc_visit_ast(module)[0].complexity
 
 
@@ -141,7 +143,12 @@ def git_show(root: Path, base: str, rel: str) -> str | None:
     return proc.stdout if proc.returncode == 0 else None
 
 
-def cmd_report(root: Path, paths: list[str], base: str) -> int:
+def cell(complexity: int | None) -> str:
+    """A table cell: the complexity and its rank, or a dash for a function that isn't there."""
+    return "—" if complexity is None else f"{complexity} ({cc_rank(complexity)})"
+
+
+def cmd_report(root: Path, paths: list[str], base: str) -> None:
     """Markdown table of the functions whose complexity changed against ``base``."""
     diff = subprocess.run(
         ["git", "diff", "--name-only", f"{base}...HEAD", "--", *paths],
@@ -162,14 +169,12 @@ def cmd_report(root: Path, paths: list[str], base: str) -> int:
             old, new = before.get(name), after.get(name)
             if old == new:
                 continue
-            fmt = lambda v: "—" if v is None else f"{v} ({cc_rank(v)})"  # noqa: E731
-            rows.append(f"| `{rel}::{name}` | {fmt(old)} | {fmt(new)} |")
+            rows.append(f"| `{rel}::{name}` | {cell(old)} | {cell(new)} |")
     if not rows:
         print("No function changed complexity.")
-        return 0
+        return
     print("| Function | Before | After |\n|---|---|---|")
     print("\n".join(rows))
-    return 0
 
 
 def cmd_baseline(root: Path, baseline_file: Path, paths: list[str], limit: int) -> int:
@@ -196,5 +201,6 @@ def run(args: argparse.Namespace, root: Path, baseline_file: Path) -> int:
     if args.action == "check":
         return cmd_check(root, baseline_file, args.paths, args.limit)
     if args.action == "report":
-        return cmd_report(root, args.paths, args.base)
+        cmd_report(root, args.paths, args.base)  # a report: it never fails
+        return 0
     return cmd_baseline(root, baseline_file, args.paths, args.limit)

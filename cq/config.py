@@ -13,6 +13,7 @@ from typing import Any, Literal
 
 DEFAULTS_DIR = Path(__file__).resolve().parent / "defaults"
 CONFIG_FILE = "cq.toml"
+PYPROJECT = "pyproject.toml"
 DEFAULT_DATA_DIR = ".cq"
 SCHEMA_VERSION = 1
 
@@ -131,14 +132,14 @@ def find_config(repo_root: Path, config: Path | None = None) -> tuple[dict[str, 
     """The settings table and the file it came from: ``config``, cq.toml, or pyproject's [tool.cq]."""
     if config is not None:
         data = tomllib.loads(config.read_text())
-        # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyprojects have no [tool.cq]
-        return (data.get("tool", {}).get("cq", {}) if config.name == "pyproject.toml" else data), config
+        # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyproject files have no [tool.cq]
+        return (data.get("tool", {}).get("cq", {}) if config.name == PYPROJECT else data), config
     own = repo_root / CONFIG_FILE
     if own.exists():
         return tomllib.loads(own.read_text()), own
-    pyproject = repo_root / "pyproject.toml"
+    pyproject = repo_root / PYPROJECT
     if pyproject.exists():
-        # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyprojects have no [tool.cq]
+        # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyproject files have no [tool.cq]
         table = tomllib.loads(pyproject.read_text()).get("tool", {}).get("cq")
         if table is not None:
             return table, pyproject
@@ -178,7 +179,7 @@ def python_source(repo_root: Path, project_name: str) -> tuple[str, ...]:
 
 def detect_targets(repo_root: Path) -> tuple[Target, ...]:
     """The targets of a repo with no settings: a pyproject.toml at the root is one Python app."""
-    pyproject = repo_root / "pyproject.toml"
+    pyproject = repo_root / PYPROJECT
     if not pyproject.exists():
         return (REPO_TARGET,)
     # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a pyproject may have no [project] table (a tool-only config)

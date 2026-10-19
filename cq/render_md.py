@@ -104,7 +104,9 @@ SEVERITY_MARK = {"error": "⛔", "warning": "⚠️", "info": "·"}
 
 def finding_line(f: dict) -> str:
     """One finding as a Markdown list item."""
-    where = f"`{f['file']}{':' + str(f['line']) if f.get('line') else ''}`" if f["file"] else ""
+    where = f"`{f['file']}:{f['line']}`" if f.get("line") else f"`{f['file']}`"
+    if not f["file"]:
+        where = ""
     symbol = f" `{f['symbol']}`" if f.get("symbol") and f["tool"] in ("complexity", "cognitive") else ""
     return f"- {SEVERITY_MARK[f['severity']]} **{f['tool']}/{f['rule']}** {where}{symbol} {f['message']}".rstrip()
 
@@ -151,7 +153,7 @@ def measurement_changes(previous: dict, latest: dict) -> list[str]:
             before, after = old.get(name), new.get(name)
             if before is None or after is None or before["hash"] != after["hash"]:
                 source = (after or before or {}).get("file", "")
-                verb = "added" if before is None else "removed" if after is None else "changed"
+                verb = "added" if before is None else ("removed" if after is None else "changed")
                 notes.append(f"{name} config {verb} ({source})")
     return notes
 

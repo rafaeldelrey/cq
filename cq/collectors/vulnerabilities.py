@@ -49,6 +49,13 @@ def collect_python(ctx: Context) -> dict:
     }
 
 
+def fix_label(fix: object) -> str:
+    """npm audit's ``fixAvailable``: the version that fixes it, or whether a fix exists."""
+    if isinstance(fix, dict):
+        return fix.get("version", "yes")
+    return "yes" if fix else "no"
+
+
 def collect_typescript(ctx: Context) -> dict:
     """npm audit of the production dependency tree.
 
@@ -74,7 +81,7 @@ def collect_typescript(ctx: Context) -> dict:
                 "range": v.get("range", ""),
                 "title": "; ".join(titles)[:240]
                 or "via " + ", ".join(x for x in v.get("via", []) if isinstance(x, str)),
-                "fix": fix.get("version", "yes") if isinstance(fix, dict) else ("yes" if fix else "no"),
+                "fix": fix_label(fix),
             }
         )
     items.sort(key=lambda i: NPM_LEVELS.index(i["severity"]) if i["severity"] in NPM_LEVELS else 9)

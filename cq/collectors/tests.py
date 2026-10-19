@@ -45,7 +45,7 @@ def fail_under(ctx: Context) -> float | None:
     pyproject = ctx.app_dir / "pyproject.toml"
     if not pyproject.exists():
         return None
-    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyprojects have no [tool.coverage.report]
+    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- optional TOML tables: most pyproject files have no [tool.coverage.report]
     report = tomllib.loads(pyproject.read_text()).get("tool", {}).get("coverage", {}).get("report", {})
     value = report.get("fail_under")
     return float(value) if value is not None else None
@@ -146,10 +146,15 @@ def collect_typescript(ctx: Context) -> dict:
     cov_dir = ctx.raw_dir / "coverage"
     with_coverage = (ctx.app_dir / "node_modules" / "@vitest" / "coverage-v8").exists()
     coverage_args = (
-        ["--coverage.enabled=true", "--coverage.reporter=json-summary", "--coverage.reporter=json",
-         f"--coverage.reportsDirectory={cov_dir}"]
-        if with_coverage else []
-    )  # fmt: skip
+        [
+            "--coverage.enabled=true",
+            "--coverage.reporter=json-summary",
+            "--coverage.reporter=json",
+            f"--coverage.reportsDirectory={cov_dir}",
+        ]
+        if with_coverage
+        else []
+    )
     # Exit 1: a test failed or coverage fell under the floor; both are measurements.
     run(
         ["npx", "vitest", "run", "--reporter=json", f"--outputFile={out_file}", *coverage_args],

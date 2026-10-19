@@ -56,9 +56,15 @@ def tool_versions(settings: Settings, checkout: Path) -> dict[str, str]:
     """Every measuring tool's version for this snapshot: a change in one explains a step in the trend."""
     pinned = {"cq": importlib.metadata.version("cq")} | {t: importlib.metadata.version(t) for t in PINNED_TOOLS}
     specs = {
-        "jscpd": settings.jscpd, "knip": settings.knip, "mutmut": PINS["mutmut"], "qlty (pinned)": settings.qlty,
-        "aislop": settings.aislop, "pyscn": settings.pyscn, "fallow": settings.fallow, "cspell": settings.cspell,
-    }  # fmt: skip
+        "jscpd": settings.jscpd,
+        "knip": settings.knip,
+        "mutmut": PINS["mutmut"],
+        "qlty (pinned)": settings.qlty,
+        "aislop": settings.aislop,
+        "pyscn": settings.pyscn,
+        "fallow": settings.fallow,
+        "cspell": settings.cspell,
+    }
     binaries = {tool: binary_version(tool, flag) for tool, flag in BINARIES.items()}
     return pinned | specs | binaries | qlty_plugin_versions(checkout)
 
@@ -151,7 +157,7 @@ class RunLog:
     def __call__(self, text: str, end: str = "\n") -> None:
         """Write ``text`` to both."""
         # aislop-ignore-next-line ai-slop/python-print-debug -- RunLog is the run's progress on stderr
-        print(text, end=end, flush=True, file=sys.stderr)
+        print(text, end=end, flush=True, file=sys.stderr)  # nosemgrep: cq-no-print - RunLog is the run's progress
         with self.path.open("a") as fh:
             fh.write(text + end)
 

@@ -78,13 +78,15 @@ def collect_python(ctx: Context) -> dict:
     rows = []
     for m in UV_OUTDATED.finditer(out):
         name, current, latest = m["name"], m["current"], m["latest"]
-        rows.append({
-            "package": name,
-            "current": current,
-            "latest": latest,
-            "major": (major(latest) or 0) > (major(current) or 0),
-            "years": round(lag_years(pypi_dates(name), current, latest), 2),
-        })  # fmt: skip
+        rows.append(
+            {
+                "package": name,
+                "current": current,
+                "latest": latest,
+                "major": (major(latest) or 0) > (major(current) or 0),
+                "years": round(lag_years(pypi_dates(name), current, latest), 2),
+            }
+        )
     return summarise(rows)
 
 
@@ -98,13 +100,15 @@ def collect_typescript(ctx: Context) -> dict:
         current, latest = info.get("current"), info.get("latest")
         if not current or not latest or current == latest:
             continue
-        rows.append({
-            "package": name,
-            "current": current,
-            "latest": latest,
-            "major": (major(latest) or 0) > (major(current) or 0),
-            "years": round(lag_years(npm_dates(ctx, name), current, latest), 2),
-        })  # fmt: skip
+        rows.append(
+            {
+                "package": name,
+                "current": current,
+                "latest": latest,
+                "major": (major(latest) or 0) > (major(current) or 0),
+                "years": round(lag_years(npm_dates(ctx, name), current, latest), 2),
+            }
+        )
     return summarise(rows)
 
 

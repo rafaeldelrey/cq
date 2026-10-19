@@ -21,13 +21,10 @@ def collect(ctx: Context) -> dict:
     plugin = PLUGIN[ctx.target.kind]
     rows = qlty.run_sarif(ctx, ["check", "--no-fail", "--filter", plugin, *qlty.source_args(ctx)], "radarlint")
     kept = [r for r in rows if r["rule"] not in OVERLAPPING and not qlty.is_test(r["file"])]
-    by_rule: dict[str, int] = {}
-    for r in kept:
-        by_rule[r["rule"]] = by_rule.get(r["rule"], 0) + 1
     return {
         "findings": len(kept),
         "warnings": sum(1 for r in kept if r["severity"] == "warning"),
-        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "by_rule": qlty.count_by_rule(kept),
         "items": ctx.with_fingerprints(
             [
                 {"file": r["file"], "line": r["line"], "code": r["rule"], "severity": r["severity"], "msg": r["msg"]}

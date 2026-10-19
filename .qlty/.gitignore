@@ -1,0 +1,4 @@
+# qlty writes its cache links and plugin sources here; only the config is the repo's.
+*
+!.gitignore
+!qlty.toml

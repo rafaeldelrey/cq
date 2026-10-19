@@ -25,9 +25,10 @@ def collect(ctx: Context) -> dict:
     data = parse_json(out, "pyscn")
     summary = data["summary"]
     pairs = [
-        p for p in (data.get("clone") or {}).get("clone_pairs") or []  # null when pyscn finds no clones
+        p
+        for p in (data.get("clone") or {}).get("clone_pairs") or []  # null when pyscn finds no clones
         if (p["clone1"].get("line_count") or 0) >= MIN_LINES and "/tests/" not in p["clone1"]["location"]["file_path"]
-    ]  # fmt: skip
+    ]
     pairs.sort(key=lambda p: (-(p["clone1"].get("line_count") or 0), -p.get("similarity", 0)))
     return {
         "health_score": summary.get("health_score"),

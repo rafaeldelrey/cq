@@ -11,7 +11,7 @@ ERROR = re.compile(r"^(?P<file>[^\s(]+)\((?P<line>\d+),\d+\): error (?P<code>TS\
 
 
 def collect(ctx: Context) -> dict:
-    """Count tsc's ``error TSnnnn`` lines; exit 2 (tsc) or 1 (npm) means it found some."""
+    """Count tsc's ``error TS<code>`` lines; exit 2 (tsc) or 1 (npm) means it found some."""
     if not (ctx.app_dir / "node_modules").exists():
         raise ToolError("node_modules missing; run `npm ci` in the app first")
     out = run(["npm", "run", "--silent", "typecheck", "--", "--pretty", "false"], ctx.app_dir, ok_codes=(0, 1, 2))

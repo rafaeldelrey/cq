@@ -18,8 +18,17 @@ SEVERITIES = ("error", "warning", "info")
 Finding = dict
 
 
-def make(target: str, tool: str, rule: str, severity: str, message: str, file: str = "", line: int | None = None,
-         symbol: str = "", **extra: object) -> Finding:  # fmt: skip
+def make(
+    target: str,
+    tool: str,
+    rule: str,
+    severity: str,
+    message: str,
+    file: str = "",
+    line: int | None = None,
+    symbol: str = "",
+    **extra: object,
+) -> Finding:
     """One finding, with its stable key."""
     key = f"{target}|{tool}|{rule}|{file}|{symbol or message}"
     return {

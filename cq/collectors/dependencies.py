@@ -53,11 +53,20 @@ def collect_python(ctx: Context) -> dict:
     ignores = ["--per-rule-ignores", ",".join(ctx.target.deptry_ignore)] if ctx.target.deptry_ignore else []
     dev_extra = ["--pep621-dev-dependency-groups", "dev"] if has_dev_extra(ctx.app_dir) else []
     run(
-        uv_app(ctx.app_dir, "deptry", ".", "--json-output", str(out), *dev_extra, *first_party, *ignores,
-               overlay=(PINS["deptry"],)),
+        uv_app(
+            ctx.app_dir,
+            "deptry",
+            ".",
+            "--json-output",
+            str(out),
+            *dev_extra,
+            *first_party,
+            *ignores,
+            overlay=(PINS["deptry"],),
+        ),
         ctx.app_dir,
         ok_codes=(0, 1),
-    )  # fmt: skip
+    )
     rows = json.loads(out.read_text())
     counts: dict[str, int] = dict.fromkeys(DEPTRY_LABELS.values(), 0)
     modules: dict[tuple[str, str], dict] = {}

@@ -17,16 +17,23 @@ def collect(ctx: Context) -> dict:
     paths = [str(p) for p in ctx.sources]
     run(
         [
-            "npx", "-y", ctx.settings.jscpd, *paths,
-            "--format", FORMATS[ctx.target.kind],
-            "--ignore", IGNORE,
-            "--reporters", "json",
-            "--output", str(out_dir),
+            "npx",
+            "-y",
+            ctx.settings.jscpd,
+            *paths,
+            "--format",
+            FORMATS[ctx.target.kind],
+            "--ignore",
+            IGNORE,
+            "--reporters",
+            "json",
+            "--output",
+            str(out_dir),
             "--silent",
             "--gitignore",
         ],
         ctx.checkout,
-    )  # fmt: skip
+    )
     data = json.loads((out_dir / "jscpd-report.json").read_text())
     total = data["statistics"]["total"]
     clones = sorted(data["duplicates"], key=lambda d: -d["lines"])

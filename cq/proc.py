@@ -18,7 +18,7 @@ _log_file: ContextVar[Path | None] = ContextVar("log_file", default=None)
 
 
 class ToolError(RuntimeError):
-    """A tool could not produce a measurement (crashed, missing, unparseable output)."""
+    """A tool could not produce a measurement (crashed, missing, unparsable output)."""
 
 
 def run(
@@ -119,8 +119,8 @@ def uv_app(app_dir: Path, *args: str, overlay: tuple[str, ...] = ()) -> list[str
     old commits whose dev tools did not have the tool yet.
     """
     extra = ["--extra", "dev"] if has_dev_extra(app_dir) else []
-    withs = [arg for pkg in overlay for arg in ("--with", pkg)]
-    return ["uv", "run", "-q", *extra, *withs, *args]
+    with_args = [arg for pkg in overlay for arg in ("--with", pkg)]
+    return ["uv", "run", "-q", *extra, *with_args, *args]
 
 
 def run_app_tool(
@@ -142,7 +142,7 @@ def run_app_tool(
     except ToolError as exc:
         if "Failed to spawn" not in str(exc) and "extra" not in str(exc).lower():
             raise
-    withs = [arg for pkg in (*packages, *overlay) for arg in ("--with", pkg)]
+    with_args = [arg for pkg in (*packages, *overlay) for arg in ("--with", pkg)]
     # An app without its own pyproject would otherwise resolve the repo root's project.
     isolate = [] if (cwd / "pyproject.toml").exists() else ["--no-project"]
-    return run(["uv", "run", "-q", *isolate, *withs, *args], cwd, ok_codes=ok_codes, env=env)
+    return run(["uv", "run", "-q", *isolate, *with_args, *args], cwd, ok_codes=ok_codes, env=env)

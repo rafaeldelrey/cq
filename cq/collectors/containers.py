@@ -79,14 +79,16 @@ def trivy(ctx: Context) -> dict:
         if key in seen or v.get("Severity") not in ("CRITICAL", "HIGH"):
             continue
         seen.add(key)
-        items.append({
-            "package": v["PkgName"],
-            "version": v.get("InstalledVersion", ""),
-            "id": v["VulnerabilityID"],
-            "severity": v["Severity"].lower(),
-            "fix": v.get("FixedVersion") or "none yet",
-            "title": (v.get("Title") or "")[:160],
-        })  # fmt: skip
+        items.append(
+            {
+                "package": v["PkgName"],
+                "version": v.get("InstalledVersion", ""),
+                "id": v["VulnerabilityID"],
+                "severity": v["Severity"].lower(),
+                "fix": v.get("FixedVersion") or "none yet",
+                "title": (v.get("Title") or "")[:160],
+            }
+        )
     return {
         "image": image,
         **image_metadata(data),

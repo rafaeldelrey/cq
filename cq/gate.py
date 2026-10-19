@@ -56,7 +56,6 @@ SHOWN = 50  # rows per table in the summary; the JSONL has them all
 # in complexity is the cognitive ratchet's and check.sh's CC gate's job.
 WHOLE_FILE_SMELLS = {"file-complexity"}
 HUNK_SIDES = re.compile(r"^@@ -(?P<old>\d+)(?:,(?P<old_count>\d+))? \+(?P<new>\d+)(?:,(?P<new_count>\d+))? @@")
-HUNK = re.compile(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@")
 
 
 def diff_status(base_sha: str) -> tuple[list[str], list[str], dict[str, str]]:
@@ -242,7 +241,7 @@ def partial_scans(head: dict) -> dict[str, str]:
 
 
 def base_errors(base: dict) -> dict[str, str]:
-    """The base's tool errors, apart from apps the base doesn't have yet: those findings went uncompared."""
+    """The base's tool errors, apart from apps the base doesn't have yet: those findings were not compared."""
     return {f"base: {k}": v for k, v in base["errors"].items() if v != "not present at this commit"}
 
 
@@ -406,8 +405,8 @@ def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: 
         with Path(step_summary).open("a") as fh:
             fh.write(text + "\n")
     # aislop-ignore-next-line ai-slop/python-print-debug -- `cq gate` prints its summary: the CLI output
-    print(text)
+    print(text)  # nosemgrep: cq-no-print - the gate's summary is its output
     # aislop-ignore-next-line ai-slop/python-print-debug -- `cq gate` prints its summary: the CLI output
-    print(f"\ngate run: {out_dir}")
+    print(f"\ngate run: {out_dir}")  # nosemgrep: cq-no-print - the gate's summary is its output
     failed = any(f["blocking"] for f in findings) or bool(errors)
     return 1 if mode == "block" and failed else 0

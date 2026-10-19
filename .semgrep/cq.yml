@@ -1,0 +1,91 @@
+# cq's own house rules: cq's packaged defaults (cq/defaults/semgrep/cq.yml), with one change.
+# cq-no-print leaves out the CLI's modules, whose prints are the interface; library code that
+# prints on purpose says why with `# nosemgrep: cq-no-print`. Keep the rest in step with the
+# defaults when they change.
+# An intentional exception carries `# nosemgrep: <rule-id>` with the reason on the same line.
+rules:
+  - id: cq-no-print
+    message: Production code logs through a logger; print() goes nowhere searchable.
+    severity: WARNING
+    languages: [python]
+    paths:
+      exclude: ["**/tests/**", "**/__main__.py", "cq/cli.py", "cq/init.py", "cq/doctor.py", "cq/complexity_gate.py"]
+    pattern: print(...)
+
+  - id: cq-logs-and-carries-on
+    message: >-
+      A broad except that logs and continues hides the bug it caught. Re-raise, or name the accepted reason (observability-only,
+      retry, degraded mode, documented UX tradeoff) and mark it `# nosemgrep`.
+    severity: WARNING
+    languages: [python]
+    paths:
+      exclude: ["**/tests/**"]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              try:
+                  ...
+              except Exception:
+                  ...
+          - pattern: |
+              try:
+                  ...
+              except Exception as $E:
+                  ...
+          - pattern: |
+              try:
+                  ...
+              except BaseException:
+                  ...
+      - pattern-not: |
+          try:
+              ...
+          except $T:
+              ...
+              raise
+      - pattern-not: |
+          try:
+              ...
+          except $T as $E:
+              ...
+              raise
+      - pattern-not: |
+          try:
+              ...
+          except $T as $E:
+              ...
+              raise $X from $E
+
+  - id: cq-nested-import
+    message: Imports go at the top of the file, even for deferred resources; the import is cheap, only the call matters.
+    severity: INFO
+    languages: [python]
+    paths:
+      exclude: ["**/tests/**"]
+    patterns:
+      - pattern-inside: |
+          def $F(...):
+              ...
+      - pattern-either:
+          - pattern: import $X
+          - pattern: from $X import $Y
+
+  - id: cq-naive-datetime
+    message: A naive datetime has no zone; use datetime.now(UTC), or a ZoneInfo for display.
+    severity: WARNING
+    languages: [python]
+    paths:
+      exclude: ["**/tests/**"]
+    pattern-either:
+      - pattern: datetime.utcnow()
+      - pattern: datetime.datetime.utcnow()
+      - pattern: datetime.now()
+      - pattern: datetime.datetime.now()
+
+  - id: cq-ui-console-log
+    message: console.log left in front-end code ships to every browser.
+    severity: INFO
+    languages: [typescript]
+    paths:
+      exclude: ["**/*.test.ts", "**/*.test.tsx"]
+    pattern: console.log(...)

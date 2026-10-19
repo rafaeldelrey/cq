@@ -17,14 +17,11 @@ def collect(ctx: Context) -> dict:
     """qlty smells over the target's production paths."""
     rows = qlty.run_sarif(ctx, ["smells", *qlty.source_args(ctx)], "smells")
     kept = [r for r in rows if not qlty.is_test(r["file"])]
-    by_rule: dict[str, int] = {}
-    for r in kept:
-        by_rule[r["rule"]] = by_rule.get(r["rule"], 0) + 1
     return {
         "smells": len(kept),
         "structure": sum(1 for r in kept if r["rule"] not in DUPLICATION),
         "duplication": sum(1 for r in kept if r["rule"] in DUPLICATION),
-        "by_rule": dict(sorted(by_rule.items(), key=lambda kv: -kv[1])),
+        "by_rule": qlty.count_by_rule(kept),
         "items": ctx.with_fingerprints(
             [
                 {"file": r["file"], "line": r["line"], "code": r["rule"], "msg": r["msg"]}

@@ -47,11 +47,23 @@ def betterleaks(args: list[str], cwd: Path, config: Path = DEFAULT_CONFIG) -> li
     with tempfile.TemporaryDirectory(prefix="cq-secrets-") as tmp:
         report = Path(tmp) / "report.json"
         run(
-            ["betterleaks", *args, "--config", str(config), "--redact", "--no-banner", "--exit-code", "0",
-             "--report-format", "json", "--report-path", str(report)],
+            [
+                "betterleaks",
+                *args,
+                "--config",
+                str(config),
+                "--redact",
+                "--no-banner",
+                "--exit-code",
+                "0",
+                "--report-format",
+                "json",
+                "--report-path",
+                str(report),
+            ],
             cwd,
             secret_output=True,
-        )  # fmt: skip
+        )
         return [slim(f) for f in json.loads(report.read_text() or "[]")]
 
 
@@ -201,10 +213,10 @@ def path_events(checkout: Path, revisions: str = "HEAD") -> list[tuple[str, str,
         token = field.lstrip("\n")
         if token.startswith("@"):
             commit = token[1:]
-        elif token[:1] == "R":
+        elif token.startswith("R"):
             old, new = next(fields), next(fields)
             events.append((commit, "R", old, new))
-        elif token[:1] == "D":
+        elif token.startswith("D"):
             old = next(fields)
             events.append((commit, "D", old, old))
     return events
@@ -230,7 +242,7 @@ def head_paths(checkout: Path, found_at: set[tuple[str, str]]) -> dict[tuple[str
     or "deleted".
 
     Secrets in history are reported at the path of the commit that added them, which a later
-    move (e.g. nightscout/ into research/ on 2026-03-21) can leave pointing at nothing. Tracing
+    move (a folder renamed, or moved under another) can leave pointing at nothing. Tracing
     from the finding's own commit keeps a path that was deleted and later reused by another file
     from being reported as unchanged.
     """

@@ -94,6 +94,13 @@ def plugin_line(width: int, folder: Path | None) -> str:
     return f"{line}\n      for /code-quality and /setup-cq: {fix}" if fix else line
 
 
+def status_mark(ok: bool, *, optional: bool) -> str:
+    """The doctor table's first column: found, optional and missing, or required and missing."""
+    if ok:
+        return "ok "
+    return "-- " if optional else "XX "
+
+
 def doctor(folder: Path | None = None) -> int:
     """Print every tool's state; exit 1 when a required one is missing or qlty is off its pin.
 
@@ -102,7 +109,7 @@ def doctor(folder: Path | None = None) -> int:
     checks = [check(t) for t in TOOLS]
     width = max(len(PLUGIN_LABEL), *(len(t.name) for t in TOOLS))
     for c in checks:
-        mark = "ok " if c.ok else ("-- " if c.tool.optional else "XX ")
+        mark = status_mark(c.ok, optional=c.tool.optional)
         state = c.found or "not installed"
         if c.tool.name == "qlty" and not c.ok:
             state = f"{state} (cq pins {PINS['qlty']})"

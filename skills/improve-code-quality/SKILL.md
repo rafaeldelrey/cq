@@ -57,9 +57,11 @@ Done when the stop rule, the config policy, the landing and the scope are each a
 
 ## 5. Measure
 
-Run `cq run` in the worktree. Read the findings with `jq` on `runs/<run>/findings.jsonl`, and compare with the previous round's run.
+Run `cq run` in the worktree. Read the findings to work on with `jq` on `runs/<run>/findings.jsonl`.
 
-Done when you have the totals by tool and severity, and the list of findings this round will work on.
+**Count from the snapshot, not from `findings.jsonl`.** cq lists only each tool's worst items in a snapshot (200 docstrings, 120 for several tools). Once those are fixed, the next ones fill the list, so a finding count can stay flat while the real number falls. Take each tool's total from its own count in `snapshot.json` (`docstrings.missing`, `smells.smells`, `aislop.findings`, `radarlint.findings`, …). Use the finding rows for tools that list everything. The rounds, the plateau and the report use these totals.
+
+Done when you have each tool's total from the snapshot, compared with the previous round's, and the list of findings this round will work on.
 
 ## 6. Reduce
 
@@ -67,6 +69,8 @@ Work through the findings, most severe first.
 
 - **A real finding** is fixed in code, with tests for every changed production line.
 - **A false positive** (wrong for this repo: a tool's own name flagged as a typo, a dependency that runs as a command) goes into the repo's own tool config, if the policy allows it. Add a reason in the config itself, and an entry in the round's **config ledger**: what it hides and why that is wrong for this repo.
+  - **Read the config file's own rules first.** angel-monitor's `cspell.json` says personal names are never added: "a name in production code stays a finding". Under such a rule, the finding is fixed in code (a neutral example name), not allowed in config.
+  - **Add to a config file in its own layout.** Rewriting the whole file to add one entry makes a diff nobody can review.
 - **Out-of-bounds and out-of-scope findings** are left alone and listed.
 - **Image vulnerabilities** describe the published image, so cq's numbers move only after a deploy. A Dockerfile fix is checked on a local build that is never pushed, with `trivy image` before and after.
 

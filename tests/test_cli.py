@@ -418,7 +418,7 @@ def test_a_cut_list_is_counted_in_the_totals_report_and_dashboard(repo: Path, mo
     totals = json.loads((run_dir / "findings-totals.json").read_text())
     assert totals["targets"]["acme"]["suppressions"] == {"findings": 3, "cut": {"items": {"shown": 3, "total": 10}}}
     assert (
-        "**Lists cut to fit** (the snapshot's totals are the real counts): `suppressions` items 3 of 10"
+        "**Lists kept short** (count from the snapshot's totals, not the rows): `suppressions` items 3 of 10"
         in (run_dir / "report.md").read_text()
     )
     page = (run_dir / "dashboard.html").read_text()
@@ -429,5 +429,5 @@ def test_a_run_with_nothing_cut_says_nothing_about_cuts(repo: Path) -> None:
     assert run_cq(repo, "run", "--tool", "size") == 0
     run_dir = latest_run(repo / ".cq" / "runs")
     assert run_dir is not None
-    assert "Lists cut to fit" not in (run_dir / "report.md").read_text()
+    assert "Lists kept short" not in (run_dir / "report.md").read_text()
     assert json.loads((run_dir / "findings-totals.json").read_text()) == {"targets": {}}

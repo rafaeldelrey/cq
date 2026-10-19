@@ -85,6 +85,21 @@ def results(sarif: dict) -> list[dict]:
     return rows
 
 
+def production(rows: list[dict]) -> list[dict]:
+    """The rows outside test files."""
+    return [r for r in rows if not is_test(r["file"])]
+
+
+def items(ctx: Context, rows: list[dict], *fields: str) -> list[dict]:
+    """The first 120 rows as report items (file, line, code, message, and ``fields``), each fingerprinted."""
+    return ctx.with_fingerprints(
+        [
+            {"file": r["file"], "line": r["line"], "code": r["rule"], "msg": r["msg"], **{f: r[f] for f in fields}}
+            for r in rows[:120]
+        ]
+    )
+
+
 def run_sarif(ctx: Context, args: list[str], name: str) -> list[dict]:
     """One qlty command with ``--sarif`` over repo-relative paths; the raw SARIF goes to the run folder."""
     check_version(ctx)

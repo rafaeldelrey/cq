@@ -18,13 +18,6 @@ from cq.config import GateSettings, Settings, Target, load_gate, load_settings
 from cq.context import Context
 from cq.proc import ToolError
 
-
-def use_git(monkeypatch: pytest.MonkeyPatch, fake: Callable[..., str]) -> None:
-    """Answer every git call the gate makes (in cq.gate and cq.diff) with ``fake``."""
-    monkeypatch.setattr(gate, "git", fake)
-    monkeypatch.setattr(diff, "git", fake)
-
-
 APP = Target(name="app", kind="python", root="apps/app", source=("app",), tests=False)
 UI = Target(name="ui", kind="typescript", root="apps/ui", source=("src",), tests=False)
 REPO = Target(name="repo", kind="repo", root=".", source=(".",), tests=False)
@@ -66,8 +59,10 @@ def item(file: str, line: int, at: str, code: str = "ai-slop/todo-stub") -> dict
 # ── which lines, files and targets ────────────────────────────────────────────────────────────
 
 
-def test_changed_lines_reads_hunks_and_ignores_deletions(monkeypatch: pytest.MonkeyPatch) -> None:
-    use_git(monkeypatch, lambda *a: DIFF)
+def test_changed_lines_reads_hunks_and_ignores_deletions(
+    use_git: Callable[[Callable[..., str]], None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    use_git(lambda *a: DIFF)
     assert diff.changed_lines("base") == {"apps/app/app/a.py": {4, 5, 12}}
 
 
@@ -88,7 +83,9 @@ def test_affected_targets_and_lockfiles() -> None:
 # ── line level and secrets ────────────────────────────────────────────────────────────────────
 
 
-def test_line_level_keeps_checks_and_the_smells_on_changed_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_line_level_keeps_checks_and_the_smells_on_changed_lines(
+    use_git: Callable[[Callable[..., str]], None], monkeypatch: pytest.MonkeyPatch
+) -> None:
     row = {"plugin": "qlty", "severity": "warning", "msg": "m", "properties": {}}
     sarif = {
         "gate-check": [row | {"plugin": "zizmor", "rule": "zizmor/unpinned-uses", "file": "w.yml", "line": 3}],
@@ -99,7 +96,7 @@ def test_line_level_keeps_checks_and_the_smells_on_changed_lines(monkeypatch: py
             row | {"rule": "function-parameters", "file": "apps/app/tests/test_a.py", "line": 4, "end_line": 4},
         ],
     }
-    use_git(monkeypatch, lambda *a: DIFF)
+    use_git(lambda *a: DIFF)
     monkeypatch.setattr(qlty, "run_sarif", lambda ctx, args, name: sarif[name])
     found = gate.line_level(None, "base")  # type: ignore[arg-type]
     assert [(f["tool"], f["rule"], f["line"]) for f in found] == [
@@ -231,10 +228,12 @@ def test_a_tool_error_is_recorded_not_raised() -> None:
     assert errors == {"qlty": "qlty 0.600.0 installed"}
 
 
-def fake_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, found: list[dict]) -> Settings:
+def fake_run(
+    use_git: Callable[[Callable[..., str]], None], monkeypatch: pytest.MonkeyPatch, tmp_path: Path, found: list[dict]
+) -> Settings:
     """run_gate over stubbed git, line level, secrets and snapshots; the settings write under tmp_path."""
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123"}
-    use_git(monkeypatch, lambda *a: answers.get(a[:1], ""))
+    use_git(lambda *a: answers.get(a[:1], ""))
     monkeypatch.setattr(gate, "line_level", lambda ctx, base: found)
     monkeypatch.setattr(gate, "branch_secrets", lambda settings, base: [])
     return replace(SETTINGS, repo_root=tmp_path, data_dir=tmp_path / ".cq")
@@ -247,9 +246,14 @@ FINDING = {"target": "repo", "tool": "smells", "rule": "function-parameters", "s
 
 @pytest.mark.parametrize(("mode", "report_only", "code"), [("warn", False, 0), ("block", False, 1), ("block", True, 0)])
 def test_exit_code_by_mode(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: Literal["warn", "block"], report_only: bool, code: int
+    use_git: Callable[[Callable[..., str]], None],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mode: Literal["warn", "block"],
+    report_only: bool,
+    code: int,
 ) -> None:
-    settings = fake_run(monkeypatch, tmp_path, [FINDING])
+    settings = fake_run(use_git, monkeypatch, tmp_path, [FINDING])
     summary_file = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
     gate_settings = GateSettings(mode=mode, block=("smells:*",))
@@ -260,18 +264,22 @@ def test_exit_code_by_mode(
     assert (row["new"], row["blocking"]) == (True, True)
 
 
-def test_a_clean_branch_passes_in_block_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    settings = fake_run(monkeypatch, tmp_path, [])
+def test_a_clean_branch_passes_in_block_mode(
+    use_git: Callable[[Callable[..., str]], None], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = fake_run(use_git, monkeypatch, tmp_path, [])
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     assert gate.run_gate(settings, GateSettings(mode="block"), "origin/main").exit_code == 0
     assert "Nothing new" in next(settings.runs_dir.glob("*_gate_*/gate.md")).read_text()
     assert (settings.data_dir / ".gitignore").read_text().endswith("*\n")  # a new data folder ignores itself
 
 
-def test_a_tool_that_did_not_run_fails_block_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    settings = fake_run(monkeypatch, tmp_path, [])
+def test_a_tool_that_did_not_run_fails_block_mode(
+    use_git: Callable[[Callable[..., str]], None], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = fake_run(use_git, monkeypatch, tmp_path, [])
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123", ("diff",): "M\tapps/app/app/a.py"}
-    use_git(monkeypatch, lambda *a: answers.get(a[:1], ""))
+    use_git(lambda *a: answers.get(a[:1], ""))
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     snapshots = iter([
         snap({"app": {}}, errors={"app.aislop": "npx failed"}),
@@ -290,11 +298,13 @@ def test_summary_caps_long_tables() -> None:
     assert "…and 5 more" in text and "**0 blocking**" in text
 
 
-def test_diff_status_keeps_deletions_and_renames_apart(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_diff_status_keeps_deletions_and_renames_apart(
+    use_git: Callable[[Callable[..., str]], None], monkeypatch: pytest.MonkeyPatch
+) -> None:
     status = (
         "M\tapps/app/app/a.py\nD\tapps/app/app/gone.py\nR100\tapps/app/app/old.py\tapps/app/app/new.py\nA\twiki/x.md"
     )
-    use_git(monkeypatch, lambda *a: status)
+    use_git(lambda *a: status)
     changed, touched, renames = diff.diff_status("base")
     assert changed == ["apps/app/app/a.py", "apps/app/app/new.py", "wiki/x.md"]
     assert "apps/app/app/gone.py" in touched and "apps/app/app/old.py" in touched
@@ -434,9 +444,11 @@ def test_syntax_ends_stop_at_the_function_not_at_the_next_assignment(tmp_path: P
     assert docstrings.syntax_ends(src) == {}
 
 
-def test_diff_lines_split_head_and_base_sides(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_diff_lines_split_head_and_base_sides(
+    use_git: Callable[[Callable[..., str]], None], monkeypatch: pytest.MonkeyPatch
+) -> None:
     patch_text = "--- a/a.py\n+++ b/a.py\n@@ -14,2 +13,0 @@ def f():\n-    x = 1\n-    y = 2\n@@ -20 +18,2 @@\n"
-    use_git(monkeypatch, lambda *a: patch_text)
+    use_git(lambda *a: patch_text)
     assert diff.diff_lines("base") == ({"a.py": {18, 19}}, {"a.py": {14, 15, 20}})
 
 

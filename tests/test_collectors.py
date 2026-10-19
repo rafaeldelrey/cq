@@ -1,5 +1,6 @@
 """Parsing the tools' output, and the collectors that need no subprocess."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -144,3 +145,44 @@ def test_vitest_coverage_and_floor(ctx: Context) -> None:
 @pytest.mark.parametrize(("fix", "label"), [({"version": "2.0.1"}, "2.0.1"), ({}, "yes"), (True, "yes"), (False, "no")])
 def test_npm_audit_fix_label(fix: object, label: str) -> None:
     assert vulnerabilities.fix_label(fix) == label
+
+
+def test_pip_audit_on_the_locked_requirements(ctx: Context, monkeypatch: pytest.MonkeyPatch) -> None:
+    audit = {
+        "dependencies": [
+            {"name": "requests", "version": "2.0.0", "vulns": []},
+            {
+                "name": "mcp",
+                "version": "1.29.0",
+                "vulns": [
+                    {"id": "CVE-2026-59951", "fix_versions": ["2.2.0", "1.30.0"]},
+                    {"id": "GHSA-xxxx", "fix_versions": ["1.30.0"]},
+                ],
+            },
+            {"name": "abandoned", "version": "0.1", "vulns": [{"id": "PYSEC-1"}]},
+        ]
+    }
+    commands: list[list[str]] = []
+
+    def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        commands.append(cmd)
+        if cmd[0] == "uv":
+            return "mcp==1.29.0\nrequests==2.0.0\n"
+        Path(cmd[cmd.index("-o") + 1]).write_text(json.dumps(audit))
+        return ""
+
+    monkeypatch.setattr(vulnerabilities, "run", fake_run)
+    (ctx.app_dir / "uv.lock").write_text("")
+    result = vulnerabilities.collect(ctx)
+    assert (result["packages"], result["vulnerable_packages"], result["vulnerabilities"]) == (3, 2, 3)
+    assert result["items"] == [
+        {"package": "mcp", "version": "1.29.0", "ids": "CVE-2026-59951, GHSA-xxxx", "fix": "1.30.0, 2.2.0"},
+        {"package": "abandoned", "version": "0.1", "ids": "PYSEC-1", "fix": "none yet"},
+    ]
+    assert "--frozen" in commands[0]  # the lock as it is, never re-resolved
+    assert "--no-deps" in commands[1]
+
+
+def test_pip_audit_needs_a_lock(ctx: Context) -> None:
+    with pytest.raises(ToolError, match=r"no uv\.lock"):
+        vulnerabilities.collect(ctx)

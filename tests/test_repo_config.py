@@ -1,5 +1,7 @@
-"""cq's own tool config stays in step with the defaults it was copied from."""
+"""cq's own files stay in step: its tool config with the defaults, its install lines with its version."""
 
+import re
+import tomllib
 from pathlib import Path
 
 from cq.config import DEFAULTS_DIR
@@ -27,3 +29,16 @@ def test_semgrep_rules_differ_from_the_defaults_only_in_the_cli_exclusion() -> N
             f'      exclude: ["**/tests/**", "**/__main__.py", {CLI_MODULES}]',
         )
     ]
+
+
+def test_every_install_line_names_this_version() -> None:
+    """The README and /setup-cq pin the tag users install; a release bumps them with the version."""
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    docs = [ROOT / "README.md", *sorted((ROOT / "skills").rglob("SKILL.md"))]
+    pins = {
+        (doc.relative_to(ROOT).as_posix(), tag)
+        for doc in docs
+        for tag in re.findall(r"rafaeldelrey/cq@(v[\w.]+)", doc.read_text())
+    }
+    assert pins, "no pinned install line found"
+    assert {tag for _, tag in pins} == {f"v{version}"}, sorted(pins)

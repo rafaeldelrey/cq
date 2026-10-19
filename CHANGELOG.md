@@ -4,6 +4,16 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.2.3] - 2026-10-18
+
+### Fixed
+
+- The README and `/setup-cq` installed cq 0.2.0, two releases behind (and without 0.2.1's mcp fix):
+  their install lines now name the current release. A test keeps every pinned install line equal to
+  the package's version, so a release can't leave them behind again.
+
+No measurement changed: snapshots from 0.2.2 and 0.2.3 compare directly.
+
 ## [0.2.2] - 2026-10-18
 
 cq measured on itself went from 348 findings to 19 (121 warnings to 2), over five rounds of

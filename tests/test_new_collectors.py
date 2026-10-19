@@ -400,7 +400,9 @@ def test_mutation_counts_survivors_by_function(tmp_path: Path, monkeypatch: pyte
     )
 
     def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
-        return results if "results" in cmd else "- return 1\n+ return 2" if "show" in cmd else ""
+        if "results" in cmd:
+            return results
+        return "- return 1\n+ return 2" if "show" in cmd else ""
 
     monkeypatch.setattr(mutation, "run", fake_run)
     ctx = make_ctx(tmp_path)

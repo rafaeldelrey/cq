@@ -1,5 +1,6 @@
 """The unified findings, and the parsing in the newer collectors."""
 
+import json
 from pathlib import Path
 
 from cq import findings
@@ -7,6 +8,8 @@ from cq.collectors import imports, mutation, semgrep
 from cq.collectors.dependencies import first_party_packages
 from cq.config import Settings, Target
 from cq.context import Context
+from cq.extractors import EXTRACTORS
+from cq.finding import Source
 
 
 def snapshot(targets: dict, errors: dict | None = None) -> dict:
@@ -49,8 +52,8 @@ def test_from_snapshot_normalises_and_orders_by_severity() -> None:
 
 
 def test_key_ignores_line_numbers() -> None:
-    a = findings.Source("app", "pyright").finding("error", "error", "bad type", "b.py", 4)
-    b = findings.Source("app", "pyright").finding("error", "error", "bad type", "b.py", 40)
+    a = Source("app", "pyright").finding("error", "error", "bad type", "b.py", 4)
+    b = Source("app", "pyright").finding("error", "error", "bad type", "b.py", 40)
     assert a["key"] == b["key"]
 
 
@@ -73,7 +76,7 @@ def test_mark_new() -> None:
 
 def test_write_jsonl(tmp_path: Path) -> None:
     out = tmp_path / "f.jsonl"
-    findings.write_jsonl([findings.Source("a", "t").finding("r", "info", "é")], out)
+    findings.write_jsonl([Source("a", "t").finding("r", "info", "é")], out)
     assert out.read_text().count("\n") == 1
     assert "é" in out.read_text()
 
@@ -226,3 +229,19 @@ def test_first_party_packages_name_direct_modules_in_src(tmp_path: Path) -> None
     target = Target(name="a", kind="python", root=".", source=("src",), tests=False)
     ctx = Context(target=target, checkout=tmp_path, raw_dir=tmp_path, settings=Settings(targets=(target,)))
     assert first_party_packages(ctx) == ["bar", "foo"]
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_every_extractor_keeps_its_findings_and_keys() -> None:
+    """A finding's key is what "new since the previous snapshot" compares, across months of history.
+
+    every_tool.snapshot.json exercises every extractor and branch. The expected output was produced by
+    the extractors before their 2026-10 rewrite, so a change here is a measurement change: old findings
+    of that tool would all look new. Update the expected file only with a CHANGELOG line saying so.
+    """
+    snap = json.loads((FIXTURES / "every_tool.snapshot.json").read_text())
+    expected = json.loads((FIXTURES / "every_tool.findings.json").read_text())
+    assert findings.from_snapshot(snap) == expected
+    assert {f["tool"] for f in expected} >= set(EXTRACTORS)

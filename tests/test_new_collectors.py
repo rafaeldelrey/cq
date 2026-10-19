@@ -11,10 +11,23 @@ from pathlib import Path
 import pytest
 
 from cq import findings, runner
-from cq.collectors import containers, dependencies, freshness, hotspots, links, scripts, semgrep, suppressions
+from cq.collectors import (
+    containers,
+    dependencies,
+    eslint,
+    freshness,
+    hotspots,
+    links,
+    mutation,
+    scripts,
+    semgrep,
+    suppressions,
+    typecheck,
+)
+from cq.collectors import tests as tests_collector
 from cq.config import DEFAULTS_DIR, Settings, Target
 from cq.context import Context
-from cq.proc import own
+from cq.proc import ToolError, own
 
 BRANCHY = """
 def branchy(x):
@@ -335,3 +348,64 @@ def test_a_folder_of_packages_names_each_package(tmp_path: Path) -> None:
     (tmp_path / "apps" / "core" / "billing" / "__init__.py").write_text("")
     (tmp_path / "apps" / "core" / "notes.txt").write_text("")
     assert dependencies.package_names(tmp_path / "apps" / "core") == ["billing"]
+
+
+def test_eslint_counts_every_message_and_lists_the_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    files = [
+        {
+            "filePath": str(tmp_path / "apps/demo/src/a.ts"),
+            "errorCount": 1,
+            "warningCount": 1,
+            "messages": [
+                {"ruleId": "no-unused-vars", "line": 2, "message": "x is unused"},
+                {"ruleId": None, "line": 1, "message": "Parsing error"},
+            ],
+        }
+    ]
+    (tmp_path / "apps/demo/node_modules").mkdir(parents=True)
+    monkeypatch.setattr(eslint, "run", lambda cmd, cwd, ok_codes: json.dumps(files))
+    result = eslint.collect(make_ctx(tmp_path, kind="typescript"))
+    assert (result["errors"], result["warnings"], result["by_rule"]) == (1, 1, {"no-unused-vars": 1, "parse": 1})
+    assert result["items"][1] == {"file": "apps/demo/src/a.ts", "line": 1, "code": "parse", "msg": "Parsing error"}
+
+
+def test_typecheck_reads_tsc_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    out = "src/a.ts(3,5): error TS2322: Type 'string' is not assignable.\nsrc/b.ts(9,1): error TS2322: Nope.\nnoise\n"
+    (tmp_path / "apps/demo/node_modules").mkdir(parents=True)
+    monkeypatch.setattr(typecheck, "run", lambda cmd, cwd, ok_codes: out)
+    result = typecheck.collect(make_ctx(tmp_path, kind="typescript"))
+    assert (result["errors"], result["by_rule"]) == (2, {"TS2322": 2})
+    assert result["items"][0] == {
+        "file": "src/a.ts",
+        "line": 3,
+        "code": "TS2322",
+        "msg": "Type 'string' is not assignable.",
+    }
+
+
+@pytest.mark.parametrize("module", ["eslint", "typecheck", "vitest"])
+def test_the_npm_tools_need_the_apps_install(tmp_path: Path, module: str) -> None:
+    collect = {"eslint": eslint.collect, "typecheck": typecheck.collect, "vitest": tests_collector.collect_typescript}
+    (tmp_path / "apps/demo").mkdir(parents=True)
+    with pytest.raises(ToolError, match="node_modules missing"):
+        collect[module](make_ctx(tmp_path, kind="typescript"))
+
+
+def test_mutation_counts_survivors_by_function(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "apps/demo/pkg").mkdir(parents=True)
+    (tmp_path / "apps/demo/pkg/mod.py").write_text("def f():\n    return 1\n")
+    (tmp_path / "apps/demo/pyproject.toml").write_text("[project]\nname = 'demo'\n")
+    results = (
+        "    pkg.mod.x_f__mutmut_1: killed\n    pkg.mod.x_f__mutmut_2: survived\n    pkg.mod.x_g__mutmut_1: survived\n"
+    )
+
+    def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        return results if "results" in cmd else "- return 1\n+ return 2" if "show" in cmd else ""
+
+    monkeypatch.setattr(mutation, "run", fake_run)
+    ctx = make_ctx(tmp_path)
+    ctx = replace(ctx, target=replace(ctx.target, mutation_paths=("pkg/mod.py",)))
+    result = mutation.collect(ctx)
+    assert (result["mutants"], result["killed"], result["survived"], result["score"]) == (3, 1, 2, 33.33)
+    assert result["by_function"] == {"pkg.mod.f": 1, "pkg.mod.g": 1}
+    assert result["items"][0]["diff"] == "- return 1\n+ return 2"

@@ -1,0 +1,558 @@
+{
+ "schema": 1,
+ "run_id": "fixture",
+ "short": "fixture",
+ "commit_date": "2026-10-18T00:00:00+00:00",
+ "targets": {
+  "app": {
+   "ruff": {
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 3,
+      "code": "F401",
+      "msg": "unused import"
+     },
+     {
+      "file": "app/a.py",
+      "line": 1,
+      "code": null,
+      "msg": "syntax error"
+     }
+    ],
+    "unformatted_files": 2
+   },
+   "pyright": {
+    "items": [
+     {
+      "file": "app/b.py",
+      "line": 7,
+      "code": "reportArgumentType",
+      "msg": "bad type"
+     }
+    ]
+   },
+   "tests": {
+    "results": {
+     "failed": 1,
+     "errors": 0
+    },
+    "coverage": {
+     "percent": 70,
+     "fail_under": 85,
+     "worst_files": [
+      {
+       "file": "app/c.py",
+       "percent": 20,
+       "missing": 40
+      },
+      {
+       "file": "app/d.py",
+       "percent": 80,
+       "missing": 2
+      }
+     ]
+    }
+   },
+   "complexity": {
+    "limit": 15,
+    "worst": [
+     {
+      "function": "app/a.py::big",
+      "cc": 20,
+      "rank": "D"
+     },
+     {
+      "function": "app/a.py::small",
+      "cc": 3,
+      "rank": "A"
+     }
+    ]
+   },
+   "cognitive": {
+    "limit": 15,
+    "worst": [
+     {
+      "function": "app/a.py::Cls.tangled",
+      "score": 22
+     }
+    ]
+   },
+   "maintainability": {
+    "worst": [
+     {
+      "file": "app/a.py",
+      "mi": 12.5,
+      "rank": "B",
+      "lines": 900
+     },
+     {
+      "file": "app/ok.py",
+      "mi": 80,
+      "rank": "A",
+      "lines": 10
+     }
+    ]
+   },
+   "dead_code": {
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 9,
+      "type": "function",
+      "msg": "unused function 'x'",
+      "confidence": 60
+     },
+     {
+      "file": "app/a.py",
+      "line": 12,
+      "type": "import",
+      "msg": "unused import 'os'",
+      "confidence": 90
+     }
+    ]
+   },
+   "duplication": {
+    "top": [
+     {
+      "a": "app/a.py:10",
+      "b": "app/b.py:40",
+      "lines": 12
+     }
+    ]
+   },
+   "docstrings": {
+    "worst_files": [
+     {
+      "file": "app/a.py",
+      "missing": 3
+     }
+    ],
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 1,
+      "symbol": "(module)"
+     },
+     {
+      "file": "app/a.py",
+      "line": 5,
+      "symbol": "big",
+      "start_line": 5,
+      "end_line": 30
+     }
+    ]
+   },
+   "semgrep": {
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 4,
+      "code": "cq-no-print",
+      "severity": "warning",
+      "msg": "print",
+      "at": "0a1b2c3d4e"
+     },
+     {
+      "file": "app/a.py",
+      "line": 8,
+      "code": "cq-no-print",
+      "severity": "warning",
+      "msg": "print",
+      "at": "0a1b2c3d4e"
+     }
+    ]
+   },
+   "imports": {
+    "items": [
+     {
+      "rule": "layers",
+      "chain": "app.ui -> app.db"
+     }
+    ]
+   },
+   "dependencies": {
+    "items": [
+     {
+      "code": "DEP001",
+      "msg": "'x' imported but missing",
+      "files": 2,
+      "file": "pyproject.toml",
+      "module": "x"
+     },
+     {
+      "code": "DEP002",
+      "msg": "'y' unused",
+      "files": 1,
+      "file": "pyproject.toml",
+      "module": "y"
+     },
+     {
+      "kind": "exports",
+      "name": "unusedFn",
+      "file": "web/a.ts",
+      "line": 3
+     }
+    ]
+   },
+   "vulnerabilities": {
+    "items": [
+     {
+      "package": "lodash",
+      "severity": "high",
+      "range": "<4.17.21",
+      "title": "proto pollution",
+      "fix": "4.17.21"
+     },
+     {
+      "package": "minimist",
+      "severity": "moderate",
+      "range": "<1.2.6",
+      "title": "proto",
+      "fix": "yes"
+     },
+     {
+      "package": "mcp",
+      "version": "1.29.0",
+      "ids": "CVE-2026-59951",
+      "fix": "1.30.0"
+     }
+    ]
+   },
+   "secrets": {
+    "tree_items": [
+     {
+      "code": "aws-key",
+      "file": "app/conf.py",
+      "line": 2
+     }
+    ],
+    "items": [
+     {
+      "code": "slack-token",
+      "file": "old/env",
+      "line": 1,
+      "commit": "abc1234",
+      "date": "2026-01-02",
+      "head_file": "deleted"
+     },
+     {
+      "code": "slack-token",
+      "file": "x/env",
+      "line": 4,
+      "commit": "def5678",
+      "date": "2026-02-03",
+      "head_file": "y/env"
+     },
+     {
+      "code": "github-pat",
+      "file": "z/env",
+      "line": 9,
+      "commit": "0123abc",
+      "date": "2026-03-04"
+     }
+    ],
+    "live_items": [
+     {
+      "code": "AWS",
+      "file": "old/env",
+      "line": 1,
+      "commit": "abc1234",
+      "date": "2026-01-02",
+      "head_file": "old/env"
+     }
+    ]
+   },
+   "mutation": {
+    "items": [
+     {
+      "mutant": "app.a.x_big__mutmut_3",
+      "function": "app.a.big",
+      "diff": "- a\n+ b"
+     }
+    ]
+   },
+   "hotspots": {
+    "window_days": 90,
+    "items": [
+     {
+      "file": "app/a.py",
+      "commits": 7,
+      "complexity": 140,
+      "worst_cc": 18,
+      "score": 980
+     },
+     {
+      "file": "app/b.py",
+      "commits": 2,
+      "complexity": 40,
+      "worst_cc": 5,
+      "score": 80
+     }
+    ]
+   },
+   "suppressions": {
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 3,
+      "kind": "noqa",
+      "reason": false,
+      "text": "# noqa: E501"
+     },
+     {
+      "file": "app/a.py",
+      "line": 6,
+      "kind": "type-ignore",
+      "reason": true,
+      "text": "# type: ignore[x] - stub is wrong"
+     }
+    ]
+   },
+   "containers": {
+    "dockerfile": {
+     "items": [
+      {
+       "file": "Dockerfile",
+       "line": 3,
+       "code": "DL3013",
+       "level": "warning",
+       "msg": "pin versions"
+      },
+      {
+       "file": "Dockerfile",
+       "line": 5,
+       "code": "DL3059",
+       "level": "info",
+       "msg": "consolidate RUN"
+      }
+     ]
+    },
+    "image": {
+     "image": "ghcr.io/acme/app:latest",
+     "items": [
+      {
+       "package": "openssl",
+       "version": "3.0.0",
+       "id": "CVE-1",
+       "severity": "high",
+       "fix": "3.0.1",
+       "title": "t"
+      },
+      {
+       "package": "glibc",
+       "version": "2.36",
+       "id": "CVE-2",
+       "severity": "critical",
+       "fix": "none yet",
+       "title": "u"
+      },
+      {
+       "package": "zlib",
+       "version": "1.2",
+       "id": "CVE-3",
+       "severity": "high",
+       "fix": "none yet",
+       "title": "v"
+      }
+     ]
+    }
+   },
+   "freshness": {
+    "items": [
+     {
+      "package": "fastapi",
+      "current": "0.1",
+      "latest": "1.0",
+      "major": true,
+      "years": 1.5
+     },
+     {
+      "package": "httpx",
+      "current": "0.27",
+      "latest": "0.28",
+      "major": false,
+      "years": 0.2
+     }
+    ]
+   },
+   "radarlint": {
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 2,
+      "code": "python:S1192",
+      "severity": "warning",
+      "msg": "dup literal",
+      "at": "0a1b2c3d4e"
+     }
+    ]
+   },
+   "smells": {
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 2,
+      "code": "function-complexity",
+      "msg": "complex",
+      "at": "0a1b2c3d4e"
+     }
+    ]
+   },
+   "aislop": {
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 2,
+      "code": "ai-slop/python-print-debug",
+      "severity": "warning",
+      "msg": "print",
+      "at": "0a1b2c3d4e"
+     }
+    ]
+   },
+   "pyscn": {
+    "items": [
+     {
+      "a": "app/a.py:10",
+      "b": "app/b.py:40",
+      "lines": 14,
+      "similarity": 0.853,
+      "type": 4
+     }
+    ]
+   },
+   "fallow": {
+    "clones": [
+     {
+      "a": "web/a.ts:1",
+      "b": "web/b.ts:9",
+      "lines": 20,
+      "fingerprint": "fp1"
+     },
+     {
+      "a": "web/c.ts:1",
+      "b": "web/d.ts:9",
+      "lines": 8
+     }
+    ],
+    "items": [
+     {
+      "file": "web/a.ts",
+      "line": 4,
+      "function": "render",
+      "severity": "warning",
+      "cyclomatic": 20,
+      "cognitive": 30,
+      "crap": 120,
+      "at": "0a1b2c3d4e"
+     }
+    ]
+   },
+   "cspell": {
+    "items": [
+     {
+      "file": "app/a.py",
+      "line": 5,
+      "at": "0a1b2c3d4e"
+     }
+    ]
+   },
+   "eslint": {
+    "items": [
+     {
+      "file": "web/a.ts",
+      "line": 2,
+      "code": "no-unused-vars",
+      "msg": "unused"
+     }
+    ]
+   },
+   "typecheck": {
+    "items": [
+     {
+      "file": "web/a.ts",
+      "line": 9,
+      "code": "TS2322",
+      "msg": "bad assignment"
+     }
+    ]
+   },
+   "size": {
+    "sloc": 100
+   }
+  },
+  "repo": {
+   "scripts": {
+    "shell": {
+     "items": [
+      {
+       "file": "s.sh",
+       "line": 3,
+       "code": "SC2086",
+       "level": "warning",
+       "msg": "quote"
+      },
+      {
+       "file": "s.sh",
+       "line": 4,
+       "code": "SC2034",
+       "level": "style",
+       "msg": "unused"
+      }
+     ]
+    },
+    "workflows": {
+     "items": [
+      {
+       "file": ".github/workflows/ci.yml",
+       "line": 7,
+       "code": "expression",
+       "msg": "bad"
+      }
+     ]
+    },
+    "workflow_security": {
+     "items": [
+      {
+       "file": ".github/workflows/ci.yml",
+       "line": 9,
+       "code": "unpinned-uses",
+       "msg": "pin it",
+       "at": "0a1b2c3d4e"
+      }
+     ]
+    }
+   },
+   "links": {
+    "items": [
+     {
+      "file": "README.md",
+      "target": "docs/gone.md",
+      "status": "Cannot find file"
+     }
+    ]
+   },
+   "vale": {
+    "items": [
+     {
+      "file": "README.md",
+      "line": 1,
+      "code": "Words",
+      "severity": "warning",
+      "msg": "AI tell",
+      "match": "Delve",
+      "at": "0a1b2c3d4e"
+     }
+    ]
+   },
+   "dead_code": {
+    "skipped": "not a python target"
+   }
+  }
+ },
+ "errors": {
+  "app.mutation": "ToolError: mutmut crashed\nTraceback ...",
+  "web": "not present at this commit"
+ }
+}

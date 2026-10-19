@@ -65,7 +65,7 @@ def collect(ctx: Context) -> dict:
         statuses = {m["name"]: m["status"].strip() for m in map(RESULT.match, results.splitlines()) if m}
         survivors = [n for n, s in statuses.items() if s == "survived"]
         diffs = {n: run(mutmut(workspace, "show", n), workspace).strip() for n in survivors[:SHOW_LIMIT]}
-    counts: dict[str, int] = {}
+    counts: dict[str, int] = {}  # in the order mutmut reports them, unlike the ranked by_function
     for status in statuses.values():
         counts[status] = counts.get(status, 0) + 1
     killed = counts.get("killed", 0)

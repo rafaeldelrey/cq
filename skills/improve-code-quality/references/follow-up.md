@@ -1,24 +1,28 @@
-# Following the PR to ready
+# Following a PR to ready
 
-**Ready** means three things:
-- CI is green on the PR's head commit;
-- Codex has reviewed that head;
+A PR is **ready** when all three hold:
+- CI is green on its head commit;
+- the head has been reviewed: by Codex where the repo has it, otherwise by a fresh-context Claude review;
 - no review thread is open.
 
-In a repo with a merge-gate hook and a status helper (for example `ship_pr.py status`), the gate's own answer is the test.
+A repo with a merge gate and a status helper decides readiness with its own answer, so use it when there is one. A helper copied from another repo can fall behind that repo's gate version.
 
 ## Open it
 
-Bump the version and add the changelog entry per the repo's rules. Write the body with the report's numbers, the decision, the config ledger and every review outcome, and end it with the session's attribution line. Write the body to a file, push, then:
+1. Bump the version and add the changelog entry, per the repo's rules.
+2. Write the body: the report's numbers, the decision, the config ledger and every review outcome, ending with the session's attribution line.
+3. Push, then:
 
-```bash
-gh pr create --base main --head <branch> --title "<summary>" --body-file <file>
-```
+   ```bash
+   gh pr create --base main --head <branch> --title "<summary>" --body-file <body file>
+   ```
 
 ## The cycle, once per head
 
-1. **CI:** `gh pr checks <n> --watch --fail-fast`. On a failure, read the log (`gh run view <run> --log-failed`), fix, commit and push, then start the cycle again for the new head.
-2. **Ask Codex**, once per head. Write this comment to a file and post it with `gh pr comment <n> --body-file <file>`:
+1. **CI:** `gh pr checks <n> --watch --fail-fast`.
+   - On a failure, read the log (`gh run view <run> --log-failed`), fix, commit and push.
+   - Then start the cycle again for the new head.
+2. **Ask for the review,** once per head. Where the repo has Codex, write this comment to a file and post it with `gh pr comment <n> --body-file <file>`:
 
    ```
    @codex review
@@ -26,24 +30,23 @@ gh pr create --base main --head <branch> --title "<summary>" --body-file <file>
    <!-- merge-gate head: <full head sha> -->
    ```
 
-   A review Codex ran on its own, when the PR opened for example, doesn't count.
-3. **Wait for its answer:** a 👍 reaction on that comment, or a review or comment that names this head ("Reviewed commit: <sha>"). Check every 2 minutes, for up to 30 minutes. Codex takes 3–6. Run the wait in the background so the session stays free.
-   - **Codex also posts a "Codex Review Summary" status comment** that names the head while the review is still running. Its hidden `<!-- codex-review-state:v1 {…} -->` JSON carries `code_review.status`. That comment is an answer only once the status for this head is no longer `running`.
-4. **Handle each unresolved thread:**
+   Where the repo has no Codex, or Codex answers that it is out of quota, a fresh-context Claude subagent reviews the head instead. Post its review on the head with `gh pr review`.
+3. **Wait for the answer,** in the background, checking every 2 minutes for up to 30. Codex takes 3–6. These count as Codex's answer:
+   - a 👍 on the request;
+   - a review on the head commit;
+   - a comment naming the head ("Reviewed commit: <sha>").
+
+   Codex's "Codex Review Summary" comment names the head while its review is still running. It counts only once its hidden `codex-review-state` JSON shows `code_review.status` for this head as something other than `running`. A review Codex ran on its own, for example when the PR opened, doesn't count.
+4. **Answer every unresolved thread:**
    - On the loop's path, or against the repo's conventions: fix it, and reply "Fixed in `<sha7>`. <what changed>".
-   - Off-path, or something the repo's review rules say not to flag: reply "Declined: <reason>".
+   - Off-path, or something the repo's review rules leave alone: reply "Declined: <reason>".
    - A late duplicate of an earlier fix: reply "Already fixed in `<sha7>`".
 
-   Resolve each thread after replying (GraphQL `resolveReviewThread`). Never write `@codex` in a reply. Push all the round's fixes together, then start again at step 1.
-5. **Ready:** CI green, Codex's answer names the head, and no thread is open.
+   Resolve each thread once answered (GraphQL `resolveReviewThread`). Never write `@codex` in a reply. Push all the cycle's fixes together, then start again at 1.
 
-## When to stop and ask instead
+## Stop and ask the user instead when
 
-- Codex finds on-path problems in a third cycle in a row.
-- Codex is silent through two 30-minute waits. If it says it is out of quota, a fresh-context Claude review stands in: post it as a PR review that names the head.
-- CI fails for a reason the branch didn't cause (a runner or a secret).
-- The repo's rules say the user lands this kind of PR by hand.
-
-## What never happens
-
-Landing the PR is the user's call. The loop ends at ready and asks.
+- the reviewer finds on-path problems in a third cycle in a row;
+- Codex stays silent through two 30-minute waits;
+- CI fails for a reason the branch didn't cause, such as a runner, a secret, or a bug in the gate itself;
+- the repo's rules say the user lands this kind of PR by hand.

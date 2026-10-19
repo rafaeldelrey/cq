@@ -284,10 +284,10 @@ or, in Claude Code:
   `/code-quality report`, `/code-quality backfill <since>` and `/code-quality gate` work too.
 - **`/improve-code-quality`** improves the repo in rounds, on its own branch: measure with cq, fix,
   review the fixes, fix what the review finds, test, commit, until the stop rule you pick. It asks
-  four questions first (when to stop, whether it may silence false positives in config, how the
-  work lands, what's in scope). It ends with a report that separates what code fixed from what
-  config hid, and, if you chose a PR, with a PR that CI and Codex have already cleared. It never
-  merges. Only you start it: type it in the repo.
+  first: when to stop, whether it may silence false positives in config, how the work lands, and
+  what's in scope. It ends with a report that separates what code fixed from what config hid, and,
+  if you chose a PR, with a PR that CI and a reviewer (Codex, or a fresh Claude review) have
+  already cleared. It never merges. Only you start it: type it in the repo.
 
 To give a whole team the skills, install the plugin for the project: `cq init --skills project`,
 or `claude plugin install cq@cq --scope project`. Commit the `.claude/settings.json` it writes.

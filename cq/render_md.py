@@ -253,6 +253,11 @@ def cut_section(cuts: list[dict]) -> list[str]:
     return [f"**Lists cut to fit** (the snapshot's totals are the real counts): {'; '.join(parts)}", ""]
 
 
+def detail_sections(target: dict, found: list[dict]) -> list[str]:
+    """The worst offenders and the newer tools' findings for one target (the report's details)."""
+    return [*hot_spots(target), *tool_sections(found)]
+
+
 def render(history: list[dict], window_days: int = 30, details: bool = True) -> str:
     """The whole report."""
     latest = history[-1]
@@ -269,12 +274,11 @@ def render(history: list[dict], window_days: int = 30, details: bool = True) -> 
     if len(history) > 1:
         lines += since_previous([r for rows in all_rows.values() for r in rows])
     lines += errors_section(latest["errors"])
+    cuts = findings.cut_lists(latest)
     for name, rows in all_rows.items():
-        lines += metrics_table(name, rows, window_days)
-        lines += cut_section([c for c in findings.cut_lists(latest) if c["target"] == name])
         mine = [f for f in all_findings if f["target"] == name]
+        lines += metrics_table(name, rows, window_days)
+        lines += cut_section([c for c in cuts if c["target"] == name])
         lines += new_findings_section(mine)
-        if details:
-            lines += hot_spots(latest["targets"][name])
-            lines += tool_sections(mine)
+        lines += detail_sections(latest["targets"][name], mine) if details else []
     return "\n".join(lines).rstrip() + "\n"

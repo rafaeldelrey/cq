@@ -28,6 +28,7 @@ gh pr create --base main --head <branch> --title "<summary>" --body-file <file>
 
    A review Codex ran on its own, when the PR opened for example, doesn't count.
 3. **Wait for its answer:** a 👍 reaction on that comment, or a review or comment that names this head ("Reviewed commit: <sha>"). Check every 2 minutes, for up to 30 minutes. Codex takes 3–6. Run the wait in the background so the session stays free.
+   - **Codex also posts a "Codex Review Summary" status comment** that names the head while the review is still running. Its hidden `<!-- codex-review-state:v1 {…} -->` JSON carries `code_review.status`. That comment is an answer only once the status for this head is no longer `running`.
 4. **Handle each unresolved thread:**
    - On the loop's path, or against the repo's conventions: fix it, and reply "Fixed in `<sha7>`. <what changed>".
    - Off-path, or something the repo's review rules say not to flag: reply "Declined: <reason>".

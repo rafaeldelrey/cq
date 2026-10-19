@@ -135,8 +135,8 @@ Data: /Users/you/work/my-repo/.cq (history/ and runs/, never committed)
 2. **qlty's config.** It writes `.qlty/qlty.toml` when the repo has none. Without that file the
    qlty-based tools don't run: radarlint, smells, workflow security and the gate's line checks
    report an error saying "run `cq init`".
-3. **The Claude Code plugin** (the `/code-quality`, `/setup-cq` and `/improve-code-quality` skills). It shows the two
-   `claude` commands for each choice, then asks:
+3. **The Claude Code plugin** (the `/code-quality`, `/setup-cq` and `/improve-code-quality`
+   skills). It shows the two `claude` commands for each choice, then asks:
    - **u, just you:** installed for your user, in every repo, with nothing written to this one;
    - **p, this repo:** written to the repo's `.claude/settings.json`; commit it, and everyone who
      opens the repo in Claude Code gets the skills;

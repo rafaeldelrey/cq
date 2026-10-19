@@ -6,16 +6,7 @@
     "name": "Rafael Del Rey"
   },
   "repository": "https://github.com/rafaeldelrey/cq",
-  "keywords": [
-    "code-quality",
-    "coverage",
-    "complexity",
-    "dead-code",
-    "duplication",
-    "secrets",
-    "ai-slop",
-    "pr-gate"
-  ],
+  "keywords": ["code-quality", "coverage", "complexity", "dead-code", "duplication", "secrets", "ai-slop", "pr-gate"],
   "skills": [
     "./skills/code-quality",
     "./skills/setup-cq",

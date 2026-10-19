@@ -44,6 +44,10 @@ A repo with a merge gate and a status helper decides readiness with its own answ
 
    Resolve each thread once answered (GraphQL `resolveReviewThread`). Never write `@codex` in a reply. Push all the cycle's fixes together, then start again at 1.
 
+## Before calling it ready
+
+When the cycle changed code, the report's numbers describe an older commit. Run `cq run` on the head, check that it is complete (SKILL.md step 5), and refresh the report and the PR body from it: the "after" totals, the targets, and the code-only row when a fix touched code or config the split depends on. Pushing those edits starts the cycle again only if they change files the checks cover.
+
 ## Stop and ask the user instead when
 
 - the reviewer finds on-path problems in a third cycle in a row;

@@ -398,7 +398,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.2.3    # move to another tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.2.3    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

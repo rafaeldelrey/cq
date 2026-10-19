@@ -4,7 +4,7 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
-## [0.2.3] - 2026-10-19
+## [0.2.3] - 2026-10-18
 
 ### Fixed
 

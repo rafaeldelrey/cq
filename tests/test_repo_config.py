@@ -38,7 +38,7 @@ def test_every_install_line_names_this_version() -> None:
     pins = {
         (doc.relative_to(ROOT).as_posix(), tag)
         for doc in docs
-        for tag in re.findall(r"rafaeldelrey/cq@(v[\w.]+)", doc.read_text())
+        for tag in re.findall(r"rafaeldelrey/cq(?:\.git)?@([\w.-]*\w)", doc.read_text())
     }
     assert pins, "no pinned install line found"
     assert {tag for _, tag in pins} == {f"v{version}"}, sorted(pins)

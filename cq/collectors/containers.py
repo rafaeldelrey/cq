@@ -17,7 +17,7 @@ from cq.proc import ToolError, run
 KINDS = ("python", "typescript")
 
 TRIVY_LEVELS = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN")
-HIGH = ("CRITICAL", "HIGH")  # the levels listed one by one; the rest are counted
+HIGH_LEVELS = ("CRITICAL", "HIGH")  # the levels listed one by one; the rest are counted
 IMAGE_MAX_AGE = timedelta(days=7)  # older commits don't get today's image judged against them
 
 
@@ -62,7 +62,7 @@ def high_items(vulns: list[dict]) -> list[dict]:
     items = []
     for v in sorted(vulns, key=lambda v: TRIVY_LEVELS.index(v.get("Severity", "UNKNOWN"))):
         key = (v["PkgName"], v["VulnerabilityID"])
-        if key in seen or v.get("Severity") not in HIGH:
+        if key in seen or v.get("Severity") not in HIGH_LEVELS:
             continue
         seen.add(key)
         items.append(
@@ -94,7 +94,7 @@ def trivy(ctx: Context) -> dict:
     data = json.loads(out_file.read_text())
     vulns = [v for r in data.get("Results", []) for v in (r.get("Vulnerabilities") or [])]
     counts = {level.lower(): sum(1 for v in vulns if v.get("Severity") == level) for level in TRIVY_LEVELS}
-    fixable = [v for v in vulns if v.get("FixedVersion") and v.get("Severity") in HIGH]
+    fixable = [v for v in vulns if v.get("FixedVersion") and v.get("Severity") in HIGH_LEVELS]
     return {
         "image": image,
         **image_metadata(data),

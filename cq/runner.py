@@ -184,22 +184,23 @@ def target_problem(target: Target, checkout: Path, settings: Settings) -> str | 
     return prepare(target, checkout, settings)
 
 
-def measure_target(ctx: Context, tools: list[str] | None, errors: dict[str, str | None], say: RunLog) -> dict:
-    """Every collector that applies to the target; a failed one goes into ``errors`` as ``<target>.<tool>``."""
+def measure_target(ctx: Context, tools: list[str] | None, say: RunLog) -> tuple[dict, dict[str, str]]:
+    """Every collector that applies to the target: the results by tool, and the errors as ``<target>.<tool>``."""
     name = ctx.target.name
     measured: dict = {}
+    errors: dict[str, str] = {}
     for tool, module in COLLECTORS.items():
         if ctx.target.kind not in module.KINDS or (tools and tool not in tools):
             continue
         say(f"  {name:<17} {tool:<16}", end="")
         result, error = run_collector(ctx, tool)
         if error or result is None:
-            errors[f"{name}.{tool}"] = error
-            say(f"ERROR {(error or '').splitlines()[0][:100]}  (see {name}/{tool}.log)")
+            errors[f"{name}.{tool}"] = error or "the collector returned no result"
+            say(f"ERROR {errors[f'{name}.{tool}'].splitlines()[0][:100]}  (see {name}/{tool}.log)")
         else:
             measured[tool] = result
             say(f"{result['seconds']:>6.1f}s")
-    return measured
+    return measured, errors
 
 
 def snapshot(
@@ -238,7 +239,8 @@ def snapshot(
             raw_dir = settings.runs_dir / run_id / target.name
             raw_dir.mkdir(parents=True, exist_ok=True)
             ctx = Context(target=target, checkout=checkout, raw_dir=raw_dir, settings=settings, full=full)
-            snap["targets"][target.name] = measure_target(ctx, tools, snap["errors"], say)
+            snap["targets"][target.name], errors = measure_target(ctx, tools, say)
+            snap["errors"] |= errors
     return snap
 
 

@@ -338,3 +338,20 @@ def test_gate_runs_from_the_command_line(repo: Path, monkeypatch: pytest.MonkeyP
     text = next((repo / ".cq" / "runs").glob("*_gate_head123/gate.md")).read_text()
     assert "(warn mode)" in text and "1 tool errors" in text
     assert "`qlty`: qlty printed no SARIF" in text
+
+
+def test_a_collector_that_fails_is_listed_as_a_tool_error(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(ctx: object) -> dict:
+        raise RuntimeError("the tool crashed")
+
+    monkeypatch.setattr(runner.COLLECTORS["size"], "collect", boom)
+    assert run_cq(repo, "run", "--tool", "size") == 0
+    run_dir = latest_run(repo / ".cq" / "runs")
+    assert run_dir is not None
+    snap = json.loads((run_dir / "snapshot.json").read_text())
+    assert snap["errors"] == {"acme.size": "RuntimeError: the tool crashed"}
+    assert "acme.size" not in snap["targets"]["acme"]
+    assert "## Tool errors\n\n- `acme.size`: RuntimeError: the tool crashed" in (run_dir / "report.md").read_text()
+    assert "ERROR RuntimeError: the tool crashed  (see acme/size.log)" in (run_dir / "run.log").read_text()

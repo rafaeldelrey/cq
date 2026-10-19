@@ -54,28 +54,34 @@ def titled_list(title: str, lines: list[str]) -> list[str]:
     return [f"**{title}**", *(f"- {line}" for line in lines), ""] if lines else []
 
 
-def part(target: dict, tool: str, key: str) -> list[dict]:
-    """One list from a tool's result; empty when the tool didn't run (its error is listed in the report)."""
-    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
-    return target.get(tool, {}).get(key, [])
+def tool_result(target: dict, tool: str) -> dict:
+    """A tool's result in one target; empty when the tool didn't run (its error is listed in the report)."""
+    return target.get(tool, {})
+
+
+def tool_list(target: dict, tool: str, key: str) -> list[dict]:
+    """One list from a tool's result; empty when the tool didn't run or listed nothing."""
+    return tool_result(target, tool).get(key, [])
 
 
 def complexity_spots(target: dict) -> list[tuple[str, list[str]]]:
     """The most complex functions and the least maintainable files."""
-    # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
-    limit = target.get("complexity", {}).get("limit")
+    limit = tool_result(target, "complexity").get("limit")
     return [
         (
             f"Highest cyclomatic complexity (limit {limit})",
-            [f"`{w['function']}` CC {w['cc']} ({w['rank']})" for w in part(target, "complexity", "worst")[:8]],
+            [f"`{w['function']}` CC {w['cc']} ({w['rank']})" for w in tool_list(target, "complexity", "worst")[:8]],
         ),
         (
             "Highest cognitive complexity",
-            [f"`{w['function']}` {w['score']}" for w in part(target, "cognitive", "worst")[:8]],
+            [f"`{w['function']}` {w['score']}" for w in tool_list(target, "cognitive", "worst")[:8]],
         ),
         (
             "Lowest maintainability",
-            [f"`{w['file']}` MI {w['mi']} ({w['lines']} lines)" for w in part(target, "maintainability", "worst")[:5]],
+            [
+                f"`{w['file']}` MI {w['mi']} ({w['lines']} lines)"
+                for w in tool_list(target, "maintainability", "worst")[:5]
+            ],
         ),
     ]
 
@@ -83,8 +89,8 @@ def complexity_spots(target: dict) -> list[tuple[str, list[str]]]:
 def hygiene_spots(target: dict) -> list[tuple[str, list[str]]]:
     """The least-covered files, high-confidence dead code, the largest clones and the missing docstrings."""
     # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a tool that didn't run has no section; its error is listed in the report
-    coverage = target.get("tests", {}).get("coverage", {}).get("worst_files", [])
-    dead = [i for i in part(target, "dead_code", "items") if i["confidence"] >= 90]
+    coverage = tool_result(target, "tests").get("coverage", {}).get("worst_files", [])
+    dead = [i for i in tool_list(target, "dead_code", "items") if i["confidence"] >= 90]
     return [
         (
             "Least-covered files",
@@ -93,11 +99,11 @@ def hygiene_spots(target: dict) -> list[tuple[str, list[str]]]:
         ("Dead code, high confidence", [f"`{i['file']}:{i['line']}` {i['msg']} ({i['confidence']}%)" for i in dead]),
         (
             "Largest clones",
-            [f"{c['lines']} lines: `{c['a']}` ≈ `{c['b']}`" for c in part(target, "duplication", "top")[:6]],
+            [f"{c['lines']} lines: `{c['a']}` ≈ `{c['b']}`" for c in tool_list(target, "duplication", "top")[:6]],
         ),
         (
             "Most missing docstrings",
-            [f"`{f['file']}` {f['missing']} missing" for f in part(target, "docstrings", "worst_files")[:6]],
+            [f"`{f['file']}` {f['missing']} missing" for f in tool_list(target, "docstrings", "worst_files")[:6]],
         ),
     ]
 
@@ -107,7 +113,10 @@ def checker_spots(target: dict) -> list[tuple[str, list[str]]]:
     return [
         (
             f"{tool} findings",
-            [f"`{i['file']}:{i['line']}` {i.get('code') or ''} {i['msg']}" for i in part(target, tool, "items")[:10]],
+            [
+                f"`{i['file']}:{i['line']}` {i.get('code') or ''} {i['msg']}"
+                for i in tool_list(target, tool, "items")[:10]
+            ],
         )
         for tool in ("ruff", "pyright", "eslint", "typecheck")
     ]

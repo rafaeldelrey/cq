@@ -15,6 +15,8 @@ from cq.metrics import METRICS
 from cq.render_md import measurement_changes
 
 TEMPLATE = Path(__file__).with_name("dashboard.html")
+HEADING = re.compile(r"^(#{1,4})\s+(.*)")  # the analysis' Markdown: headings and list items
+LIST_ITEM = re.compile(r"^\s*([-*]|\d+\.)\s+(.*)")
 
 
 def history_until(history: list[dict], snap: dict) -> list[dict]:
@@ -65,10 +67,6 @@ def inline(text: str) -> str:
     return out
 
 
-HEADING = re.compile(r"^(#{1,4})\s+(.*)")
-LIST_ITEM = re.compile(r"^\s*([-*]|\d+\.)\s+(.*)")
-
-
 class HtmlBuilder:
     """The HTML for markdown_to_html, built one Markdown line at a time."""
 
@@ -111,6 +109,11 @@ class HtmlBuilder:
             self.list_kind = kind
         self.out.append(f"<li>{inline(m[2])}</li>")
 
+    def document(self) -> str:
+        """The HTML so far, with any open paragraph or list closed."""
+        self.blank()
+        return "\n".join(self.out)
+
     def text(self, line: str) -> None:
         """A line of a paragraph: it ends any list."""
         self.end_list()
@@ -130,8 +133,7 @@ def markdown_to_html(md: str) -> str:
             html.item(item)
         else:
             html.text(line)
-    html.blank()
-    return "\n".join(html.out)
+    return html.document()
 
 
 def build(

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from cq import findings, runner
-from cq.collectors import containers, freshness, hotspots, links, scripts, semgrep, suppressions
+from cq.collectors import containers, dependencies, freshness, hotspots, links, scripts, semgrep, suppressions
 from cq.config import DEFAULTS_DIR, Settings, Target
 from cq.context import Context
 from cq.proc import own
@@ -295,3 +295,43 @@ def test_a_missing_required_key_lands_in_the_snapshot_as_a_tool_error(
     result, error = runner.run_collector(make_ctx(tmp_path, kind="repo", link_paths=("wiki",)), "links")
     assert result is None
     assert error == "KeyError: 'error_map'"
+
+
+def test_high_items_keep_each_critical_or_high_advisory_once() -> None:
+    medium = {"PkgName": "zlib", "VulnerabilityID": "CVE-2", "Severity": "MEDIUM"}
+    critical = {"PkgName": "glibc", "VulnerabilityID": "CVE-3", "Severity": "CRITICAL"}
+    items = containers.high_items([TRIVY_VULN, medium, critical, TRIVY_VULN])
+    assert [(i["package"], i["severity"], i["fix"]) for i in items] == [
+        ("glibc", "critical", "none yet"),
+        ("openssl", "high", "3.0.1"),
+    ]
+
+
+def test_knip_issues_by_kind(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    knip = {
+        "files": ["src/old.ts"],
+        "issues": [
+            {
+                "file": "src/a.ts",
+                "exports": [{"name": "unusedFn", "line": 3}],
+                "dependencies": ["left-pad"],
+                "types": [],
+                "owners": "not a list",
+            }
+        ],
+    }
+    monkeypatch.setattr(dependencies, "run", lambda cmd, cwd, ok_codes: json.dumps(knip))
+    result = dependencies.collect_typescript(make_ctx(tmp_path, kind="typescript"))
+    assert result["by_kind"] == {"exports": 1, "dependencies": 1, "files": 1}
+    assert result["items"] == [
+        {"file": "apps/demo/src/a.ts", "kind": "exports", "name": "unusedFn", "line": 3},
+        {"file": "apps/demo/src/a.ts", "kind": "dependencies", "name": "left-pad", "line": None},
+        {"file": "apps/demo/src/old.ts", "kind": "files", "name": "unused file", "line": None},
+    ]
+
+
+def test_a_folder_of_packages_names_each_package(tmp_path: Path) -> None:
+    (tmp_path / "apps" / "core" / "billing").mkdir(parents=True)
+    (tmp_path / "apps" / "core" / "billing" / "__init__.py").write_text("")
+    (tmp_path / "apps" / "core" / "notes.txt").write_text("")
+    assert dependencies.package_names(tmp_path / "apps" / "core") == ["billing"]

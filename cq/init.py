@@ -7,7 +7,6 @@ It also offers cq's Claude Code plugin, for the user or for the repo.
 """
 
 import shutil
-import sys
 from pathlib import Path
 
 from cq import plugin
@@ -22,7 +21,7 @@ from cq.config import (
     Target,
     find_config,
 )
-from cq.console import ask, confirm, out
+from cq.console import ask, confirm, is_terminal, out
 
 # The gate's recommended blocking list: what a branch should never add.
 BLOCK = (
@@ -143,7 +142,7 @@ def ask_scope() -> str:
         runs = " && ".join(" ".join(cmd) for cmd in plugin.commands("claude", scope))
         out(f"  {key}  {note}\n       runs: {runs}")
     out("  s  skip")
-    if not sys.stdin.isatty():
+    if not is_terminal():
         out("[u/p/s] s (not a terminal: pass --skills user|project|none)")
         return "none"
     answer = ask("[u/p/s] ").strip().lower()[:1]

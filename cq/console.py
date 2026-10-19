@@ -29,11 +29,16 @@ def ask(prompt: str) -> str:
     return input(prompt)
 
 
+def is_terminal() -> bool:
+    """Whether someone can answer a question: stdin is a terminal, not a pipe or CI."""
+    return sys.stdin.isatty()
+
+
 def confirm(question: str, *, assume_yes: bool) -> bool:
     """A y/N answer; no answer without a terminal, unless ``assume_yes``."""
     if assume_yes:
         return True
-    if not sys.stdin.isatty():
+    if not is_terminal():
         out(f"{question} [y/N] no (not a terminal: pass --yes)")
         return False
     return ask(f"{question} [y/N] ").strip().lower() in ("y", "yes")

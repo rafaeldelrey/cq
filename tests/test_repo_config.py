@@ -7,14 +7,14 @@ from pathlib import Path
 from cq.config import DEFAULTS_DIR, QLTY_IGNORE_DEFAULT
 
 ROOT = Path(__file__).resolve().parent.parent
-CLI_MODULES = '"cq/console.py"'
+PRINT_ALLOWED = '"cq/console.py"'  # the one module that prints
 
 
 def test_qlty_config_is_cqs_default() -> None:
     assert (ROOT / ".qlty" / "qlty.toml").read_text() == (DEFAULTS_DIR / "qlty.toml").read_text()
 
 
-def test_semgrep_rules_differ_from_the_defaults_only_in_the_cli_exclusion() -> None:
+def test_semgrep_rules_differ_from_the_defaults_only_in_the_console_exclusion() -> None:
     assert (ROOT / ".semgrep" / "tests" / "cq-tests.yml").read_text() == (
         DEFAULTS_DIR / "semgrep" / "tests" / "cq-tests.yml"
     ).read_text()
@@ -26,7 +26,7 @@ def test_semgrep_rules_differ_from_the_defaults_only_in_the_cli_exclusion() -> N
     assert changed == [
         (
             '      exclude: ["**/tests/**", "**/__main__.py"]',
-            f'      exclude: ["**/tests/**", "**/__main__.py", {CLI_MODULES}]',
+            f'      exclude: ["**/tests/**", "**/__main__.py", {PRINT_ALLOWED}]',
         )
     ]
 

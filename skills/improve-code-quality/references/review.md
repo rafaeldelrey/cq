@@ -5,8 +5,8 @@ Two axes, in two fresh-context subagents launched together. The diff is the roun
 ## With Matt Pocock's plugin
 
 When the Skill tool knows `mattpocock-skills:code-review`, invoke it with the round's first commit's parent as the fixed point. Give it these sources:
-- **Standards:** the repo's code standards and review rules from step 2.
-- **Spec:** the decision from step 3: the config policy, the scope, and the out-of-bounds paths.
+- **Standards:** the repo's code standards and review rules from step 1, and the out-of-bounds paths.
+- **Spec:** the decision from step 4: the config policy and the scope.
 
 ## Without it
 

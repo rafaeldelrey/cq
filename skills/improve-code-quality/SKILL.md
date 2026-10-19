@@ -10,38 +10,50 @@ argument-hint: "[resume]"
 An unattended loop of **rounds** on the repo you are in. Each round measures with cq, fixes what it reports, reviews the fixes, fixes what the review finds, runs the tests and commits. The loop stops by the rule the user picks. If the answer was a PR, it ends with a PR that is **ready**: CI is green on the head, Codex has reviewed the head, and no thread is open. Then it asks the user. It never merges.
 
 Two words carry the loop:
-- **Round:** one pass through steps 4–9, ending in its commits.
+- **Round:** one pass through steps 5–9, ending in its commits.
 - **Plateau:** two rounds in a row that each move the findings total by less than 10% of the round before, or by fewer than 5 findings.
 
-## 1. cq is ready
-
-Run `cq --version` and `cq doctor` from the repo's root. If `cq` is missing, `doctor` reports a required tool missing, or the repo has no cq settings and no `.qlty/qlty.toml`, invoke `/cq:setup-cq` (it asks before installing anything), then continue.
-
-Done when `cq doctor` shows every required tool present and `cq run --tool size` succeeds.
-
-## 2. The repo's rules
+## 1. The repo's rules
 
 Read `AGENTS.md` (or `CLAUDE.md`) and any rule files it links.
 
-- **With a `## Shipping` section:** its checks, version and changelog rule, PR body format, review rules and merge gate are the loop's.
-  - Every area whose route needs evidence before a PR (agent prompts, a danger path, a model) is **out of bounds**. Make no change there, and list it for the report.
+- **With a `## Shipping` section:** its checks, version and changelog rule, PR title and body format, review rules and merge gate are the loop's.
 - **Without one:** the defaults.
   - The checks are the ones the repo already has: ruff, pyright and pytest for Python; eslint, tsc and vitest for TypeScript. Find them in its config and lockfiles.
   - The PR body is plain, and there is no version bump.
 
-Done when you can name the checks, the version rule (or "none"), and every out-of-bounds path.
+**Out of bounds:** every area whose route needs evidence before a PR, such as agent prompts and tools, a danger path or a model. Write the bounds as paths a reviewer can check:
+- whole folders (`app/agents/`);
+- plus files picked out by a marker (every file defining an `@tool`, or a Pydantic `Field(description=…)` a model reads).
 
-## 3. The four questions
+Docstrings and descriptions that a model or an API reads count as behaviour there, so a docstring added in those places alters an agent. The loop makes no change inside the bounds, and lists them for the report.
 
-Ask them with AskUserQuestion, from [references/questions.md](references/questions.md), filled in with this repo's numbers from a first `cq run`. Then record the answers as a decision: a comment on the tracking issue if the user names one, or otherwise `decisions.md` in the first run folder. The PR body repeats them.
+Done when you can name the checks, the version rule (or "none"), and the out-of-bounds paths and markers.
 
-Done when the stop rule, the config policy, the landing and the scope are each answered and recorded.
+## 2. The worktree
 
-## 4. The worktree
-
-Make a branch and a worktree from `origin/main`, beside the repo (`../<repo>.worktrees/quality-loop-<date>`). Copy in any untracked files the checks need (env files). All work happens there, never in the main checkout. Note the `cq --version` you measure with, and use that same cq in every round, so the rounds compare.
+Make a branch and a worktree from `origin/main`, beside the repo (`../<repo>.worktrees/quality-loop-<date>`). Copy in any untracked files the checks need (env files) from the main checkout. All work happens in the worktree from here on, setup included: settings written in the main checkout never reach it.
 
 Done when `git -C <worktree> status` is clean on the new branch.
+
+## 3. cq is ready, on the right targets
+
+In the worktree, run `cq --version` and `cq doctor`, then `cq run --tool size --no-history`, and read the targets it measured.
+- If `cq` is missing or a required tool is missing, invoke `/cq:setup-cq`. It asks before installing anything.
+- **If the targets aren't the repo's apps,** settings are needed. That happens when cq found one root target in a monorepo of `apps/*`, or the repo already lists its apps elsewhere (an older config, CI scripts). Write them as `[[tool.cq.targets]]` (or `cq.toml`), from the repo's own records, and show the user before using them.
+- **A target's `image`** must name what is deployed today. Check it against the app's build or deploy script. A registry move leaves the old tag behind, and Trivy then judges a stale build.
+- **Install each app's dependencies in the worktree** with its own package manager: `npm ci` in a TypeScript app (`pnpm`/`yarn` per its lockfile), `uv sync` in a Python app. A fresh worktree has none, and cq reports the npm tools as "node_modules missing".
+- Commit any settings this step wrote as **round 0**, so every round measures the same way.
+
+Note the `cq --version` you measure with, and use that same cq in every round, so the rounds compare.
+
+Done when every app the repo ships is a target, the size run succeeds, and the worktree is clean.
+
+## 4. The four questions
+
+Run `cq run` once in the worktree for this repo's numbers. Then ask the questions from [references/questions.md](references/questions.md) with AskUserQuestion. Record the answers as a decision: a comment on the tracking issue if the user names one, or otherwise `decisions.md` in that first run folder. The PR body repeats them.
+
+Done when the stop rule, the config policy, the landing and the scope are each answered and recorded.
 
 ## 5. Measure
 
@@ -56,6 +68,9 @@ Work through the findings, most severe first.
 - **A real finding** is fixed in code, with tests for every changed production line.
 - **A false positive** (wrong for this repo: a tool's own name flagged as a typo, a dependency that runs as a command) goes into the repo's own tool config, if the policy allows it. Add a reason in the config itself, and an entry in the round's **config ledger**: what it hides and why that is wrong for this repo.
 - **Out-of-bounds and out-of-scope findings** are left alone and listed.
+- **Image vulnerabilities** describe the published image, so cq's numbers move only after a deploy. A Dockerfile fix is checked on a local build that is never pushed, with `trivy image` before and after.
+
+**In a repo with several apps,** give each app its own fix agent, in parallel, in the same worktree. Each agent edits only its app's folder, proposes config instead of editing shared config, and runs that app's checks. It doesn't commit; you do, once all have reported.
 
 **When the repo's own code produces findings or metrics** (the repo is cq, or another analysis tool), a refactor of that code must keep its output identical. Record the output on stored snapshots before the change and compare after; a committed golden fixture is better.
 
@@ -75,7 +90,7 @@ Done when every finding has its outcome written down for the PR body.
 
 ## 9. Test and commit
 
-Run every check from step 2 and fix what fails. Commit the round, and its review fixes as a second commit. Each message names the round and what it changed.
+Run every check from step 1 and fix what fails. Commit the round, and its review fixes as a second commit. Each message names the round and what it changed.
 
 Done when the checks pass and the worktree is clean.
 

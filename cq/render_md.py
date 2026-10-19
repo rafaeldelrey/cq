@@ -245,27 +245,51 @@ def metrics_table(name: str, rows: list[Row], window_days: int) -> list[str]:
     return [*lines, ""]
 
 
-def render(history: list[dict], window_days: int = 30, details: bool = True) -> str:
-    """The whole report."""
+def cut_section(cuts: list[dict]) -> list[str]:
+    """The lists a target's tools kept short, each as "kept of total": counting their rows stops short."""
+    if not cuts:
+        return []
+    parts = [f"`{c['tool']}` {c['list']} {c['shown']} of {c['total']}" for c in cuts]
+    return [f"**Lists kept short** (count from the snapshot's totals, not the rows): {'; '.join(parts)}", ""]
+
+
+def header(history: list[dict], window_days: int) -> list[str]:
+    """The report's title (the measured commit) and what its delta columns mean."""
     latest = history[-1]
-    all_findings = findings.mark_new(findings.from_snapshot(latest), history[-2] if len(history) > 1 else None)
-    lines = [
-        f"# Code quality: {latest['commit_date'][:10]} ({latest['short']}{', dirty tree' if latest['dirty'] else ''})",
+    dirty = ", dirty tree" if latest["dirty"] else ""
+    return [
+        f"# Code quality: {latest['commit_date'][:10]} ({latest['short']}{dirty})",
         "",
         f"{len(history)} snapshot(s), {history[0]['commit_date'][:10]} → {latest['commit_date'][:10]}. "
         f"Δ prev = since the previous snapshot; Δ {window_days}d = since the last snapshot "
         f"{window_days} days before this one; Δ first = since the first.",
         "",
     ]
+
+
+def target_section(
+    latest: dict, name: str, rows: list[Row], found: list[dict], window_days: int, *, details: bool
+) -> list[str]:
+    """One target's part of the report: its metrics, its cut lists, its new findings and, with details,
+    its worst offenders and the newer tools' findings."""
+    mine = [f for f in found if f["target"] == name]
+    lines = metrics_table(name, rows, window_days)
+    lines += cut_section([c for c in findings.cut_lists(latest) if c["target"] == name])
+    lines += new_findings_section(mine)
+    if details:
+        lines += hot_spots(latest["targets"][name]) + tool_sections(mine)
+    return lines
+
+
+def render(history: list[dict], window_days: int = 30, details: bool = True) -> str:
+    """The whole report."""
+    latest = history[-1]
+    all_findings = findings.mark_new(findings.from_snapshot(latest), history[-2] if len(history) > 1 else None)
+    lines = header(history, window_days)
     all_rows = {name: rows_for(history, name, window_days) for name in latest["targets"]}
     if len(history) > 1:
         lines += since_previous([r for rows in all_rows.values() for r in rows])
     lines += errors_section(latest["errors"])
     for name, rows in all_rows.items():
-        lines += metrics_table(name, rows, window_days)
-        mine = [f for f in all_findings if f["target"] == name]
-        lines += new_findings_section(mine)
-        if details:
-            lines += hot_spots(latest["targets"][name])
-            lines += tool_sections(mine)
+        lines += target_section(latest, name, rows, all_findings, window_days, details=details)
     return "\n".join(lines).rstrip() + "\n"

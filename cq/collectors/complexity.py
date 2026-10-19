@@ -52,5 +52,7 @@ def collect(ctx: Context) -> dict:
         "limit": limit,
         "ranks": ranks,
         "baseline_entries": baseline_entries(ctx),
-        "worst": [{"function": k, "cc": v, "rank": cc_rank(v)} for k, v in worst[:15]],
+        # Every function over the limit and its CC: each is a finding, beyond the 15 worst listed.
+        "over_limit_items": {k: v for k, v in worst if v > limit},
+        "worst": [{"function": k, "cc": v, "rank": cc_rank(v)} for k, v in ctx.cap(worst, 15, "worst")],
     }

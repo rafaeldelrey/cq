@@ -53,5 +53,5 @@ def collect(ctx: Context) -> dict:
         "total": len(items),
         "high": len(high),
         "by_type": by_type,
-        "items": sorted(items, key=lambda i: -i["confidence"])[:40],
+        "items": ctx.cap(sorted(items, key=lambda i: -i["confidence"]), 40),
     }

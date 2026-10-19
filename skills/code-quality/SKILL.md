@@ -15,13 +15,13 @@ repo has never been set up, run `/setup-cq` first.
 |---|---|
 | Settings | `cq.toml` at the repo root, or `[tool.cq]` in `pyproject.toml`, or nothing (targets detected). Each tool reads the repo's own config first (`[tool.vulture]`, `cspell.json`, `.vale.ini`, `.gitleaks.toml`, `.semgrep/`), then cq's default |
 | Trend | `<data_dir>/history/<commit-date>_<sha>.json`: one per measured commit (`data_dir` defaults to `.cq/`) |
-| A run | `<data_dir>/runs/<UTC timestamp>_<sha>/`: `snapshot.json`, `run.log`, `report.md`, `dashboard.html`, `findings.jsonl`, `analysis.md`, and per target each tool's raw output plus `<tool>.log` |
+| A run | `<data_dir>/runs/<UTC timestamp>_<sha>/`: `snapshot.json`, `run.log`, `report.md`, `dashboard.html`, `findings.jsonl`, `findings-totals.json`, `analysis.md`, and per target each tool's raw output plus `<tool>.log` |
 | Git | the data folder ignores itself: nothing a run produces is committed. `cq backfill` rebuilds lost history |
 
 ## `run` (default)
 
 1. **Measure.** `cq run` (a minute or two). It writes the history file, the run folder, `report.md` and `dashboard.html`, and prints the run folder. A tool that fails is recorded as an error in the snapshot, with its full output in `runs/<run>/<target>/<tool>.log`. Read that log before saying why it failed; `cq doctor` says whether a tool is missing.
-2. **Read** `runs/<run>/report.md` and `runs/<run>/run.log`. `runs/<run>/findings.jsonl` has every finding in one shape (tool, rule, severity, file, line, message, `new`); filter it with `jq` instead of re-reading tool output, e.g. `jq -c 'select(.new==true and .severity!="info")' findings.jsonl`.
+2. **Read** `runs/<run>/report.md` and `runs/<run>/run.log`. `runs/<run>/findings.jsonl` has every finding in one shape (tool, rule, severity, file, line, message, `new`); filter it with `jq` instead of re-reading tool output, e.g. `jq -c 'select(.new==true and .severity!="info")' findings.jsonl`. Its rows stop short where a tool's list was cut: count from `runs/<run>/findings-totals.json` (each cut list's true total) or the snapshot's numbers, never from rows.
 3. **Find the cause of every regression.** For each metric that got worse since the previous snapshot:
    - take the two commits from the history files (`short` of the previous snapshot, and this one);
    - list what landed in between on that target: `git log --oneline <prev>..<now> -- <target root>`;

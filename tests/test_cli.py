@@ -11,6 +11,7 @@ import pytest
 from cq import cli, complexity_gate, gate, runner
 from cq.backfill import commits_to_measure
 from cq.config import DEFAULTS_DIR, QLTY_IGNORE_DEFAULT, Target, load_settings
+from cq.context import Context
 from cq.proc import ToolError
 from cq.report import latest_run
 
@@ -396,3 +397,37 @@ def test_qltys_cache_never_makes_a_run_dirty(repo: Path, tmp_path: Path) -> None
     (repo / ".qlty" / "configs").mkdir()
     (repo / ".qlty" / "configs" / ".ruff.toml").write_text("line-length = 100\n")
     assert runner.commit_info("HEAD", settings)["dirty"] is True  # and so do its plugin configs
+
+
+def test_a_cut_list_is_counted_in_the_totals_report_and_dashboard(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def suppressions(ctx: Context) -> dict:
+        items = [
+            {"file": "src/acme/pricing.py", "line": n, "kind": "noqa", "reason": True, "text": f"# noqa: E{n} - why"}
+            for n in range(10)
+        ]
+        return {"total": 10, "without_reason": 0, "by_kind": {"noqa": 10}, "items": ctx.cap(items, 3)}
+
+    monkeypatch.setattr(runner.COLLECTORS["suppressions"], "collect", suppressions)
+    assert run_cq(repo, "run", "--tool", "suppressions") == 0
+    run_dir = latest_run(repo / ".cq" / "runs")
+    assert run_dir is not None
+    snap = json.loads((run_dir / "snapshot.json").read_text())
+    assert snap["targets"]["acme"]["suppressions"]["truncated"] == {"items": 10}
+    rows = [json.loads(line) for line in (run_dir / "findings.jsonl").read_text().splitlines()]
+    assert sum(1 for r in rows if r["tool"] == "suppressions") == 3
+    totals = json.loads((run_dir / "findings-totals.json").read_text())
+    assert totals["targets"]["acme"]["suppressions"] == {"findings": 3, "cut": {"items": {"shown": 3, "total": 10}}}
+    assert (
+        "**Lists kept short** (count from the snapshot's totals, not the rows): `suppressions` items 3 of 10"
+        in (run_dir / "report.md").read_text()
+    )
+    page = (run_dir / "dashboard.html").read_text()
+    assert '"truncated":{"items":10}' in page and "function cutNote()" in page
+
+
+def test_a_run_with_nothing_cut_says_nothing_about_cuts(repo: Path) -> None:
+    assert run_cq(repo, "run", "--tool", "size") == 0
+    run_dir = latest_run(repo / ".cq" / "runs")
+    assert run_dir is not None
+    assert "Lists kept short" not in (run_dir / "report.md").read_text()
+    assert json.loads((run_dir / "findings-totals.json").read_text()) == {"targets": {}}

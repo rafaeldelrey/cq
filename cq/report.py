@@ -42,6 +42,7 @@ def write_reports(
     (run_dir / "report.md").write_text(text)
     found = findings.mark_new(findings.from_snapshot(snap), history[-2] if len(history) > 1 else None)
     findings.write_jsonl(found, run_dir / "findings.jsonl")
+    findings.write_totals(snap, found, run_dir / "findings-totals.json")
     analysis_path = analysis or (run_dir / "analysis.md")
     analysis_md = analysis_path.read_text() if analysis_path.exists() else None
     title = f"{name} code quality" if name else "Code quality"

@@ -281,7 +281,8 @@ def collect(ctx: Context) -> dict:
     for r in sorted((r for r in verified if r["verified"]), key=lambda r: r["date"]):
         newest[r["identity"]] = r
     live = sorted(newest.values(), key=lambda r: r["date"], reverse=True)
-    places = {(f["file"], f["commit"]) for f in history[:120]} | {(r["file"], r["commit"]) for r in live[:40]}
+    shown, live_shown = ctx.cap(history, 120), ctx.cap(live, 40, "live_items")
+    places = {(f["file"], f["commit"]) for f in shown} | {(r["file"], r["commit"]) for r in live_shown}
     now = head_paths(ctx.checkout, places)
     return {
         "in_tree": len(tree),
@@ -289,7 +290,9 @@ def collect(ctx: Context) -> dict:
         "verified_live": len(live),
         "unverifiable": sum(1 for r in verified if r["unverifiable"]),
         "by_rule": ranked(f["rule"] for f in history),
-        "tree_items": [{"file": f["file"], "line": f["line"], "code": f["rule"]} for f in tree[:60]],
+        "tree_items": [
+            {"file": f["file"], "line": f["line"], "code": f["rule"]} for f in ctx.cap(tree, 60, "tree_items")
+        ],
         "items": [
             {
                 "file": f["file"],
@@ -299,7 +302,7 @@ def collect(ctx: Context) -> dict:
                 "commit": f["commit"],
                 "date": f["date"],
             }
-            for f in history[:120]
+            for f in shown
         ],
         "live_items": [
             {
@@ -310,6 +313,6 @@ def collect(ctx: Context) -> dict:
                 "commit": r["commit"],
                 "date": r["date"],
             }
-            for r in live[:40]
+            for r in live_shown
         ],
     }

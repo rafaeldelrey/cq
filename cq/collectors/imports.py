@@ -79,5 +79,5 @@ def collect(ctx: Context) -> dict:
         "broken": sum(1 for c in contracts if c["status"] == "BROKEN"),
         "violations": len(items) + elided,
         "contract_status": contracts,
-        "items": items[:80],
+        "items": ctx.cap(items, 80),
     }

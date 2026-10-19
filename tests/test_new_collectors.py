@@ -129,7 +129,7 @@ def test_containers_hadolint_and_no_image(tmp_path: Path) -> None:
     assert lint["items"][0]["file"] == "apps/demo/Dockerfile"
 
 
-def test_freshness_parsing_and_libyear() -> None:
+def test_freshness_parsing_and_libyear(tmp_path: Path) -> None:
     out = (
         "agents-server v0.1.0\n"
         "├── fastapi v0.141.1 (latest: v0.143.0)\n"
@@ -143,7 +143,8 @@ def test_freshness_parsing_and_libyear() -> None:
     assert round(freshness.lag_years(dates, "1.0", "2.0"), 2) == 1.0
     assert freshness.lag_years(dates, "1.0", "9.9") == 0.0
     summary = freshness.summarise(
-        [{"package": "a", "major": True, "years": 0.5}, {"package": "b", "major": False, "years": 1.25}]
+        make_ctx(tmp_path),
+        [{"package": "a", "major": True, "years": 0.5}, {"package": "b", "major": False, "years": 1.25}],
     )
     assert (summary["outdated"], summary["major_behind"], summary["libyear"]) == (2, 1, 1.75)
     assert summary["items"][0]["package"] == "b"

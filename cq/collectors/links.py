@@ -46,6 +46,6 @@ def collect(ctx: Context) -> dict:
         "checked": data.get("total", 0),
         "broken": len(items),
         "files_with_broken": len(by_file),
-        "by_file": dict(list(by_file.items())[:20]),
-        "items": items[:150],
+        "by_file": dict(ctx.cap(list(by_file.items()), 20, "by_file")),
+        "items": ctx.cap(items, 150),
     }

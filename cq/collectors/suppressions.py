@@ -69,5 +69,5 @@ def collect(ctx: Context) -> dict:
         "total": len(items),
         "without_reason": sum(1 for i in items if not i["reason"]),
         "by_kind": by_kind,
-        "items": sorted(items, key=lambda i: (i["reason"], i["file"], i["line"]))[:150],
+        "items": ctx.cap(sorted(items, key=lambda i: (i["reason"], i["file"], i["line"])), 150),
     }

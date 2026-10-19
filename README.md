@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.3.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.4.0
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.3.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.4.0
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -215,6 +215,7 @@ Every run writes a folder under `.cq/runs/<UTC time>_<sha>/`:
 | `dashboard.html` | **Start here.** Open it in a browser (`open <path>` on macOS). It has the trend, the scorecard and every finding, and it needs no server |
 | `report.md` | The same in Markdown: what got better or worse since the previous snapshot and over 30 days, and the worst offenders |
 | `findings.jsonl` | Every finding in one shape (tool, rule, severity, file, line, message, `new`). Filter it with `jq`, e.g. `jq -c 'select(.new and .severity!="info")' findings.jsonl` |
+| `findings-totals.json` | Per target and tool, how many findings `findings.jsonl` holds, and every list cut to fit with its true total. Collectors keep each tool's first or worst items (up to 15–200), so count from here or `snapshot.json`, not from rows |
 | `snapshot.json` | Every number, the tool versions, and the config files each tool read |
 | `run.log` | One line per tool, with its time or its error |
 | `<target>/<tool>.log` | The exact commands a tool ran, their exit codes and output: read this when a tool errors |
@@ -253,7 +254,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.3.2"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.4.0"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -406,7 +407,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.3.2    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.4.0    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

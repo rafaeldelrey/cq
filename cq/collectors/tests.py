@@ -74,7 +74,7 @@ def coverage_summary(data: dict, ctx: Context) -> dict:
         "branches": branches,
         "missing_branches": missing_branches,
         "fail_under": fail_under(ctx),
-        "worst_files": [f for f in files if f["missing"] > 0][:15],
+        "worst_files": ctx.cap([f for f in files if f["missing"] > 0], 15, "coverage.worst_files"),
     }
 
 
@@ -134,7 +134,7 @@ def vitest_coverage(summary: dict, ctx: Context) -> dict:
         "missing_branches": total["branches"]["total"] - total["branches"]["covered"],
         "fail_under": floor.get("lines"),
         "branch_floor": floor.get("branches"),
-        "worst_files": [f for f in files if f["missing"] > 0][:15],
+        "worst_files": ctx.cap([f for f in files if f["missing"] > 0], 15, "coverage.worst_files"),
     }
 
 

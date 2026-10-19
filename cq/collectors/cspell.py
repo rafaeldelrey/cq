@@ -49,6 +49,6 @@ def collect(ctx: Context) -> dict:
         "unknown_words": len({h["word"] for h in hits}),
         "occurrences": len(hits),
         "items": ctx.with_fingerprints(
-            [{"file": ctx.rel(h["file"], ctx.checkout), "line": int(h["line"])} for h in hits[:150]]
+            [{"file": ctx.rel(h["file"], ctx.checkout), "line": int(h["line"])} for h in ctx.cap(hits, 150)]
         ),
     }

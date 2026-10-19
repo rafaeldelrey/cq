@@ -26,5 +26,7 @@ def collect(ctx: Context) -> dict:
         "mean": round(mean(mi for _, mi, _ in rows), 2) if rows else 0.0,
         "weighted_mean": round(sum(mi * lines for _, mi, lines in rows) / total_lines, 2) if total_lines else 0.0,
         "ranks": ranks,
-        "worst": [{"file": f, "mi": round(mi, 2), "rank": mi_rank(mi), "lines": n} for f, mi, n in rows[:15]],
+        "worst": [
+            {"file": f, "mi": round(mi, 2), "rank": mi_rank(mi), "lines": n} for f, mi, n in ctx.cap(rows, 15, "worst")
+        ],
     }

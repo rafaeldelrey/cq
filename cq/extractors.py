@@ -28,19 +28,25 @@ class Lint:
 
 @dataclass(frozen=True)
 class OverLimit:
-    """A per-function score with a limit: each of the worst functions over it is a warning."""
+    """A per-function score with a limit: each function over it is a warning."""
 
     rule: str
     field: str
     label: str
 
+    def over(self, d: dict) -> dict[str, int]:
+        """Every function over the limit and its score; from a snapshot older than ``over_limit_items``,
+        those among the worst it listed (the limit is 15 when the result names none)."""
+        if "over_limit_items" in d:
+            return d["over_limit_items"]
+        return {w["function"]: w[self.field] for w in d.get("worst", []) if w[self.field] > d.get("limit", 15)}
+
     def __call__(self, src: Source, d: dict) -> Iterator[Finding]:
-        """One finding per function above the result's limit (15 when it names none)."""
-        for w in d.get("worst", []):
-            if w[self.field] > d.get("limit", 15):
-                file, symbol = split_function(w["function"])
-                message = f"{self.label} {w[self.field]} > {d.get('limit')}"
-                yield src.finding(self.rule, "warning", message, file, symbol=symbol, value=w[self.field])
+        """One finding per function over the limit."""
+        for function, score in self.over(d).items():
+            file, symbol = split_function(function)
+            message = f"{self.label} {score} > {d.get('limit')}"
+            yield src.finding(self.rule, "warning", message, file, symbol=symbol, value=score)
 
 
 def code_of(i: dict) -> str:

@@ -100,7 +100,7 @@ def trivy(ctx: Context) -> dict:
         **image_metadata(data),
         **counts,
         "fixable_high": len({(v["PkgName"], v["VulnerabilityID"]) for v in fixable}),
-        "items": high_items(vulns)[:80],
+        "items": ctx.cap(high_items(vulns), 80, "image.items"),
     }
 
 

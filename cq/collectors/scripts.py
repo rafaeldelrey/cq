@@ -54,7 +54,7 @@ def shellcheck(ctx: Context) -> dict:
                 "level": c["level"],
                 "msg": c["message"][:200],
             }
-            for c in sorted(comments, key=lambda c: SHELLCHECK_LEVELS.index(c["level"]))[:80]
+            for c in ctx.cap(sorted(comments, key=lambda c: SHELLCHECK_LEVELS.index(c["level"])), 80, "shell.items")
         ],
     }
 
@@ -69,7 +69,8 @@ def actionlint(ctx: Context) -> dict:
     return {
         "findings": len(rows),
         "items": [
-            {"file": r["filepath"], "line": r["line"], "code": r["kind"], "msg": r["message"][:200]} for r in rows[:50]
+            {"file": r["filepath"], "line": r["line"], "code": r["kind"], "msg": r["message"][:200]}
+            for r in ctx.cap(rows, 50, "workflows.items")
         ],
     }
 
@@ -82,7 +83,10 @@ def zizmor(ctx: Context) -> dict:
     return {
         "findings": len(rows),
         "items": ctx.with_fingerprints(
-            [{"file": r["file"], "line": r["line"], "code": r["rule"], "msg": r["msg"]} for r in rows[:50]]
+            [
+                {"file": r["file"], "line": r["line"], "code": r["rule"], "msg": r["msg"]}
+                for r in ctx.cap(rows, 50, "workflow_security.items")
+            ]
         ),
     }
 

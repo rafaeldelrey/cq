@@ -195,6 +195,7 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
     <div class="bars" id="f-bars"></div>
     <div class="table-wrap"><table id="f-table"></table></div>
     <div class="sub" id="f-count"></div>
+    <div class="sub" id="f-cut"></div>
   </section>
 
   <section class="panel">
@@ -445,6 +446,24 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
     return FINDINGS.filter((f) => (fstate.app === "all" || f.target === fstate.app) && fstate.sevs.has(f.severity) &&
       (!fstate.newOnly || f.new === true));
   }
+  // The lists the collectors kept short (a result's "truncated"): counting their rows stops short.
+  function cutNote() {
+    const kept = (result, name) => {
+      const node = name.split(".").reduce((n, k) => (n && typeof n === "object" ? n[k] : undefined), result);
+      return Array.isArray(node) ? node.length : node && typeof node === "object" ? Object.keys(node).length : 0;
+    };
+    const parts = [];
+    Object.entries(SNAP.targets || {}).forEach(([target, tools]) => {
+      if (fstate.app !== "all" && target !== fstate.app) return;
+      Object.entries(tools).forEach(([tool, result]) => {
+        if (fstate.tool !== "all" && tool !== fstate.tool) return;
+        Object.entries((result && result.truncated) || {}).forEach(([name, total]) =>
+          parts.push(`${tool} ${name}: ${kept(result, name)} of ${total} kept`));
+      });
+    });
+    return parts.length ? `Lists kept short in this run (count from the snapshot's totals, not the rows): ${parts.join("; ")}.` : "";
+  }
+
   function renderFindings() {
     const isNew = FINDINGS.filter((f) => f.new === true);
     $("f-sub").textContent = `${FINDINGS.length} in this run · ${isNew.length} new since the previous snapshot`;
@@ -480,6 +499,7 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
         `<td class="path">${esc(f.file)}${f.line ? ":" + f.line : ""}${f.symbol && (f.tool === "complexity" || f.tool === "cognitive") ? "<br><span class='sub'>" + esc(f.symbol) + "</span>" : ""}</td>` +
         `<td>${esc(f.message)}${f.diff ? `<details><summary>the mutant</summary><pre class="diff">${esc(f.diff)}</pre></details>` : ""}</td></tr>`).join("") ||
         `<tr><td colspan="5" class="sub">No findings match. Clean.</td></tr>`) + `</tbody>`;
+    $("f-cut").textContent = cutNote();
     $("f-count").innerHTML = rows.length > shown.length
       ? `${shown.length} of ${rows.length} shown. <button type="button" class="chip-btn" id="f-more">Show all</button>` : `${rows.length} shown.`;
   }

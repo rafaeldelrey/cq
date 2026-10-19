@@ -24,6 +24,6 @@ def collect(ctx: Context) -> dict:
         "unformatted_files": len(unformatted),
         "items": [
             {"file": ctx.rel(f["filename"]), "line": f["location"]["row"], "code": f.get("code"), "msg": f["message"]}
-            for f in findings[:30]
+            for f in ctx.cap(findings, 30)
         ],
     }

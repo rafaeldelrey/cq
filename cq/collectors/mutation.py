@@ -79,5 +79,7 @@ def collect(ctx: Context) -> dict:
         "score": round(100 * killed / judged, 2) if judged else None,
         "by_status": counts,
         "by_function": by_function,
-        "items": [{"mutant": n, "function": function_of(n), "diff": diffs.get(n, "")[-1200:]} for n in survivors[:80]],
+        "items": [
+            {"mutant": n, "function": function_of(n), "diff": diffs.get(n, "")[-1200:]} for n in ctx.cap(survivors, 80)
+        ],
     }

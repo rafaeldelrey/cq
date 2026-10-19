@@ -63,5 +63,5 @@ def collect(ctx: Context) -> dict:
         "files_changed": len(rows),
         "hotspots": len(hot),
         "top_score": rows[0]["score"] if rows else 0,
-        "items": rows[:20],
+        "items": ctx.cap(rows, 20),
     }

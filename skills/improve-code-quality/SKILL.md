@@ -26,6 +26,8 @@ Read `AGENTS.md` (or `CLAUDE.md`) and any rule files it links.
 - whole folders (`app/agents/`);
 - plus files picked out by a marker (every file defining an `@tool`, or a Pydantic `Field(description=…)` a model reads).
 
+Match the marker on its definition, not on a mention: `^\s*@tool`, not `@tool` anywhere. In angel-monitor, a loose search listed 11 files that only mentioned `@tool` in comments, and none that defined one.
+
 Docstrings and descriptions that a model or an API reads count as behaviour there, so a docstring added in those places alters an agent. The loop makes no change inside the bounds, and lists them for the report.
 
 Done when you can name the checks, the version rule (or "none"), and the out-of-bounds paths and markers.
@@ -75,6 +77,8 @@ Work through the findings, most severe first.
 - **Image vulnerabilities** describe the published image, so cq's numbers move only after a deploy. A Dockerfile fix is checked on a local build that is never pushed, with `trivy image` before and after.
 
 **In a repo with several apps,** give each app its own fix agent, in parallel, in the same worktree. Each agent edits only its app's folder, proposes config instead of editing shared config, and runs that app's checks. It doesn't commit; you do, once all have reported.
+- **An agent that starts helpers reports only after every helper has finished.** In angel-monitor's round 2, a fix agent handed back while five helpers were still editing.
+- **Before you commit or measure,** check that no agent is still running, and that `git diff --stat` stays inside the agents' folders.
 
 **When the repo's own code produces findings or metrics** (the repo is cq, or another analysis tool), a refactor of that code must keep its output identical. Record the output on stored snapshots before the change and compare after; a committed golden fixture is better.
 

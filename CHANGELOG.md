@@ -4,6 +4,19 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.5.0] - 2026-10-20
+
+### Changed
+
+- **Measurement change: the suppressions count now includes aislop's markers.** `aislop-ignore`,
+  `-line`, `-next-line` and `-file`, after `#`, `//` or `<!--`, are counted as the new
+  `aislop-ignore` kind. A marker that gives its reason after ` -- ` (aislop's form) counts as
+  explained. The same ` -- ` form now counts as a reason for every other kind too.
+  - **What moves:** `suppressions.total` and `by_kind` go up on any repo that uses these markers
+    (cq itself: 12), and `without_reason` can drop where other suppressions already wrote
+    ` -- reason`. The trend shows a step at this version.
+  - Old snapshots still load and render; they simply have no `aislop-ignore` kind.
+
 ## [0.4.2] - 2026-10-19
 
 ### Fixed

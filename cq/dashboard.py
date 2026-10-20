@@ -19,6 +19,7 @@ STATIC_MARKER = "<!--__STATIC__-->"  # where the static report goes, in <main>
 DATA_MARKER = "/*__DATA__*/{}"  # where the page's JSON goes
 TABLE_ROW = re.compile(r"^\s*\|")
 ALIGNMENT = re.compile(r"^\s*:?-+:?\s*$")  # a table's second row: |---|--:|
+PIPE_END = re.compile(r"(?<!\\)\|$")  # the row's closing border, not an escaped pipe in its last cell
 PIPE = re.compile(r"(?<!\\)\|")  # a cell border; "\|" is a pipe inside a cell
 HEADING = re.compile(r"^(#{1,4})\s+(.*)")  # the analysis' Markdown: headings and list items
 LIST_ITEM = re.compile(r"^\s*([-*]|\d+\.)\s+(.*)")
@@ -66,7 +67,7 @@ INLINE = [
 
 def inline(text: str) -> str:
     """Escape, then the inline Markdown the analysis uses: code, bold, links."""
-    out = html.escape(text, quote=False)
+    out = html.escape(text)  # quotes too: a link's URL lands in an href attribute
     for pattern, repl in INLINE:
         out = pattern.sub(repl, out)
     return out
@@ -120,7 +121,7 @@ class HtmlBuilder:
         """A table row: ``| a | b |``; a pipe written ``\\|`` stays inside its cell."""
         self.end_paragraph()
         self.end_list()
-        inner = line.strip().removeprefix("|").removesuffix("|")
+        inner = PIPE_END.sub("", line.strip().removeprefix("|"))
         self.rows.append([cell.strip().replace("\\|", "|") for cell in PIPE.split(inner)])
 
     def blank(self) -> None:
@@ -221,6 +222,9 @@ def build(
     }
     payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
     # Split at the markers rather than replace, so nothing in the report or the data reads as one.
-    top, _, rest = TEMPLATE.read_text().replace("__TITLE__", html.escape(title)).partition(STATIC_MARKER)
+    page = TEMPLATE.read_text().replace("__TITLE__", html.escape(title))
+    if STATIC_MARKER not in page or DATA_MARKER not in page:
+        raise ValueError(f"{TEMPLATE} has lost its {STATIC_MARKER} or {DATA_MARKER} marker")
+    top, _, rest = page.partition(STATIC_MARKER)
     middle, _, end = rest.partition(DATA_MARKER)
     return top + static_report(analysis_md, report_md) + middle + payload + end

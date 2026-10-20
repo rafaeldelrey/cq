@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from cq import dashboard, render_md
 from cq.metrics import METRICS, Metric, load_history, rows_for, verdict
 
@@ -216,3 +218,24 @@ def test_a_dashboard_built_without_a_report_has_no_static_section(tmp_path: Path
     page = dashboard.build(history, history[-1], tmp_path)
     assert 'id="static-report"' not in page
     assert "<!--__STATIC__-->" not in page and "/*__DATA__*/" not in page
+
+
+def test_a_hostile_link_in_a_report_stays_inside_its_href() -> None:
+    page = dashboard.markdown_to_html('A finding: [a](https://e"onmouseover="alert(1)) and `x"<b>`')
+    assert "onmouseover=" not in page.replace("&quot;onmouseover=&quot;", "")
+    assert 'href="https://e&quot;onmouseover=&quot;alert(1"' in page
+    assert "<b>" not in page
+
+
+def test_an_escaped_pipe_at_the_end_of_a_row_stays_in_its_cell() -> None:
+    page = dashboard.markdown_to_html("| a | b |\n|---|---|\n| x | y\\|")
+    assert "<td>x</td><td>y|</td>" in page
+
+
+def test_a_template_without_its_markers_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    history = write(tmp_path, snap("2026-09-01", "aaa", 85, 5))
+    broken = tmp_path / "dashboard.html"
+    broken.write_text("<html>__TITLE__ /*__DATA__*/{}</html>")
+    monkeypatch.setattr(dashboard, "TEMPLATE", broken)
+    with pytest.raises(ValueError, match="marker"):
+        dashboard.build(history, history[-1], tmp_path, report_md="# r")

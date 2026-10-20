@@ -29,8 +29,9 @@ def git(repo: Path, *args: str) -> None:
 
 def registry_unreachable() -> str | None:
     """Why the npm side can't run here, or None when it can."""
-    if shutil.which("npx") is None:
-        return "npx not installed"
+    missing = [tool for tool in ("npm", "npx") if shutil.which(tool) is None]
+    if missing:
+        return f"{' and '.join(missing)} not installed"
     try:
         subprocess.run(["npm", "ping"], check=True, capture_output=True, timeout=30)
     # "Can't tell" from an outside command: no registry means the npm tools can't install.
@@ -53,7 +54,9 @@ def snapshot(tmp_path_factory: pytest.TempPathFactory) -> dict:
     git(repo, "init", "-q", "-b", "main")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "demo")
-    subprocess.run(["npm", "ci", "--no-audit", "--no-fund"], cwd=repo, check=True, capture_output=True, timeout=300)
+    # No install scripts: the fixture's tools run from their packages, and nothing else needs to.
+    install = ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"]
+    subprocess.run(install, cwd=repo, check=True, capture_output=True, timeout=300)
     assert cli.main(["--repo", str(repo), "run", *(arg for tool in TOOLS for arg in ("--tool", tool))]) == 0
     (snap_file,) = (repo / ".cq" / "runs").glob("*/snapshot.json")
     return json.loads(snap_file.read_text())

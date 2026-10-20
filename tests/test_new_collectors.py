@@ -596,8 +596,12 @@ def test_npm_audit_lists_each_vulnerable_package(tmp_path: Path, monkeypatch: py
     app = tmp_path / "apps" / "demo"
     app.mkdir(parents=True)
     (app / "package-lock.json").write_text("{}")
-    monkeypatch.setattr(vulnerabilities, "run", lambda cmd, cwd, **kwargs: json.dumps(NPM_AUDIT))
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        vulnerabilities, "run", lambda cmd, cwd, **kwargs: commands.append(cmd) or json.dumps(NPM_AUDIT)
+    )
     result = vulnerabilities.collect(make_ctx(tmp_path, kind="typescript"))
+    assert commands == [["npm", "audit", "--json", "--omit=dev"]]  # production dependencies only
     assert (result["vulnerable_packages"], result["vulnerabilities"], result["high"], result["moderate"]) == (
         2,
         2,

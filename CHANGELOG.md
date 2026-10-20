@@ -4,6 +4,17 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.4.2] - 2026-10-19
+
+### Fixed
+
+- The dashboard is readable without JavaScript. Opened where its script doesn't run (a file
+  preview, a mail attachment, a viewer that strips scripts), it used to show headings over empty
+  panels. Now it shows the run's analysis and the whole report, tables included. With JavaScript, the
+  interactive dashboard is unchanged, and the plain report is hidden before the page paints.
+
+No measurement changed: snapshots from 0.4.1 and 0.4.2 compare directly.
+
 ## [0.4.1] - 2026-10-19
 
 ### Changed

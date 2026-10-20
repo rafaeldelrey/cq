@@ -575,3 +575,59 @@ def test_read_report(tmp_path: Path) -> None:
     assert read_report(tmp_path / "out.json", "tool") == "[]"
     with pytest.raises(ToolError, match=r"^tool wrote no report \(nothing to scan\): .*missing\.json$"):
         read_report(tmp_path / "missing.json", "tool", "nothing to scan")
+
+
+NPM_AUDIT = {
+    "vulnerabilities": {
+        "left-pad-ish": {
+            "severity": "high",
+            "range": "<1.2.0",
+            "via": [{"title": "Prototype pollution in left-pad-ish"}],
+            "fixAvailable": {"name": "left-pad-ish", "version": "1.2.0"},
+        },
+        "wrapper": {"severity": "moderate", "range": "*", "via": ["left-pad-ish"], "fixAvailable": False},
+    },
+    "metadata": {"vulnerabilities": {"critical": 0, "high": 1, "moderate": 1, "low": 0, "info": 0, "total": 2}},
+}
+
+
+def test_npm_audit_lists_each_vulnerable_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """npm audit's JSON, invented: a direct advisory and a package vulnerable only through it."""
+    app = tmp_path / "apps" / "demo"
+    app.mkdir(parents=True)
+    (app / "package-lock.json").write_text("{}")
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        vulnerabilities, "run", lambda cmd, cwd, **kwargs: commands.append(cmd) or json.dumps(NPM_AUDIT)
+    )
+    result = vulnerabilities.collect(make_ctx(tmp_path, kind="typescript"))
+    assert commands == [["npm", "audit", "--json", "--omit=dev"]]  # production dependencies only
+    assert (result["vulnerable_packages"], result["vulnerabilities"], result["high"], result["moderate"]) == (
+        2,
+        2,
+        1,
+        1,
+    )
+    assert result["items"] == [
+        {
+            "package": "left-pad-ish",
+            "severity": "high",
+            "range": "<1.2.0",
+            "title": "Prototype pollution in left-pad-ish",
+            "fix": "1.2.0",
+        },
+        {"package": "wrapper", "severity": "moderate", "range": "*", "title": "via left-pad-ish", "fix": "no"},
+    ]
+    assert json.loads((tmp_path / "raw" / "npm-audit.json").read_text()) == NPM_AUDIT
+
+
+def test_npm_audit_skips_a_pnpm_app_and_says_why(tmp_path: Path) -> None:
+    app = tmp_path / "apps" / "demo"
+    app.mkdir(parents=True)
+    (app / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n")
+    result = vulnerabilities.collect(make_ctx(tmp_path, kind="typescript"))
+    assert result == {"skipped": "pnpm-lock.yaml: cq audits npm projects only (npm audit needs package-lock.json)"}
+
+
+def test_a_target_without_tests_is_skipped_not_zero(tmp_path: Path) -> None:
+    assert tests_collector.collect(make_ctx(tmp_path)) == {"skipped": "target has no tests"}

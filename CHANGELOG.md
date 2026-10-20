@@ -4,6 +4,18 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.5.1] - 2026-10-20
+
+### Changed
+
+- cq is now tested end to end on a TypeScript app, as it already was on a Python repo. A small
+  fixture app goes through `npm ci` and `cq run` with eslint, tsc, vitest, knip and npm audit. Its
+  planted findings must all come out, with no tool error. The test skips without `npx` or the npm
+  registry, except in CI. The tests collector's pytest path and deptry's findings get the same
+  end-to-end test on a Python repo.
+
+No measurement changed: snapshots from 0.5.0 and 0.5.1 compare directly.
+
 ## [0.5.0] - 2026-10-20
 
 ### Changed

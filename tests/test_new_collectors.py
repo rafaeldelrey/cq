@@ -101,6 +101,37 @@ def test_suppressions_count_and_reasons(tmp_path: Path) -> None:
     assert result["items"][0]["reason"] is False  # the ones without a reason come first
 
 
+def test_suppressions_count_aislop_markers_in_each_form(tmp_path: Path) -> None:
+    pkg = tmp_path / "apps" / "demo" / "pkg"
+    pkg.mkdir(parents=True)
+    marker = "aislop" + "-ignore"  # split, so this test file isn't a suppression of its own
+    (pkg / "a.py").write_text(
+        f"# {marker}-file ai-slop/python-print-debug -- the console prints, on purpose\n"
+        f"# {marker}-next-line ai-slop/python-chained-dict-get\n"
+        f"x = 1  # {marker}-line ai-slop/x -- an optional table\n"
+        f"y = 2  # {marker}\n"
+        f"z = '{marker} in a string is not a marker'\n"
+    )
+    result = suppressions.collect(make_ctx(tmp_path))
+    assert result["by_kind"] == {"aislop-ignore": 4}
+    by_line = {i["line"]: i["reason"] for i in result["items"]}
+    assert by_line == {1: True, 2: False, 3: True, 4: False}
+
+
+def test_suppressions_count_aislop_markers_in_typescript(tmp_path: Path) -> None:
+    pkg = tmp_path / "apps" / "demo" / "pkg"
+    pkg.mkdir(parents=True)
+    marker = "aislop" + "-ignore"
+    (pkg / "a.tsx").write_text(
+        f"// {marker}-next-line ai-slop/x -- a generated table\nconst a = 1;\n{{/* {marker}-line */}}\n"
+        f"// <!-- {marker} -->\n"
+        f"// {marker}-foo is not a marker, nor {marker}d\n"
+    )
+    result = suppressions.collect(make_ctx(tmp_path, kind="typescript"))
+    assert result["by_kind"] == {"aislop-ignore": 3}
+    assert [i["line"] for i in result["items"] if not i["reason"]] == [3, 4]
+
+
 @pytest.mark.skipif(shutil.which(own("semgrep")) is None, reason="semgrep not installed")
 def test_mock_only_rule_finds_tests_under_a_tests_folder(tmp_path: Path) -> None:
     tests = tmp_path / "apps" / "demo" / "tests"

@@ -198,6 +198,36 @@ def test_the_app_environment_tools_run_on_a_dependency_group_repo(repo: Path) ->
     assert measured["freshness"]["outdated"] >= 0
 
 
+def test_pytest_coverage_and_deptry_on_a_python_repo(repo: Path) -> None:
+    """The tests collector's pytest path (results, branch coverage, the floor) and deptry's findings."""
+    pyproject = repo / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text()
+        + "dependencies = []\n\n[tool.pytest.ini_options]\npythonpath = ['src']\n\n[tool.coverage.run]\nbranch = true\n\n[tool.coverage.report]\nfail_under = 50\n"
+    )
+    (repo / "src" / "acme" / "fetch.py").write_text('"""Fetching."""\n\nimport requests  # not declared\n')
+    (repo / "tests" / "test_pricing.py").write_text(
+        "from acme.pricing import price\n\n\ndef test_price() -> None:\n    assert price(2, 1.5) == 3.0\n"
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "tests and an undeclared import")
+    assert run_cq(repo, "run", "--tool", "tests", "--tool", "dependencies") == 0
+    run_dir = latest_run(load_settings(repo).runs_dir)
+    assert run_dir is not None
+    snap = json.loads((run_dir / "snapshot.json").read_text())
+    assert snap["errors"] == {}, snap["errors"]
+    tests = snap["targets"]["acme"]["tests"]
+    assert tests["results"]["passed"] == 1 and tests["results"]["failed"] == 0
+    coverage = tests["coverage"]
+    assert coverage["fail_under"] == 50.0
+    assert 0 < coverage["percent"] < 100 and coverage["branches"] > 0  # vip and unused_helper are never run
+    assert "src/acme/pricing.py" in [f["file"] for f in coverage["worst_files"]]
+    deptry = snap["targets"]["acme"]["dependencies"]
+    assert [(i["code"], i["module"], i["file"]) for i in deptry["items"]] == [
+        ("DEP001", "requests", "src/acme/fetch.py")
+    ]
+
+
 def test_version_and_cq_config(repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exit_info:
         cli.main(["--version"])

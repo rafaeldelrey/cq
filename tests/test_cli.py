@@ -219,7 +219,7 @@ def test_pytest_coverage_and_deptry_on_a_python_repo(repo: Path) -> None:
     tests = snap["targets"]["acme"]["tests"]
     assert tests["results"]["passed"] == 1 and tests["results"]["failed"] == 0
     coverage = tests["coverage"]
-    assert coverage["fail_under"] == 50.0
+    assert coverage["fail_under"] == pytest.approx(50)
     assert 0 < coverage["percent"] < 100 and coverage["branches"] > 0  # vip and unused_helper are never run
     assert "src/acme/pricing.py" in [f["file"] for f in coverage["worst_files"]]
     deptry = snap["targets"]["acme"]["dependencies"]

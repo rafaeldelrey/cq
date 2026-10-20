@@ -46,5 +46,6 @@ def write_reports(
     analysis_path = analysis or (run_dir / "analysis.md")
     analysis_md = analysis_path.read_text() if analysis_path.exists() else None
     title = f"{name} code quality" if name else "Code quality"
-    (run_dir / "dashboard.html").write_text(dashboard.build(full_history, snap, run_dir, analysis_md, found, title))
+    page = dashboard.build(full_history, snap, run_dir, analysis_md, found, title, report_md=text)
+    (run_dir / "dashboard.html").write_text(page)
     return text

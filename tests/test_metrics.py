@@ -185,3 +185,34 @@ def test_a_finding_line_says_where_when_it_can() -> None:
     assert render_md.finding_line(base | {"file": "a.py", "line": 3}) == "- ⚠️ **ruff/F401** `a.py:3` unused"
     assert render_md.finding_line(base | {"file": "a.py", "line": None}) == "- ⚠️ **ruff/F401** `a.py` unused"
     assert render_md.finding_line(base | {"file": "", "line": None}) == "- ⚠️ **ruff/F401**  unused"
+
+
+def test_markdown_tables_like_the_reports() -> None:
+    md = (
+        "## app\n\n"
+        "| Metric | Now | Δ prev |\n|---|--:|--:|\n"
+        "| Coverage | 87.6% | +1.0 ✅ |\n| `ruff` a\\|b | 3 | 0 · |\n\n"
+        "- after the table\n\n"
+        "| only | header |\n"
+    )
+    out = dashboard.markdown_to_html(md)
+    assert "<h4>app</h4>" in out
+    assert "<thead><tr><th>Metric</th><th class=num>Now</th><th class=num>Δ prev</th></tr></thead>" in out
+    assert "<tr><td>Coverage</td><td class=num>87.6%</td><td class=num>+1.0 ✅</td></tr>" in out
+    assert "<td><code>ruff</code> a|b</td>" in out  # inline code, and a pipe written \| stays in its cell
+    assert "</table></div>\n<ul>\n<li>after the table</li>" in out  # the list ends the table
+    assert out.endswith("<thead><tr><th>only</th><th>header</th></tr></thead><tbody></tbody></table></div>")
+
+
+def test_a_table_ends_where_a_paragraph_or_heading_starts() -> None:
+    out = dashboard.markdown_to_html("| a |\n|---|\n| 1 |\nplain text\n| b |\n# Next")
+    assert out.count("<table>") == 2
+    assert "</table></div>\n<p>plain text</p>" in out
+    assert "</table></div>\n<h3>Next</h3>" in out
+
+
+def test_a_dashboard_built_without_a_report_has_no_static_section(tmp_path: Path) -> None:
+    history = write(tmp_path, snap("2026-09-01", "aaa", 85, 5))
+    page = dashboard.build(history, history[-1], tmp_path)
+    assert 'id="static-report"' not in page
+    assert "<!--__STATIC__-->" not in page and "/*__DATA__*/" not in page

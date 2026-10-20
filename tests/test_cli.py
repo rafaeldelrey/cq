@@ -431,3 +431,17 @@ def test_a_run_with_nothing_cut_says_nothing_about_cuts(repo: Path) -> None:
     assert run_dir is not None
     assert "Lists kept short" not in (run_dir / "report.md").read_text()
     assert json.loads((run_dir / "findings-totals.json").read_text()) == {"targets": {}}
+
+
+def test_the_dashboard_carries_the_report_for_viewers_without_scripts(repo: Path) -> None:
+    assert run_cq(repo, "run", "--tool", "size") == 0
+    run_dir = latest_run(repo / ".cq" / "runs")
+    assert run_dir is not None
+    page = (run_dir / "dashboard.html").read_text()
+    static = page.split('<section class="panel" id="static-report">')[1].split("</section>")[0]
+    assert "<script" not in static  # plain HTML, readable where scripts don't run
+    assert "<h4>acme</h4>" in static and "<th>Metric</th>" in static and "Source lines" in static
+    assert page.index('id="static-report"') < page.index('<script id="data"')
+    assert page.index('classList.add("js")') < page.index("<main>")  # the switch runs before the page paints
+    data = page.split('<script id="data" type="application/json">')[1].split("</script>")[0]
+    assert json.loads(data)["snapshot"]["run_id"] == run_dir.name

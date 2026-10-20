@@ -1,6 +1,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
+<script>document.documentElement.classList.add("js");  /* before the first paint: the dashboard, not the static report */</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -73,6 +74,11 @@ select, input[type="search"] { font: inherit; font-size: .88rem; padding: 4px 8p
 .changes .val { margin-left: auto; font-family: var(--font-mono); font-size: .8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .table-wrap { overflow-x: auto; }
+/* Without scripts the page is the static report (a preview, a mail attachment); the script's "js"
+   class on the root swaps in the interactive dashboard. */
+html:not(.js) main > section.panel:not(#static-report), html:not(.js) header .controls, html:not(.js) #meta { display: none; }
+.js #static-report { display: none; }
+#static-report th.num, #static-report td.num { text-align: right; font-variant-numeric: tabular-nums; }
 table { border-collapse: collapse; width: 100%; font-size: .86rem; }
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; white-space: nowrap; }
@@ -148,6 +154,8 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
       <div class="chips" id="app-chips" role="group" aria-label="Apps shown"></div>
     </div>
   </header>
+
+  <!--__STATIC__-->
 
   <section class="panel" id="steps" hidden>
     <h2>Measurement changed since the previous snapshot</h2>

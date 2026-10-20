@@ -123,11 +123,13 @@ def test_suppressions_count_aislop_markers_in_typescript(tmp_path: Path) -> None
     pkg.mkdir(parents=True)
     marker = "aislop" + "-ignore"
     (pkg / "a.tsx").write_text(
-        f"// {marker}-next-line ai-slop/x -- a generated table\nconst a = 1;\n{{/* <!-- {marker}-line --> */}}\n"
+        f"// {marker}-next-line ai-slop/x -- a generated table\nconst a = 1;\n{{/* {marker}-line */}}\n"
+        f"// <!-- {marker} -->\n"
+        f"// {marker}-foo is not a marker, nor {marker}d\n"
     )
     result = suppressions.collect(make_ctx(tmp_path, kind="typescript"))
-    assert result["by_kind"] == {"aislop-ignore": 2}
-    assert result["without_reason"] == 1
+    assert result["by_kind"] == {"aislop-ignore": 3}
+    assert [i["line"] for i in result["items"] if not i["reason"]] == [3, 4]
 
 
 @pytest.mark.skipif(shutil.which(own("semgrep")) is None, reason="semgrep not installed")

@@ -26,7 +26,9 @@ PATTERNS: dict[str, re.Pattern[str]] = {
     "eslint\x2ddisable": re.compile(r"eslint\x2ddisable"),
     "ts-ignore": re.compile(r"@ts-(ignore|nocheck)\b"),
     "ts-expect-error": re.compile(r"@ts-expect\x2derror\b"),
-    "aislop-ignore": re.compile(r"(#|//|<!\x2d\x2d)\s*aislop\x2dignore(\x2dline|\x2dnext\x2dline|\x2dfile)?\b"),
+    "aislop-ignore": re.compile(
+        r"(#|//|/\*|<!\x2d\x2d)\s*aislop\x2dignore(\x2dline|\x2dnext\x2dline|\x2dfile)?(?![\w\x2d])"
+    ),
 }
 # A reason after " - " or " -- " (aislop's form), an em dash, or a "code: words" comment.
 REASON = re.compile(r"(\s--?\s|—|:\s+\w+.*\w{3})")

@@ -287,8 +287,9 @@ or, in Claude Code:
   `cq setup` and `cq init`, asking first. It looks for the repo's apps (manifests at any depth,
   workspaces, what gets built), proposes them as targets and writes them on a yes, then takes the
   first snapshot.
-- **`/cq`** runs cq and explains the result. It traces each regression to the commit
-  that caused it, writes an analysis onto the dashboard, and ranks what to fix next.
+- **`/cq`** (in full `/cq:cq`, plugin and skill) runs cq and explains the result. It traces each
+  regression to the commit that caused it, writes an analysis onto the dashboard, and ranks what to
+  fix next.
   `/cq report`, `/cq backfill <since>` and `/cq gate` work too.
 - **`/improve-code-quality`** improves the repo in rounds, on its own branch: measure with cq, fix,
   review the fixes, fix what the review finds, test, commit, until the stop rule you pick. It asks

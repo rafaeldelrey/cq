@@ -7,6 +7,7 @@ checks the parsing and filtering, not the tool.
 """
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -15,7 +16,7 @@ import pytest
 
 from cq import findings, proc, qlty
 from cq.collectors import aislop, cspell, fallow, pyscn, radarlint, secrets, smells, vale
-from cq.config import DEFAULTS_DIR, Settings, Target, load_settings
+from cq.config import DEFAULTS_DIR, PINS, Settings, Target, load_settings
 from cq.context import Context
 from cq.proc import ToolError, log_to, run
 
@@ -145,6 +146,53 @@ def test_aislop_drops_tuned_out_rules(tmp_path: Path, monkeypatch: pytest.Monkey
     result = aislop.collect(ctx)
     assert (result["score"], result["findings"], result["slop"]) == (86, 2, 1)
     assert result["items"][0]["file"] == "apps/demo/pkg/a.py"
+
+
+def test_aislop_runs_without_cqs_environment_and_drops_its_python_audit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """aislop's pip-audit audits whatever environment it sits in; its npm audit audits the app."""
+    own = tmp_path / "cq-env" / "bin"
+    own.mkdir(parents=True)
+    monkeypatch.setattr(aislop.sysconfig, "get_path", lambda name: str(own))
+    monkeypatch.setenv("PATH", os.pathsep.join([str(own), "/usr/local/bin", "/usr/bin"]))
+    out = {
+        "score": 70,
+        "diagnostics": [
+            {"filePath": "requirements.txt", "line": 0, "rule": "security/vulnerable-dependency",
+             "engine": "security", "severity": "error", "message": "Vulnerable Python dependency: certifi"},
+            {"filePath": "package.json", "line": 0, "rule": "security/vulnerable-dependency",
+             "engine": "security", "severity": "error", "message": "Vulnerable npm dependency: left-pad-ish"},
+        ],
+    }  # fmt: skip
+    paths: list[str] = []
+    monkeypatch.setattr(proc.shutil, "which", lambda _: "/usr/bin/tool")
+    monkeypatch.setattr(aislop, "run", lambda *a, env, **k: paths.append(env["PATH"]) or json.dumps(out))
+    result = aislop.collect(make_ctx(tmp_path))
+    assert paths == [os.pathsep.join(["/usr/local/bin", "/usr/bin"])]
+    assert [i["msg"] for i in result["items"]] == ["Vulnerable npm dependency: left-pad-ish"]
+    assert (result["score"], result["findings"]) == (70, 1)  # aislop's own score stays as reported
+
+
+@pytest.mark.skipif(shutil.which("npx") is None, reason="npx not installed")
+def test_aislop_never_runs_the_pip_audit_of_cqs_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A real aislop scan, with a pip-audit in "cq's environment" that would report a vulnerable package."""
+    own = tmp_path / "cq-env" / "bin"
+    own.mkdir(parents=True)
+    ran = tmp_path / "pip-audit-ran"
+    report = {"dependencies": [{"name": "certifi", "version": "1.0", "vulns": [{"id": "PYSEC-0000-0"}]}]}
+    fake = own / "pip-audit"
+    fake.write_text(f"#!/bin/sh\ntouch {ran}\necho '{json.dumps(report)}'\n")
+    fake.chmod(0o755)
+    monkeypatch.setattr(aislop.sysconfig, "get_path", lambda name: str(own))
+    monkeypatch.setenv("PATH", f"{own}{os.pathsep}{os.environ['PATH']}")
+    app = tmp_path / "apps" / "demo"
+    (app / "pkg").mkdir(parents=True)
+    (app / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
+    (app / "pkg" / "__init__.py").write_text('"""Demo."""\n')
+    result = aislop.collect(make_ctx(tmp_path, aislop=PINS["aislop"]))
+    assert not ran.exists()
+    assert not [i for i in result["items"] if i["code"] == "security/vulnerable-dependency"]
 
 
 def test_aislop_without_json_is_a_tool_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -4,6 +4,22 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.6.0] - 2026-10-20
+
+### Changed
+
+- **Measurement change: aislop no longer reports Python dependencies that aren't the repo's.**
+  aislop's Python audit runs whatever `pip-audit` is on `PATH`, and that audits its own
+  environment, never the measured repo. Under `uv run cq` it audited cq's own dependencies, and
+  under the installed `cq` it found no `pip-audit` and silently skipped. Now:
+  - aislop runs without cq's own environment on its `PATH`, so both ways of launching cq give the
+    same aislop findings and score;
+  - its "Vulnerable Python dependency" findings are dropped. Python vulnerabilities come from cq's
+    `vulnerabilities` collector (pip-audit on each app's `uv.lock`);
+  - aislop's npm audit findings stay: they audit the app's own `package.json`.
+  - **What moves:** for runs launched with `uv run cq`, aislop's findings and score lose cq's own
+    vulnerable dependencies. Runs of the installed `cq` don't move.
+
 ## [0.5.2] - 2026-10-20
 
 ### Fixed

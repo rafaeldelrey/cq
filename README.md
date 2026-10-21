@@ -26,13 +26,13 @@ Two ways in; both end with the same setup.
 /setup-cq
 ```
 
-Run `/setup-cq` in the repo you want to measure. Then use `/code-quality` for a snapshot and an
+Run `/setup-cq` in the repo you want to measure. Then use `/cq` for a snapshot and an
 analysis.
 
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.6.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.7.0
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.6.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.7.0
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -140,7 +140,7 @@ Data: /Users/you/work/my-repo/.cq (history/ and runs/, never committed)
    in. Without `qlty.toml` the qlty-based tools don't run: radarlint, smells, workflow security and
    the gate's line checks report an error saying "run `cq init`". A repo that already has the config
    but no `.gitignore` is offered one; `cq doctor` points it out.
-3. **The Claude Code plugin** (the `/code-quality`, `/setup-cq` and `/improve-code-quality`
+3. **The Claude Code plugin** (the `/cq`, `/setup-cq` and `/improve-code-quality`
    skills). It shows the two `claude` commands for each choice, then asks:
    - **u, just you:** installed for your user, in every repo, with nothing written to this one;
    - **p, this repo:** written to the repo's `.claude/settings.json`; commit it, and everyone who
@@ -257,7 +257,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.6.2"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.7.0"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -287,9 +287,9 @@ or, in Claude Code:
   `cq setup` and `cq init`, asking first. It looks for the repo's apps (manifests at any depth,
   workspaces, what gets built), proposes them as targets and writes them on a yes, then takes the
   first snapshot.
-- **`/code-quality`** runs cq and explains the result. It traces each regression to the commit
+- **`/cq`** runs cq and explains the result. It traces each regression to the commit
   that caused it, writes an analysis onto the dashboard, and ranks what to fix next.
-  `/code-quality report`, `/code-quality backfill <since>` and `/code-quality gate` work too.
+  `/cq report`, `/cq backfill <since>` and `/cq gate` work too.
 - **`/improve-code-quality`** improves the repo in rounds, on its own branch: measure with cq, fix,
   review the fixes, fix what the review finds, test, commit, until the stop rule you pick. It asks
   first: when to stop, whether it may silence false positives in config, how the work lands, and
@@ -404,7 +404,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 | numbers jumped with no code change | check the report's "Measurement changed" section: a tool version or a config moved |
 | the first run is slow | npx, uvx and qlty fetch their tools on first use; later runs are faster |
 | `The plugin wasn't installed` during `cq init` | read claude's output above it. Usually ssh access to `rafaeldelrey/cq` is missing; the two `/plugin` lines it prints work from Claude Code too |
-| `/code-quality` isn't found in Claude Code | `cq doctor` shows where the plugin is installed; start a new Claude Code session after installing |
+| `/cq` isn't found in Claude Code | `cq doctor` shows where the plugin is installed; start a new Claude Code session after installing |
 
 ---
 
@@ -412,7 +412,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.6.2    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.7.0    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

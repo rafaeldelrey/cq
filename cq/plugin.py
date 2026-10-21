@@ -1,4 +1,4 @@
-"""cq's Claude Code plugin (the /code-quality, /setup-cq and /improve-code-quality skills): where it's
+"""cq's Claude Code plugin (the /cq, /setup-cq and /improve-code-quality skills): where it's
 installed, and installing it.
 
 The plugin lives in cq's own repo, which is also its marketplace. It is installed with the
@@ -17,7 +17,7 @@ from cq.console import flush, out
 MARKETPLACE = "rafaeldelrey/cq"
 PLUGIN = "cq@cq"
 PASTE = f"/plugin marketplace add {MARKETPLACE}\n/plugin install {PLUGIN}"
-SKILLS = ("/code-quality", "/setup-cq", "/improve-code-quality")  # what .claude-plugin/plugin.json lists
+SKILLS = ("/cq", "/setup-cq", "/improve-code-quality")  # what .claude-plugin/plugin.json lists
 
 
 def skill_names() -> str:

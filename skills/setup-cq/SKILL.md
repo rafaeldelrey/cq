@@ -1,6 +1,6 @@
 ---
 name: setup-cq
-description: Set a repository up for cq, the code-quality CLI. Installs cq if it is missing, checks and installs the measuring tools (cq doctor, cq setup), adds the repo's starter settings and qlty config (cq init), and takes the first snapshot. Use when the user types /setup-cq, asks to set up cq or code-quality measurement in a repo, or when /code-quality finds cq missing.
+description: Set a repository up for cq, the code-quality CLI. Installs cq if it is missing, checks and installs the measuring tools (cq doctor, cq setup), adds the repo's starter settings and qlty config (cq init), and takes the first snapshot. Use when the user types /setup-cq, asks to set up cq or code-quality measurement in a repo, or when /cq finds cq missing.
 ---
 
 # /setup-cq: get a repo ready for cq
@@ -14,7 +14,7 @@ let them commit.
 Check with `cq --version` (or `command -v cq`). If it is missing:
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.6.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.7.0
 ```
 
 Use the newest release tag (`git ls-remote --tags git@github.com:rafaeldelrey/cq.git`): a tag pins
@@ -98,7 +98,7 @@ target written.
 ## 5. The first snapshot
 
 Run `cq run`. Report how many tools measured and which ones errored, with the first line of each
-error from `runs/<run>/<target>/<tool>.log`. Then offer `/code-quality report` for the analysis, and
+error from `runs/<run>/<target>/<tool>.log`. Then offer `/cq report` for the analysis, and
 `cq backfill --since <date> --dry-run` to give the trend a history.
 
 ## 6. For a team

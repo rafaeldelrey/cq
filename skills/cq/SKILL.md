@@ -1,10 +1,10 @@
 ---
-name: code-quality
-description: Measure a repository's code quality with the cq CLI (coverage, pyright, ruff, cyclomatic and cognitive complexity, maintainability, dead code, duplication, docstrings, semgrep house rules, import contracts, dependency hygiene, vulnerabilities, secrets and live keys, mutation testing, hotspots, suppressions, mock-only tests, Dockerfile and image scans, dependency freshness, shell and workflow linting, doc links, and the AI-slop tools radarlint, smells, aislop, pyscn, fallow, vale and cspell), store the snapshot, and report how quality has moved over time, with a Markdown report, an interactive dashboard and a written analysis. Use when the user types /code-quality [run|report|backfill|gate], or asks about code quality, its trend, a quality report, or what a branch adds.
+name: cq
+description: Measure a repository's code quality with the cq CLI (coverage, pyright, ruff, cyclomatic and cognitive complexity, maintainability, dead code, duplication, docstrings, semgrep house rules, import contracts, dependency hygiene, vulnerabilities, secrets and live keys, mutation testing, hotspots, suppressions, mock-only tests, Dockerfile and image scans, dependency freshness, shell and workflow linting, doc links, and the AI-slop tools radarlint, smells, aislop, pyscn, fallow, vale and cspell), store the snapshot, and report how quality has moved over time, with a Markdown report, an interactive dashboard and a written analysis. Use when the user types /cq [run|report|backfill|gate], or asks about code quality, its trend, a quality report, or what a branch adds.
 argument-hint: "[run|report|backfill <since> [every-days]|gate [base]]  (default: run)"
 ---
 
-# /code-quality: snapshots, trend, report
+# /cq: snapshots, trend, report
 
 **Mode:** `$ARGUMENTS` (empty means `run`).
 
@@ -68,5 +68,5 @@ What the current branch adds over its base: `cq gate --base <base>` (default `or
 ## Rules
 
 - Don't change the settings, a tool's config or its ignore lists during a run. Propose the change, with what it would hide or reveal, and let the user decide.
-- Don't fix the code the report points at during a `/code-quality` run. Offer the fixes in "Next".
+- Don't fix the code the report points at during a `/cq` run. Offer the fixes in "Next".
 - cq pins its measuring tools per release, so a cq upgrade can move the numbers: say so when `tool_versions` changed between two snapshots.

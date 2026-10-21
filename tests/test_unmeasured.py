@@ -148,3 +148,12 @@ def test_a_run_of_a_past_commit_says_nothing_about_todays_tree(
     repo = committed(tmp_path / "mono", MONOREPO)
     assert cli.main(["--repo", str(repo), "run", "--rev", "HEAD~0", "--tool", "size", "--no-history"]) == 0
     assert "Not measured" not in capsys.readouterr().err
+
+
+def test_doctor_stays_quiet_when_the_named_settings_file_is_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = committed(tmp_path / "mono", MONOREPO)
+    assert doctor.targets_line(repo, repo / "quality" / "missing.toml") is None
+    cli.main(["--repo", str(repo), "--config", "quality/missing.toml", "doctor"])  # prints the tools, no traceback
+    assert "Not measured" not in capsys.readouterr().out

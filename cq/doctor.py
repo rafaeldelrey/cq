@@ -117,9 +117,10 @@ def targets_line(folder: Path | None, config: Path | None = None) -> str | None:
         return None
     try:
         settings = load_settings(root, config)
-    # A specific, expected exception: settings cq can't read (bad TOML, a missing key, a wrong
-    # type) are `cq run`'s error to report; doctor is about the machine and stays quiet on them.
-    except (ValueError, KeyError, TypeError):
+    # A specific, expected exception: settings cq can't read (a missing or unreadable file, bad
+    # TOML, a missing key, a wrong type) are `cq run`'s error to report; doctor is about the
+    # machine and stays quiet on them.
+    except (OSError, ValueError, KeyError, TypeError):
         return None
     return unmeasured.hint(settings)
 

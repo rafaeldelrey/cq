@@ -91,7 +91,9 @@ prints a "Not measured: …" line when it sees app folders below the root.
    first lines list each target as cq reads them, without the "Not measured" line. A TypeScript
    target needs its packages installed (`npm ci` in its root) before its tools can run.
 
-A single-app repo whose app is the root needs none of this: say so and move on.
+A repo whose only app is a Python app at the root, already listed by `cq init`, needs none of
+this: say so and move on. A TypeScript app at the root is never detected, so it always needs its
+target written.
 
 ## 5. The first snapshot
 

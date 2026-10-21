@@ -9,7 +9,7 @@ It also offers cq's Claude Code plugin, for the user or for the repo.
 import shutil
 from pathlib import Path
 
-from cq import plugin
+from cq import plugin, unmeasured
 from cq.config import (
     CONFIG_FILE,
     DEFAULTS_DIR,
@@ -51,8 +51,8 @@ def starter(prefix: str) -> str:
     header = "\n[tool.cq]" if prefix else ""
     return f"""{header}
 # cq's settings (https://github.com/rafaeldelrey/cq). Targets are detected: a pyproject.toml at the
-# root is one Python app. To list them yourself, add [[{prefix}targets]] entries
-# (name, kind = "python" | "typescript", root, source, tests).
+# root is one Python app. For a repo with several apps, /setup-cq finds them; or add
+# [[{prefix}targets]] entries yourself (name, kind = "python" | "typescript", root, source, tests).
 
 [{prefix}gate]
 mode = "warn"  # "block": the gate fails the job on a blocking finding
@@ -77,6 +77,8 @@ def describe(settings: Settings) -> None:
     for t in settings.targets:
         out(f"  {t.name} ({t.kind}, root {t.root}){target_detail(t)}")
     out(f"Data: {settings.data_dir} (history/ and runs/, never committed)")
+    if line := unmeasured.hint(settings):
+        out(line)
 
 
 def add_settings(settings: Settings, *, assume_yes: bool) -> None:

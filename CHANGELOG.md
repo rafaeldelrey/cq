@@ -4,6 +4,21 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.6.2] - 2026-10-20
+
+### Added
+
+- **A "Not measured" line for apps cq can't see.** With no targets in the settings, cq measures
+  only a Python app at the repo's root. When the repo tracks app manifests below its root (a
+  `pyproject.toml`, or a `package.json` with TypeScript, outside `tests/` and `fixtures/`),
+  `cq init`, `cq doctor` and `cq run` now say how many, and name up to three.
+- **`/setup-cq` finds the targets.** A new step looks at the repo (manifests at any depth,
+  workspaces, what gets built), proposes its apps as `[[targets]]` with the reason for each, and
+  writes them into the settings after a yes.
+
+No measurement changed: target detection is the same, and snapshots from 0.6.1 and 0.6.2 compare
+directly.
+
 ## [0.6.1] - 2026-10-20
 
 ### Fixed

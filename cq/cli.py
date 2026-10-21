@@ -24,7 +24,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from cq import complexity_gate
+from cq import complexity_gate, unmeasured
 from cq.backfill import backfill, commits_to_measure
 from cq.collectors import COLLECTORS
 from cq.config import Settings, load_gate, load_settings
@@ -97,6 +97,8 @@ def cmd_run(settings: Settings, args: argparse.Namespace) -> int:
     if unknown:
         note(f"unknown target(s) {', '.join(unknown)}; this repo has {', '.join(sorted(names))}")
         return 2
+    if line := unmeasured.hint(settings):
+        note(line)
     note(f"Measuring {args.rev}…")
     snap = snapshot(settings, rev=args.rev, targets=args.target, tools=args.tool)
     to_history = not snap["partial"] and not args.no_history

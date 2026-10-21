@@ -18,6 +18,7 @@ as they audit the app's own package.json.
 """
 
 import os
+import sys
 import sysconfig
 from pathlib import Path
 
@@ -42,9 +43,16 @@ def dropped(diagnostic: dict) -> bool:
 
 
 def path_without_cq() -> str:
-    """PATH without the scripts folder of the Python environment cq runs in."""
+    """PATH without the scripts folder of cq's own virtual environment.
+
+    A Python that isn't a virtual environment keeps its scripts folder: that can be a shared one,
+    such as /usr/local/bin, which also holds node and npx.
+    """
+    path = os.environ.get("PATH", "")
+    if sys.prefix == sys.base_prefix:
+        return path
     own = Path(sysconfig.get_path("scripts")).resolve()
-    entries = os.environ.get("PATH", "").split(os.pathsep)
+    entries = path.split(os.pathsep)
     return os.pathsep.join(e for e in entries if e and Path(e).resolve() != own)
 
 

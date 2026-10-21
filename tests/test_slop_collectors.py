@@ -174,6 +174,15 @@ def test_aislop_runs_without_cqs_environment_and_drops_its_python_audit(
     assert (result["score"], result["findings"]) == (70, 1)  # aislop's own score stays as reported
 
 
+def test_a_system_pythons_shared_scripts_folder_stays_on_aislops_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Outside a virtual environment the scripts folder may be /usr/local/bin, where npx lives too."""
+    monkeypatch.setattr(aislop.sys, "prefix", "/usr/local")
+    monkeypatch.setattr(aislop.sys, "base_prefix", "/usr/local")
+    monkeypatch.setattr(aislop.sysconfig, "get_path", lambda name: "/usr/local/bin")
+    monkeypatch.setenv("PATH", os.pathsep.join(["/usr/local/bin", "/usr/bin"]))
+    assert aislop.path_without_cq() == os.pathsep.join(["/usr/local/bin", "/usr/bin"])
+
+
 @pytest.mark.skipif(shutil.which("npx") is None, reason="npx not installed")
 def test_aislop_never_runs_the_pip_audit_of_cqs_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A real aislop scan, with a pip-audit in "cq's environment" that would report a vulnerable package."""

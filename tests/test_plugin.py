@@ -174,7 +174,11 @@ def test_a_list_claude_cannot_answer_counts_as_not_installed(repo: Path, monkeyp
     ("claude", "installed", "line"),
     [
         (False, [], "--  claude plugin  Claude Code not installed"),
-        (True, [], "--  claude plugin  not installed\n      for /code-quality and /setup-cq: cq init"),
+        (
+            True,
+            [],
+            "--  claude plugin  not installed\n      for /code-quality, /setup-cq and /improve-code-quality: cq init",
+        ),
         (True, [{"id": "cq@cq", "scope": "user", "version": "0.2.0"}], "ok  claude plugin  cq@cq (user 0.2.0)"),
     ],
 )
@@ -320,3 +324,21 @@ def test_doctor_points_out_a_missing_qlty_gitignore(
     assert doctor.doctor() == 0
     assert ".qlty/.gitignore" not in capsys.readouterr().out
     assert (repo / ".qlty" / ".gitignore").read_text() == "*\n"  # doctor changed nothing
+
+
+def test_init_names_every_skill_the_plugin_brings(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    use(monkeypatch, FakeClaude())
+    monkeypatch.setattr(sys, "stdin", tty("u"))
+    init.add_plugin(load_settings(repo), skills=None, assume_yes=False)
+    out = capsys.readouterr().out
+    named = "/code-quality, /setup-cq and /improve-code-quality"
+    assert f"Install the cq skills for Claude Code ({named})?" in out
+    assert f"Installed for you: {named} work in every repo." in out
+
+
+def test_the_skill_list_is_the_plugins() -> None:
+    """A skill added to plugin.json without cq naming it fails here."""
+    manifest = json.loads((Path(__file__).parents[1] / ".claude-plugin" / "plugin.json").read_text())
+    assert [f"/{Path(s).name}" for s in manifest["skills"]] == list(plugin.SKILLS)

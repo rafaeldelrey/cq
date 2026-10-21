@@ -1,4 +1,5 @@
-"""cq's Claude Code plugin (the /code-quality and /setup-cq skills): where it's installed, and installing it.
+"""cq's Claude Code plugin (the /code-quality, /setup-cq and /improve-code-quality skills): where it's
+installed, and installing it.
 
 The plugin lives in cq's own repo, which is also its marketplace. It is installed with the
 ``claude`` CLI, for the user (every repo, nothing written to this one) or for the project (the
@@ -16,6 +17,14 @@ from cq.console import flush, out
 MARKETPLACE = "rafaeldelrey/cq"
 PLUGIN = "cq@cq"
 PASTE = f"/plugin marketplace add {MARKETPLACE}\n/plugin install {PLUGIN}"
+SKILLS = ("/code-quality", "/setup-cq", "/improve-code-quality")  # what .claude-plugin/plugin.json lists
+
+
+def skill_names() -> str:
+    """The plugin's skills, as a sentence names them: "/a, /b and /c"."""
+    return f"{', '.join(SKILLS[:-1])} and {SKILLS[-1]}"
+
+
 Scope = Literal["user", "project"]
 
 

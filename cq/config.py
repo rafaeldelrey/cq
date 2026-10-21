@@ -104,6 +104,7 @@ class Settings:
     data_dir: Path = Path(DEFAULT_DATA_DIR)  # history/ and runs/
     config_dir: Path = Path()  # relative paths in the settings resolve from here
     config_file: Path | None = None  # where the settings came from; None when detected
+    targets_detected: bool = True  # no targets in the settings: detect_targets chose them
     # The repo's own files for the tools, relative to config_dir; empty means "look in the repo,
     # then use cq's default" (cq/toolconfig.py).
     semgrep_rules: str = ""
@@ -254,6 +255,7 @@ def load_settings(repo_root: Path | None = None, config: Path | None = None) -> 
         data_dir=(config_dir / table.get("data_dir", DEFAULT_DATA_DIR)).resolve(),
         config_dir=config_dir,
         config_file=source,
+        targets_detected=not table.get("targets"),
         semgrep_rules=str(table.get("semgrep_rules", "")),
         contracts_dir=str(table.get("contracts_dir", "")),
         cspell_config=str(table.get("cspell_config", "")),

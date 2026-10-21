@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.6.1
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.6.2
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.6.1
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.6.2
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -131,7 +131,10 @@ Data: /Users/you/work/my-repo/.cq (history/ and runs/, never committed)
 ```
 
 1. **Settings.** It adds a starter `[tool.cq]` to `pyproject.toml`, or writes `cq.toml` when the
-   repo has no pyproject. The starter holds the PR gate in `warn` mode. Targets stay detected.
+   repo has no pyproject. The starter holds the PR gate in `warn` mode. Targets stay detected:
+   a `pyproject.toml` at the root is one Python app, and nothing else is. When the repo has app
+   folders below its root, `init`, `cq doctor` and `cq run` print a "Not measured: …" line naming
+   them; `/setup-cq` lists them as targets (or write `[[tool.cq.targets]]` yourself, below).
 2. **qlty's config.** It writes `.qlty/qlty.toml` when the repo has none, with the `.qlty/.gitignore`
    `qlty init` writes: qlty's cache stays out of git, and its config, plugin configs and hooks stay
    in. Without `qlty.toml` the qlty-based tools don't run: radarlint, smells, workflow security and
@@ -254,7 +257,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.6.1"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.6.2"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -281,7 +284,9 @@ or, in Claude Code:
 `cq doctor` shows whether it's installed, and for whom (`claude plugin` line, optional).
 
 - **`/setup-cq`** walks a repo through steps 1 and 2: it installs cq, then runs `cq doctor`,
-  `cq setup` and `cq init`, asking first, and takes the first snapshot.
+  `cq setup` and `cq init`, asking first. It looks for the repo's apps (manifests at any depth,
+  workspaces, what gets built), proposes them as targets and writes them on a yes, then takes the
+  first snapshot.
 - **`/code-quality`** runs cq and explains the result. It traces each regression to the commit
   that caused it, writes an analysis onto the dashboard, and ranks what to fix next.
   `/code-quality report`, `/code-quality backfill <since>` and `/code-quality gate` work too.
@@ -407,7 +412,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.6.1    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.6.2    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

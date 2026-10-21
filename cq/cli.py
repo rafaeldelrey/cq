@@ -24,7 +24,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from cq import complexity_gate
+from cq import complexity_gate, unmeasured
 from cq.backfill import backfill, commits_to_measure
 from cq.collectors import COLLECTORS
 from cq.config import Settings, load_gate, load_settings
@@ -97,6 +97,8 @@ def cmd_run(settings: Settings, args: argparse.Namespace) -> int:
     if unknown:
         note(f"unknown target(s) {', '.join(unknown)}; this repo has {', '.join(sorted(names))}")
         return 2
+    if args.rev == "HEAD" and (line := unmeasured.hint(settings)):  # the hint describes today's tree
+        note(line)
     note(f"Measuring {args.rev}…")
     snap = snapshot(settings, rev=args.rev, targets=args.target, tools=args.tool)
     to_history = not snap["partial"] and not args.no_history
@@ -171,7 +173,8 @@ def cmd_complexity(settings: Settings, args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Which measuring tools this machine has, for the repo given (or here)."""
-    return doctor(args.repo.resolve())
+    repo = args.repo.resolve()
+    return doctor(repo, repo / args.config if args.config else None)
 
 
 def cmd_setup(args: argparse.Namespace) -> int:

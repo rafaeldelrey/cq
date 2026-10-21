@@ -14,8 +14,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from cq import plugin
-from cq.config import PINS, QLTY_CONFIG, QLTY_DIR, QLTY_IGNORE
+from cq import plugin, unmeasured
+from cq.config import PINS, QLTY_CONFIG, QLTY_DIR, QLTY_IGNORE, load_settings
 from cq.console import confirm, out
 from cq.proc import run
 
@@ -109,10 +109,27 @@ def status_mark(ok: bool, *, optional: bool) -> str:
     return "-- " if optional else "XX "
 
 
-def doctor(folder: Path | None = None) -> int:
+def targets_line(folder: Path | None, config: Path | None = None) -> str | None:
+    """The unmeasured-apps hint for the repo ``folder`` is (with its ``config``, if one is named),
+    when it is a repo with readable settings."""
+    root = folder or Path.cwd()
+    if not (root / ".git").exists():
+        return None
+    try:
+        settings = load_settings(root, config)
+    # A specific, expected exception: settings cq can't read (a missing or unreadable file, bad
+    # TOML, a missing key, a wrong type) are `cq run`'s error to report; doctor is about the
+    # machine and stays quiet on them.
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return unmeasured.hint(settings)
+
+
+def doctor(folder: Path | None = None, config: Path | None = None) -> int:
     """Print every tool's state; exit 1 when a required one is missing or qlty is off its pin.
 
-    ``folder`` (default: the current one) is the repo the plugin line is about.
+    ``folder`` (default: the current one) is the repo the plugin and targets lines are about, and
+    ``config`` its settings file when one is named (``--config``, ``CQ_CONFIG``).
     """
     checks = [check(t) for t in TOOLS]
     width = max(len(PLUGIN_LABEL), *(len(t.name) for t in TOOLS))
@@ -126,6 +143,8 @@ def doctor(folder: Path | None = None) -> int:
     out(plugin_line(width, folder))
     if note := qlty_ignore_line(width, folder):
         out(note)
+    if line := targets_line(folder, config):
+        out(line)
     missing = [c for c in checks if not c.ok and not c.tool.optional]
     if missing:
         out(f"\n{len(missing)} required tool(s) missing or off their pin: `cq setup` installs them.")

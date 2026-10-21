@@ -162,7 +162,7 @@ def test_aislop_runs_without_cqs_environment_and_drops_its_python_audit(
             {"filePath": "requirements.txt", "line": 0, "rule": "security/vulnerable-dependency",
              "engine": "security", "severity": "error", "message": "Vulnerable Python dependency: certifi"},
             {"filePath": "package.json", "line": 0, "rule": "security/vulnerable-dependency",
-             "engine": "security", "severity": "error", "message": "Vulnerable npm dependency: left-pad-ish"},
+             "engine": "security", "severity": "error", "message": "left-pad-ish (high) — upgrade to 1.2.0"},
         ],
     }  # fmt: skip
     paths: list[str] = []
@@ -170,7 +170,7 @@ def test_aislop_runs_without_cqs_environment_and_drops_its_python_audit(
     monkeypatch.setattr(aislop, "run", lambda *a, env, **k: paths.append(env["PATH"]) or json.dumps(out))
     result = aislop.collect(make_ctx(tmp_path))
     assert paths == [os.pathsep.join(["/usr/local/bin", "/usr/bin"])]
-    assert [i["msg"] for i in result["items"]] == ["Vulnerable npm dependency: left-pad-ish"]
+    assert [i["msg"] for i in result["items"]] == ["left-pad-ish (high) — upgrade to 1.2.0"]
     assert (result["score"], result["findings"]) == (70, 1)  # aislop's own score stays as reported
 
 

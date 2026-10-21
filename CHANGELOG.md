@@ -18,7 +18,10 @@ numbers, and the trend shows a step there.
     `vulnerabilities` collector (pip-audit on each app's `uv.lock`);
   - aislop's npm audit findings stay: they audit the app's own `package.json`.
   - **What moves:** for runs launched with `uv run cq`, aislop's findings and score lose cq's own
-    vulnerable dependencies. Runs of the installed `cq` don't move.
+    vulnerable dependencies. aislop also stops finding cq's own `ruff`: in a repo with no `.venv`
+    of its own, it lints with a `ruff` from the machine's `PATH` or its bundled copy, as the
+    installed `cq` always did, so its ruff findings can move too. Runs of the installed `cq` don't
+    move.
 
 ## [0.5.2] - 2026-10-20
 

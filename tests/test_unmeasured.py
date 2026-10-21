@@ -104,3 +104,9 @@ def test_outside_a_git_repo_there_is_nothing_to_say(tmp_path: Path) -> None:
 def test_doctor_stays_quiet_on_settings_it_cannot_read(tmp_path: Path) -> None:
     repo = committed(tmp_path / "r", {**MONOREPO, "cq.toml": "not = [valid toml"})
     assert doctor.targets_line(repo) is None
+
+
+def test_doctor_prints_the_hint_for_its_repo(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = committed(tmp_path / "mono", MONOREPO)
+    doctor.doctor(repo)
+    assert "Not measured: 2 app folder(s) below the root (apps/api, apps/web)." in capsys.readouterr().out

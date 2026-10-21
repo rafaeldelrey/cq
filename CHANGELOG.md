@@ -4,6 +4,17 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.6.1] - 2026-10-20
+
+### Fixed
+
+- `cq init` and `cq doctor` name all three of the plugin's skills: `/code-quality`, `/setup-cq`
+  and `/improve-code-quality`. They used to leave out `/improve-code-quality`, so a plugin
+  installed from `cq init` didn't say it came with it. The names come from one list, which a test
+  ties to `.claude-plugin/plugin.json`.
+
+No measurement changed: snapshots from 0.6.0 and 0.6.1 compare directly.
+
 ## [0.6.0] - 2026-10-20
 
 ### Changed

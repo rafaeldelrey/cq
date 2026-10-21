@@ -90,7 +90,7 @@ def plugin_line(width: int, folder: Path | None) -> str:
     """cq's Claude Code plugin, for the repo ``folder`` (default: the current one) is in: optional, never a failure."""
     ok, found, fix = plugin.status(folder or Path.cwd())
     line = f"{'ok ' if ok else '-- '} {PLUGIN_LABEL:<{width}}  {found}"
-    return f"{line}\n      for /code-quality and /setup-cq: {fix}" if fix else line
+    return f"{line}\n      for {plugin.skill_names()}: {fix}" if fix else line
 
 
 def qlty_ignore_line(width: int, folder: Path | None) -> str | None:

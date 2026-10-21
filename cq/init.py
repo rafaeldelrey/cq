@@ -137,7 +137,7 @@ SCOPE_NOTES: tuple[tuple[str, plugin.Scope, str], ...] = (
 
 def ask_scope() -> str:
     """Where to install the plugin: user, project or none; none without a terminal to ask on."""
-    out("\nInstall the cq skills for Claude Code (/code-quality, /setup-cq)?")
+    out(f"\nInstall the cq skills for Claude Code ({plugin.skill_names()})?")
     for key, scope, note in SCOPE_NOTES:
         runs = " && ".join(" ".join(cmd) for cmd in plugin.commands("claude", scope))
         out(f"  {key}  {note}\n       runs: {runs}")
@@ -178,7 +178,7 @@ def add_plugin(settings: Settings, *, skills: str | None, assume_yes: bool) -> N
     if scope == "project":
         out("Installed for this repo: commit .claude/settings.json, and the team gets the skills.")
     else:
-        out("Installed for you: /code-quality and /setup-cq work in every repo.")
+        out(f"Installed for you: {plugin.skill_names()} work in every repo.")
 
 
 def init(settings: Settings, *, assume_yes: bool = False, skills: str | None = None) -> int:

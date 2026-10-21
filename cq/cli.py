@@ -97,7 +97,7 @@ def cmd_run(settings: Settings, args: argparse.Namespace) -> int:
     if unknown:
         note(f"unknown target(s) {', '.join(unknown)}; this repo has {', '.join(sorted(names))}")
         return 2
-    if line := unmeasured.hint(settings):
+    if args.rev == "HEAD" and (line := unmeasured.hint(settings)):  # the hint describes today's tree
         note(line)
     note(f"Measuring {args.rev}…")
     snap = snapshot(settings, rev=args.rev, targets=args.target, tools=args.tool)
@@ -173,7 +173,8 @@ def cmd_complexity(settings: Settings, args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Which measuring tools this machine has, for the repo given (or here)."""
-    return doctor(args.repo.resolve())
+    repo = args.repo.resolve()
+    return doctor(repo, repo / args.config if args.config else None)
 
 
 def cmd_setup(args: argparse.Namespace) -> int:

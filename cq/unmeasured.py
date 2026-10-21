@@ -15,6 +15,7 @@ from cq.proc import run
 MANIFESTS = ("pyproject.toml", "package.json")
 NOT_APPS = {"tests", "test", "fixtures"}  # a manifest there is test data, not an app
 SHOWN = 3  # folders named in the hint
+DEPENDENCIES = ("dependencies", "devDependencies")
 
 
 def is_typescript(package_json: Path) -> bool:
@@ -23,11 +24,13 @@ def is_typescript(package_json: Path) -> bool:
         return True
     try:
         data = json.loads(package_json.read_text())
-    # A specific, expected exception: a package.json that isn't JSON is no app cq could measure.
-    except json.JSONDecodeError:
+    # A specific, expected exception: a package.json cq can't read (missing in a sparse checkout,
+    # not UTF-8, not JSON) is no app cq could measure, and a hint must never stop a run.
+    except (OSError, ValueError):
         return False
-    deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-    return "typescript" in deps
+    if not isinstance(data, dict):
+        return False
+    return any(isinstance(deps, dict) and "typescript" in deps for deps in (data.get(k) for k in DEPENDENCIES))
 
 
 def app_folders(repo_root: Path) -> list[str]:

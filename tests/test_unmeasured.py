@@ -110,3 +110,41 @@ def test_doctor_prints_the_hint_for_its_repo(tmp_path: Path, capsys: pytest.Capt
     repo = committed(tmp_path / "mono", MONOREPO)
     doctor.doctor(repo)
     assert "Not measured: 2 app folder(s) below the root (apps/api, apps/web)." in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "text",
+    ['{"dependencies": ["typescript"]}', '{"dependencies": null}', '["typescript"]', "{not json"],
+    ids=["deps-list", "deps-null", "top-level-array", "not-json"],
+)
+def test_a_package_json_of_another_shape_is_no_app(tmp_path: Path, text: str) -> None:
+    repo = committed(tmp_path / "r", {"web/package.json": text})
+    assert unmeasured.app_folders(repo) == []
+
+
+def test_a_package_json_that_is_not_utf8_or_gone_is_no_app(tmp_path: Path) -> None:
+    repo = committed(tmp_path / "r", {"web/package.json": "{}", "ui/package.json": "{}"})
+    (repo / "web" / "package.json").write_bytes(b'{"name": "\xff\xfe"}')
+    (repo / "ui" / "package.json").unlink()  # tracked, but not in the working tree
+    assert unmeasured.app_folders(repo) == []
+
+
+def test_doctor_reads_the_named_settings_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    settings = '[[targets]]\nname = "api"\nkind = "python"\nroot = "apps/api"\nsource = ["app"]\n'
+    repo = committed(tmp_path / "mono", {**MONOREPO, "quality/cq.toml": settings})
+    assert doctor.targets_line(repo) is not None  # cq.toml at the root is absent: targets detected
+    cli.main(["--repo", str(repo), "--config", "quality/cq.toml", "doctor"])
+    assert "Not measured" not in capsys.readouterr().out
+
+
+def test_doctor_stays_quiet_on_settings_of_the_wrong_type(tmp_path: Path) -> None:
+    repo = committed(tmp_path / "r", {**MONOREPO, "cq.toml": 'targets = "api"\n'})
+    assert doctor.targets_line(repo) is None
+
+
+def test_a_run_of_a_past_commit_says_nothing_about_todays_tree(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = committed(tmp_path / "mono", MONOREPO)
+    assert cli.main(["--repo", str(repo), "run", "--rev", "HEAD~0", "--tool", "size", "--no-history"]) == 0
+    assert "Not measured" not in capsys.readouterr().err

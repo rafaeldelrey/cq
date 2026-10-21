@@ -87,9 +87,9 @@ prints a "Not measured: …" line when it sees app folders below the root.
    tests = true
    ```
 
-5. **Check** with `cq run --tool size`. It lists each target as cq reads it, without the "Not
-   measured" line. A TypeScript target needs its packages installed (`npm ci` in its root) before
-   its tools can run.
+5. **Check** with `cq init --skills none`: with the settings in place it changes nothing, and its
+   first lines list each target as cq reads them, without the "Not measured" line. A TypeScript
+   target needs its packages installed (`npm ci` in its root) before its tools can run.
 
 A single-app repo whose app is the root needs none of this: say so and move on.
 

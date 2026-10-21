@@ -4,6 +4,15 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.5.2] - 2026-10-20
+
+### Fixed
+
+- cq's own dependencies: `certifi` 2026.7.22 → 2026.10.19, for PYSEC-2026-4320. cq installs it
+  (the HTTP clients of semgrep and pip-audit pull it in), and nothing it measures changes.
+
+No measurement changed: snapshots from 0.5.1 and 0.5.2 compare directly.
+
 ## [0.5.1] - 2026-10-20
 
 ### Changed

@@ -28,6 +28,12 @@ def test_the_count_reads_each_ruff_versions_output(tmp_path: Path, version: str)
     )
     assert out.returncode == 1
     assert ruff.unformatted_count(out.stdout) == 2
+    for name in ("a.py", "b.py"):
+        (tmp_path / name).unlink()
+    clean = subprocess.run(
+        ["uvx", "-q", f"ruff@{version}", "format", "--check", "."], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert (clean.returncode, ruff.unformatted_count(clean.stdout)) == (0, 0)
 
 
 @pytest.mark.parametrize(
@@ -38,9 +44,14 @@ def test_the_count_from_the_summary_line(output: str, count: int) -> None:
     assert ruff.unformatted_count(output) == count
 
 
-def test_files_to_reformat_without_a_readable_count_is_a_tool_error() -> None:
+@pytest.mark.parametrize(
+    "output",
+    ["unformatted: File would be reformatted\n --> a.py:1:2\n", "2 files need formatting\n"],
+    ids=["diagnostics-without-summary", "a-reworded-summary"],
+)
+def test_output_without_a_readable_count_is_a_tool_error(output: str) -> None:
     with pytest.raises(ToolError, match="no count cq can read"):
-        ruff.unformatted_count("unformatted: File would be reformatted\n --> a.py:1:2\n")
+        ruff.unformatted_count(output)
 
 
 def test_cq_run_counts_unformatted_files(tmp_path: Path) -> None:

@@ -13,20 +13,21 @@ KINDS = ("python",)
 # already formatted". Up to 0.15 each file also had a "Would reformat: <path>" line; 0.16 replaced
 # those with diagnostics, so the summary is what stays.
 WOULD_REFORMAT = re.compile(r"^(\d+) files? would be reformatted", re.MULTILINE)
+ALL_FORMATTED = re.compile(r"\d+ files? already formatted")
 
 
 def unformatted_count(output: str) -> int:
     """How many files ``ruff format --check`` would reformat; never a silent 0.
 
-    No summary line means nothing to reformat, unless the output still says a file would be: then
-    the format is one cq can't read, and that is a tool error, not a clean result.
+    The count is the summary's, the last one printed. Without one, the output must be empty or say
+    only that every file is formatted; anything else is a format cq can't read, and a tool error.
     """
-    m = WOULD_REFORMAT.search(output)
-    if m:
-        return int(m.group(1))
-    if "would be reformatted" in output.lower():
-        raise ToolError(f"ruff format --check: files to reformat, but no count cq can read: {output[-300:]}")
-    return 0
+    counts = WOULD_REFORMAT.findall(output)
+    if counts:
+        return int(counts[-1])
+    if not output.strip() or ALL_FORMATTED.fullmatch(output.strip()):
+        return 0
+    raise ToolError(f"ruff format --check: output with no count cq can read: {output[-300:]}")
 
 
 def collect(ctx: Context) -> dict:

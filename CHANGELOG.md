@@ -4,6 +4,19 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.9.0] - 2026-10-21
+
+### Fixed
+
+- **Measurement change: "Unformatted files" counts again on ruff 0.16 and later.** ruff 0.16
+  replaced `ruff format --check`'s "Would reformat: <path>" lines with diagnostics, so the count cq
+  read from them was always 0. cq now reads ruff's summary line ("N files would be reformatted"),
+  which every version prints. If ruff says files would be reformatted but gives no count cq can
+  read, that's a tool error, never a silent 0.
+  - **What moves:** for apps that run ruff 0.16 or later (their own pin, or the latest when cq
+    overlays it), the count goes from a wrong 0 to the real number. The trend shows a step at
+    this version.
+
 ## [0.8.0] - 2026-10-21
 
 ### Changed

@@ -16,6 +16,8 @@ import re
 import urllib.request
 from datetime import datetime
 
+from packaging.version import InvalidVersion, Version
+
 from cq import requirements
 from cq.config import PYPROJECT
 from cq.context import Context
@@ -98,26 +100,39 @@ def outdated_row(name: str, current: str, latest: str, dates: dict[str, datetime
     }
 
 
-def trimmed(version: str) -> str:
-    """A version without its trailing ``.0`` parts, so ``2.31`` and ``2.31.0`` compare equal."""
-    return re.sub(r"(\.0)+$", "", version.lower())
+def parsed(version: str) -> Version | None:
+    """A PEP 440 version, or None for a string that isn't one."""
+    try:
+        return Version(version)
+    # A specific, expected exception: a non-PEP 440 version string, compared as text instead.
+    except InvalidVersion:
+        return None
 
 
 def release_key(dates: dict[str, datetime], version: str) -> str:
     """The PyPI release a pin names: ``2.31`` pins the release PyPI lists as ``2.31.0``."""
     if version in dates:
         return version
-    return next((v for v in dates if trimmed(v) == trimmed(version)), version)
+    wanted = parsed(version)
+    return next((v for v in dates if wanted is not None and parsed(v) == wanted), version)
+
+
+def is_behind(pin: str, latest: str) -> bool:
+    """Whether a pin is older than the latest release, by version order (a later backport is still older)."""
+    pinned, newest = parsed(pin), parsed(latest)
+    if pinned is None or newest is None:
+        return pin != latest
+    return pinned < newest  # a pre-release newer than the latest isn't behind
 
 
 def pinned_row(name: str, pin: str) -> dict | None:
-    """One pinned requirement against PyPI's latest release; None when the pin is the latest."""
+    """One pinned requirement against PyPI's latest release; None when the pin is not behind it."""
     project = pypi_project(name)
+    latest = project["info"]["version"]
+    if not is_behind(pin, latest):
+        return None
     dates = release_dates(project)
-    current, latest = release_key(dates, pin), project["info"]["version"]
-    if current == latest or (current in dates and latest in dates and dates[current] >= dates[latest]):
-        return None  # the latest, or a pre-release newer than it
-    return outdated_row(name, pin, latest, dates, current)
+    return outdated_row(name, pin, latest, dates, release_key(dates, pin))
 
 
 def collect_requirements(ctx: Context) -> dict:

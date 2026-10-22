@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from packaging.markers import Marker
+
 from cq.config import PYPROJECT
 
 REQUIREMENTS = "requirements.txt"
@@ -72,8 +74,19 @@ def url_name(target: str) -> str:
     return path.rstrip("/").rsplit("/", 1)[-1].split("@")[0] or "(url)"
 
 
+def applies(line: str) -> bool:
+    """Whether a line's environment marker (``; sys_platform == "linux"``) holds for the Python running cq.
+
+    A file can pin a package differently per platform or Python version; only the pin that applies
+    here is measured. A marker packaging can't read raises, so the collector reports a tool error.
+    """
+    _, _, marker = line.partition(";")
+    marker = LINE_OPTION.sub("", f" {marker}").strip()
+    return not marker or Marker(marker).evaluate()
+
+
 def parse_line(line: str) -> Requirement | None:
-    """One line as a requirement; None for an option line that names no package (``--index-url``, ``-c``)."""
+    """One line as a requirement; None for an option line (``--index-url``, ``-c``) or one whose marker excludes it."""
     editable = EDITABLE.match(line)
     if editable:
         return Requirement(url_name(editable["target"]), None)
@@ -82,6 +95,8 @@ def parse_line(line: str) -> Requirement | None:
     m = NAME.match(line)
     if not m or "://" in line.split("@")[0] or line.startswith((".", "/")):
         return Requirement(url_name(line), None)  # a bare URL or path: never a pin
+    if not applies(line):
+        return None
     pin = PIN.match(LINE_OPTION.sub("", f" {m['spec']}").strip())
     return Requirement(canonical(m["name"]), pin["version"] if pin else None)
 

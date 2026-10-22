@@ -14,8 +14,10 @@ numbers, and the trend shows a step there.
     with uv, and run `python -m pytest`;
   - **vulnerabilities** resolve those files with `uv pip compile`, in the run's folder, and audit
     every resolved package, transitive ones included;
-  - **freshness** compares each exact `==` pin with PyPI's latest release, and counts the other
-    lines in a new metric, `freshness.unpinned` ("Unpinned dependencies").
+  - **freshness** compares each exact `==` pin with PyPI's latest release, by version order, and
+    counts the other lines in a new metric, `freshness.unpinned` ("Unpinned dependencies"). A line
+    whose environment marker (`; sys_platform == "win32"`) doesn't hold for cq's Python is left
+    out. cq now declares `packaging`, for these versions and markers.
   - **What moves:** these apps get tests, vulnerability and freshness numbers where they had tool
     errors.
 - **An app with no dependency file cq can read** (no `pyproject.toml` or `requirements.txt`; a

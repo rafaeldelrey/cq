@@ -8,6 +8,7 @@ the advisory database: off the network it is skipped and says why, except in CI.
 import json
 import os
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -108,6 +109,9 @@ def project(latest: str, *released: str) -> dict:
         ("1.0.0", project("2.0.0", "1.0.0", "1.5.0", "2.0.0"), (True, 2.0)),
         ("1.5", project("1.9.0", "1.0.0", "1.5.0", "1.9.0"), (False, 1.0)),
         ("0.9", project("1.0.0", "1.0.0"), (True, 0.0)),  # a release PyPI doesn't date: no lag known
+        ("1.9", project("2.0", "1.0", "2.0", "1.9"), (True, 0.0)),  # a backport after 2.0 is still behind it
+        ("rel-b", project("rel-b", "rel-a", "rel-b"), None),  # not PEP 440: compared as text
+        ("rel-a", project("rel-b", "rel-a", "rel-b"), (False, 1.0)),
     ],
 )
 def test_a_pin_is_outdated_only_behind_the_latest_release(
@@ -246,3 +250,13 @@ def test_npm_freshness_rows_match_the_python_ones(tmp_path: Path, monkeypatch: p
         {"package": "left-pad", "current": "1.0.0", "latest": "2.0.0", "major": True, "years": 2.0}
     ]
     assert (result["outdated"], result["libyear"]) == (1, 2.0)
+
+
+def test_only_the_pin_whose_marker_holds_here_is_measured(tmp_path: Path) -> None:
+    here, elsewhere = (sys.platform, "no-such-platform")
+    (tmp_path / "requirements.txt").write_text(
+        f'pkg==2.0 ; sys_platform == "{elsewhere}"\n'
+        f'pkg==1.9 ; sys_platform == "{here}" --hash=sha256:aaaa\n'
+        'old==1.0 ; python_version < "3"\n'
+    )
+    assert requirements.parse(tmp_path / "requirements.txt") == [Requirement("pkg", "1.9")]

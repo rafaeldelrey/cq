@@ -20,7 +20,19 @@ _log_file: ContextVar[Path | None] = ContextVar("log_file", default=None)
 
 
 class ToolError(RuntimeError):
-    """A tool could not produce a measurement (crashed, missing, unparsable output)."""
+    """A tool could not produce a measurement (crashed, missing, unparsable output).
+
+    From ``run``, it also carries the command's exit code and output, for a caller that knows an
+    exit code the tool still measured with (ruff's 2 on an unparsable file). A tool run with
+    ``secret_output`` leaves both outputs empty.
+    """
+
+    def __init__(self, message: str, *, returncode: int | None = None, stdout: str = "", stderr: str = "") -> None:
+        """The message, plus what ``run`` knows about the failed command."""
+        super().__init__(message)
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
 
 
 def run(
@@ -57,7 +69,13 @@ def run(
             if secret_output
             else (proc.stderr or proc.stdout).strip()[-1500:]
         )
-        raise ToolError(f"{' '.join(cmd)} exited {proc.returncode}: {tail}")
+        outputs = ("", "") if secret_output else (proc.stdout, proc.stderr)
+        raise ToolError(
+            f"{' '.join(cmd)} exited {proc.returncode}: {tail}",
+            returncode=proc.returncode,
+            stdout=outputs[0],
+            stderr=outputs[1],
+        )
     return proc.stdout
 
 

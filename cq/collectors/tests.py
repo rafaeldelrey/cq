@@ -98,7 +98,17 @@ def collect_python(ctx: Context) -> dict:
     cov_json = ctx.raw_dir / "coverage.json"
     out = run_pytest(
         ctx,
-        ["pytest", "-q", "-p", "no:cacheprovider", "--cov", f"--cov-report=json:{cov_json}", "--cov-report="],
+        # --verbosity sets the level outright: a -q in the project's addopts would stack with cq's own
+        # into -qq, where pytest drops the summary line the results are read from (#52).
+        [
+            "pytest",
+            "--verbosity=-1",
+            "-p",
+            "no:cacheprovider",
+            "--cov",
+            f"--cov-report=json:{cov_json}",
+            "--cov-report=",
+        ],
         # Coverage's data file and pytest's bytecode stay out of the user's tree.
         {"COVERAGE_FILE": str(ctx.raw_dir / ".coverage"), "PYTHONDONTWRITEBYTECODE": "1"},
     )

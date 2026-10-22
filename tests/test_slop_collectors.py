@@ -339,8 +339,15 @@ def test_secret_output_never_reaches_the_log(tmp_path: Path) -> None:
 
 def test_secret_output_stays_out_of_errors(tmp_path: Path) -> None:
     with pytest.raises(ToolError) as excinfo:
-        run(["sh", "-c", 'echo "$V"; exit 3'], tmp_path, env={"V": "SECRETVALUE"}, secret_output=True)
+        run(["sh", "-c", 'echo "$V"; echo "$V" >&2; exit 3'], tmp_path, env={"V": "SECRETVALUE"}, secret_output=True)
     assert "SECRETVALUE" not in str(excinfo.value)
+    assert (excinfo.value.returncode, excinfo.value.stdout, excinfo.value.stderr) == (3, "", "")
+
+
+def test_a_failed_command_s_error_carries_its_exit_code_and_output(tmp_path: Path) -> None:
+    with pytest.raises(ToolError) as excinfo:
+        run(["sh", "-c", "echo out; echo err >&2; exit 2"], tmp_path)
+    assert (excinfo.value.returncode, excinfo.value.stdout, excinfo.value.stderr) == (2, "out\n", "err\n")
 
 
 @pytest.mark.skipif(shutil.which("betterleaks") is None, reason="betterleaks not installed")

@@ -163,3 +163,18 @@ def test_owns_and_nested_roots(tmp_path: Path) -> None:
     assert ctx.nested_roots == [(repo / "apps" / "outer" / "inner").resolve()]
     assert ctx.owns("x.py") and ctx.owns(repo / "apps" / "outer" / "x.py")
     assert not ctx.owns("inner/y.py") and not ctx.owns(repo / "elsewhere.py")
+
+
+def test_a_format_failure_other_than_the_old_flag_still_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only ruff's "unexpected argument '--extend-exclude'" triggers the per-file fallback."""
+    repo = committed(tmp_path / "r", {"cq.toml": TARGETS, "apps/outer/x.py": "", "apps/outer/inner/y.py": ""})
+    settings = load_settings(repo)
+    outer = next(t for t in settings.targets if t.name == "outer")
+    ctx = Context(target=outer, checkout=repo, raw_dir=tmp_path, settings=settings)
+
+    def broken(packages: tuple[str, ...], args: list[str], cwd: Path, **kwargs: object) -> str:
+        raise ToolError("ruff format --check exited 2: error: Failed to parse pyproject.toml")
+
+    monkeypatch.setattr(ruff_collector, "run_app_tool", broken)
+    with pytest.raises(ToolError, match="Failed to parse"):
+        ruff_collector.format_count(ctx, ["--extend-exclude", "./inner"])

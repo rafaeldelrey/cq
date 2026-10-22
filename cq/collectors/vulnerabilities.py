@@ -13,7 +13,7 @@ from pathlib import Path
 from cq import requirements
 from cq.config import PYPROJECT
 from cq.context import Context
-from cq.proc import has_lock, own, read_report, run
+from cq.proc import ToolError, has_lock, own, read_report, run
 
 KINDS = ("python", "typescript")
 
@@ -88,6 +88,48 @@ def fix_label(fix: object) -> str:
     return "yes" if fix else "no"
 
 
+def table(data: dict, key: str) -> dict:
+    """``data[key]`` when it is a JSON object, else an empty one."""
+    value = data.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def npm_error(data: dict) -> str | None:
+    """npm's own message when its audit JSON is an error body rather than a report; None for a report.
+
+    A registry error has a ``statusCode`` and the registry's message (in ``body``, or at the top);
+    a local one has ``error.code`` and ``error.summary``. The ``headers`` npm also prints (cookies
+    among them) never reach the message.
+    """
+    if "metadata" in data:
+        return None
+    body, error = table(data, "body"), table(data, "error")
+    if "statusCode" in data:
+        return f"{data['statusCode']} {body.get('message') or data.get('message', '')}".strip()
+    if error.get("code") or error.get("summary"):
+        return f"{error.get('code', '')} {error.get('summary', '')}".strip()
+    return json.dumps({k: v for k, v in data.items() if k != "headers"})[:300]
+
+
+def audit_attempt(ctx: Context) -> dict:
+    """One ``npm audit`` of the production tree, its JSON kept in the run's folder."""
+    out = run(["npm", "audit", "--json", "--omit=dev"], ctx.app_dir, ok_codes=(0, 1))
+    (ctx.raw_dir / "npm-audit.json").write_text(out)
+    return json.loads(out)
+
+
+def audit_report(ctx: Context) -> dict:
+    """npm audit's report. A registry error is tried once more (they have passed on a rerun);
+    a local one isn't. Either, left standing, is a tool error with npm's message (#66)."""
+    data = audit_attempt(ctx)
+    if npm_error(data) is not None and "statusCode" in data:
+        data = audit_attempt(ctx)
+    message = npm_error(data)
+    if message is not None:
+        raise ToolError(f"npm audit: {message}")
+    return data
+
+
 def collect_typescript(ctx: Context) -> dict:
     """npm audit of the production dependency tree.
 
@@ -98,9 +140,7 @@ def collect_typescript(ctx: Context) -> dict:
         other = next((lock for lock in ("pnpm-lock.yaml", "yarn.lock") if (ctx.app_dir / lock).exists()), None)
         if other:
             return {"skipped": f"{other}: cq audits npm projects only (npm audit needs package-lock.json)"}
-    out = run(["npm", "audit", "--json", "--omit=dev"], ctx.app_dir, ok_codes=(0, 1))
-    (ctx.raw_dir / "npm-audit.json").write_text(out)
-    data = json.loads(out)
+    data = audit_report(ctx)
     counts = data["metadata"]["vulnerabilities"]
     items = []
     for name, v in data.get("vulnerabilities", {}).items():

@@ -37,11 +37,13 @@ def glob_literal(path: str) -> str:
     """``path`` as a ruff exclude pattern that matches only itself: ruff reads excludes as globs, so
     each glob character goes in a one-character class (``[[]``, ``[*]``).
 
-    A comma can't be passed: ``--extend-exclude`` splits its value on commas, and overriding the
-    setting through ``--config`` would replace the app's own. That's a tool error, never a miscount.
+    A comma or a backslash can't be passed: ``--extend-exclude`` splits its value on commas, ruff's
+    globs read a backslash as an escape, and overriding the setting through ``--config`` would
+    replace the app's own. That's a tool error, never a miscount.
     """
-    if "," in path:
-        raise ToolError(f"cq can't exclude the nested target {path!r} from ruff: its path has a comma")
+    for char, name in ((",", "a comma"), ("\\", "a backslash")):
+        if char in path:
+            raise ToolError(f"cq can't exclude the nested target {path!r} from ruff: its path has {name}")
     return "".join(f"[{c}]" if c in GLOB_SPECIAL else c for c in path)
 
 

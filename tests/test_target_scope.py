@@ -115,10 +115,12 @@ def test_glob_literal_escapes_each_glob_character() -> None:
     assert ruff_collector.glob_literal("a[1]/b*c?{d}") == "a[[]1[]]/b[*]c[?][{]d[}]"
 
 
-def test_a_nested_target_whose_path_has_a_comma_is_a_tool_error() -> None:
-    """ruff splits --extend-exclude on commas: an exclusion it can't express is an error, not a miscount."""
-    with pytest.raises(ToolError, match="has a comma"):
-        ruff_collector.glob_literal("a,b")
+@pytest.mark.parametrize(("path", "said"), [("a,b", "a comma"), ("inner\\1", "a backslash")])
+def test_a_nested_target_ruff_cant_exclude_is_a_tool_error(path: str, said: str) -> None:
+    """ruff splits --extend-exclude on commas and reads a backslash as a glob escape: an exclusion it
+    can't express is an error, not a miscount."""
+    with pytest.raises(ToolError, match=f"has {said}"):
+        ruff_collector.glob_literal(path)
 
 
 def test_an_outer_target_on_ruff_before_0_16_still_counts_only_its_files(tmp_path: Path) -> None:

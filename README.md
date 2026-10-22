@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.7.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.8.0
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -63,7 +63,7 @@ You do this once per machine. It works on macOS and Linux.
 | | Why | Check | Install |
 |---|---|---|---|
 | git | everything | `git --version` | `brew install git` |
-| [uv](https://docs.astral.sh/uv/) | installs cq; runs each app's own tools | `uv --version` | `brew install uv` |
+| [uv](https://docs.astral.sh/uv/) 0.8.7 or later | installs cq; runs each app's own tools | `uv --version` | `brew install uv` |
 | [Homebrew](https://brew.sh) | `cq setup` installs the measuring tools with it | `brew --version` | see brew.sh |
 | GitHub ssh access | the cq repo is private | `ssh -T git@github.com` | add your ssh key to GitHub |
 | GitHub CLI, signed in | `cq setup` checks qlty's build attestation with it | `gh auth status` | `brew install gh`, then `gh auth login` |
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.7.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.8.0
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -84,10 +84,10 @@ version, so keep it the same everywhere you want comparable numbers.
 cq doctor
 ```
 
-Each tool gets one line. `ok` means installed (qlty also has to be the version cq pins). `XX` means
-missing and required. `--` means optional. Every line that isn't `ok` carries the command that
-fixes it. hadolint and trivy are optional: they're needed only when a repo has a Dockerfile or a
-published image.
+Each tool gets one line. `ok` means installed (qlty also has to be the version cq pins, and uv
+0.8.7 or later). `XX` means missing and required. `--` means optional. Every line that isn't `ok`
+carries the command that fixes it. hadolint and trivy are optional: they're needed only when a repo
+has a Dockerfile or a published image.
 
 **Step 3: install what's missing.**
 
@@ -257,7 +257,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.7.0"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.8.0"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -413,7 +413,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.7.0    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.8.0    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

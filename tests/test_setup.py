@@ -22,7 +22,8 @@ def fake_versions(monkeypatch: pytest.MonkeyPatch, found: dict[str, str]) -> Non
     monkeypatch.setattr(doctor, "version_line", lambda name, flag: found.get(name, ""))
 
 
-ALL = {t.name: f"{t.name} 1.0" for t in doctor.TOOLS} | {"qlty": QLTY_LINE}
+UV_LINE = "uv 0.12.22 (70fe1196a 2026-10-01 aarch64-apple-darwin)"
+ALL = {t.name: f"{t.name} 1.0" for t in doctor.TOOLS} | {"qlty": QLTY_LINE, "uv": UV_LINE}
 
 
 # ── doctor ────────────────────────────────────────────────────────────────────────────────────
@@ -184,6 +185,7 @@ def test_init_asks_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_dev_tools_as_an_extra_or_a_group(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n\n[dependency-groups]\ndev = ['pytest']\n")
+    (tmp_path / "uv.lock").write_text("")  # a locked app: uv run as is
     assert proc.uv_app(tmp_path, "pytest") == ["uv", "run", "-q", "pytest"]  # uv run includes the dev group
     (tmp_path / "pyproject.toml").write_text(
         "[project]\nname = 'x'\n\n[project.optional-dependencies]\ndev = ['pytest']\n"
@@ -326,3 +328,51 @@ def test_init_offers_the_gitignore_to_a_repo_set_up_before(
     init.add_qlty(load_settings(tmp_path), assume_yes=True)
     assert (tmp_path / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / QLTY_IGNORE_DEFAULT).read_text()
     assert (tmp_path / ".qlty" / "qlty.toml").read_text() == 'config_version = "0"\n'  # the config is kept
+
+
+def test_the_overlay_fallback_runs_isolated_in_an_unlocked_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the app's environment lacks the tool, the retry with ``--with`` doesn't lock the app either."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+    commands: list[list[str]] = []
+
+    def fake_run(cmd: list[str], cwd: Path, **kwargs: object) -> str:
+        if cmd[:2] == ["uv", "tree"]:
+            raise proc.ToolError("error: Unable to find lockfile")  # uv's answer: no lock covers the app
+        commands.append(cmd)
+        if len(commands) == 1:
+            raise proc.ToolError("error: Failed to spawn: `ruff`")
+        return "ok"
+
+    monkeypatch.setattr(proc, "run", fake_run)
+    assert proc.run_app_tool(("ruff",), ["ruff", "check"], tmp_path) == "ok"
+    assert commands == [
+        ["uv", "run", "-q", "--isolated", "ruff", "check"],
+        ["uv", "run", "-q", "--isolated", "--with", "ruff", "ruff", "check"],
+    ]
+
+
+def uv_workspace(root: Path, workspace: str, apps: dict[str, str]) -> None:
+    """A uv workspace at ``root`` with dependency-free apps, locked by uv itself."""
+    (root / "pyproject.toml").write_text(f"[tool.uv.workspace]\n{workspace}")
+    for folder, name in apps.items():
+        (root / folder).mkdir(parents=True)
+        (root / folder / "pyproject.toml").write_text(
+            f"[project]\nname = '{name}'\nversion = '0.1.0'\nrequires-python = '>=3.12'\ndependencies = []\n"
+        )
+    subprocess.run(["uv", "lock", "-q"], cwd=root, check=True, capture_output=True)
+
+
+def test_has_lock_follows_uvs_own_membership_rules(tmp_path: Path) -> None:
+    """Members, excluded folders, unlisted apps and ** globs, as uv itself decides them."""
+    apps = {"apps/a": "a", "apps/standalone": "standalone", "packages/foo": "foo", "tools": "tools"}
+    uv_workspace(tmp_path, "members = ['apps/*', 'packages/**/foo']\nexclude = ['apps/standalone']\n", apps)
+    locked = {folder: proc.has_lock(tmp_path / folder) for folder in apps}
+    assert locked == {"apps/a": True, "apps/standalone": False, "packages/foo": True, "tools": False}
+    assert proc.unlocked(tmp_path / "apps" / "standalone") == ["--isolated"]
+    assert proc.unlocked(tmp_path / "packages" / "foo") == []
+    assert sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("uv.lock")) == ["uv.lock"]
+
+
+def test_has_lock_without_a_pyproject_asks_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(proc, "run", lambda *a, **k: pytest.fail("uv was asked"))
+    assert not proc.has_lock(tmp_path)

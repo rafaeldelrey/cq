@@ -46,6 +46,9 @@ TOOLS = (
     Tool("trivy", "--version", "trivy", "published images", optional=True),
 )
 QLTY_VERSION = re.compile(r"qlty (\S+)")
+UV_VERSION = re.compile(r"uv (\d+)\.(\d+)\.(\d+)")
+# The first uv whose `uv run --isolated` writes no uv.lock into an app without one (cq's #53).
+UV_MIN = (0, 8, 7)
 QLTY_BIN = Path.home() / ".local" / "bin" / "qlty"
 
 
@@ -79,6 +82,10 @@ def check(tool: Tool) -> Check:
         m = QLTY_VERSION.search(found)
         ok = bool(m) and m.group(1) == PINS["qlty"]
         return Check(tool, found, ok, "cq setup" if not ok else "")
+    if tool.name == "uv" and found:
+        m = UV_VERSION.search(found)
+        ok = bool(m) and tuple(int(n) for n in m.groups()) >= UV_MIN
+        return Check(tool, found, ok, "" if ok else "uv self update, or brew upgrade uv")
     return Check(tool, found, bool(found), "" if found else f"brew install {tool.formula}")
 
 
@@ -125,6 +132,16 @@ def targets_line(folder: Path | None, config: Path | None = None) -> str | None:
     return unmeasured.hint(settings)
 
 
+def state_of(c: Check) -> str:
+    """A tool's state for doctor's table: its version line, and the version cq needs when it's off."""
+    state = c.found or "not installed"
+    if c.tool.name == "qlty" and not c.ok:
+        return f"{state} (cq pins {PINS['qlty']})"
+    if c.tool.name == "uv" and c.found and not c.ok:
+        return f"{state} (cq needs {'.'.join(map(str, UV_MIN))} or later)"
+    return state
+
+
 def doctor(folder: Path | None = None, config: Path | None = None) -> int:
     """Print every tool's state; exit 1 when a required one is missing or qlty is off its pin.
 
@@ -135,9 +152,7 @@ def doctor(folder: Path | None = None, config: Path | None = None) -> int:
     width = max(len(PLUGIN_LABEL), *(len(t.name) for t in TOOLS))
     for c in checks:
         mark = status_mark(c.ok, optional=c.tool.optional)
-        state = c.found or "not installed"
-        if c.tool.name == "qlty" and not c.ok:
-            state = f"{state} (cq pins {PINS['qlty']})"
+        state = state_of(c)
         line = f"{mark} {c.tool.name:<{width}}  {state}"
         out(f"{line}\n      for {c.tool.needed_for}: {c.fix}" if c.fix else line)
     out(plugin_line(width, folder))

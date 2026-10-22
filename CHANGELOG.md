@@ -4,6 +4,30 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.8.0] - 2026-10-21
+
+### Changed
+
+- **Measurement change: a run no longer writes into an app that has no `uv.lock`.** The ruff,
+  pyright, dependencies and tests collectors run `uv run` in the app's folder, and uv locked a
+  project without a lock, leaving an untracked `uv.lock` in the user's repo. For such an app cq now
+  runs `uv run --isolated`: the app's dependencies are installed into a temporary environment, and
+  nothing is written. Apps with a lock (their own, or their uv workspace root's) run as before.
+  - **freshness and vulnerabilities** read the app's lock. On an app without one they used to
+    measure only when an earlier collector in the same run had left a lock behind, and failed
+    otherwise. They now record `skipped` ("no uv.lock …") with the reason. **What moves:** their
+    numbers disappear for apps without a lock, which the trend shows as a step at this version.
+  - **vulnerabilities on a uv workspace member** is audited against the workspace root's lock
+    (the member's own packages). It used to be a tool error ("no uv.lock to audit"). **What
+    moves:** those members get vulnerability numbers.
+- **cq needs uv 0.8.7 or later**, and `cq doctor` checks it. Older uv writes a `uv.lock` even
+  under `uv run --isolated`.
+
+### Fixed
+
+- The tests collector runs pytest with `PYTHONDONTWRITEBYTECODE=1`, so it leaves no `__pycache__`
+  folders in the user's tree either, as coverage's data file already stayed in cq's run folder.
+
 ## [0.7.0] - 2026-10-21
 
 ### Changed

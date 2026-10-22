@@ -86,7 +86,8 @@ def collect_python(ctx: Context) -> dict:
         ["pytest", "-q", "-p", "no:cacheprovider", "--cov", f"--cov-report=json:{cov_json}", "--cov-report="],
         ctx.app_dir,
         ok_codes=(0, 1),  # 1: some tests failed — counted, not an error of the measurement
-        env={"COVERAGE_FILE": str(ctx.raw_dir / ".coverage")},
+        # Coverage's data file and pytest's bytecode stay out of the user's tree.
+        env={"COVERAGE_FILE": str(ctx.raw_dir / ".coverage"), "PYTHONDONTWRITEBYTECODE": "1"},
         # pytest-cov is overlaid: older commits ran tests without it, and its version doesn't move the numbers.
         overlay=("pytest-cov",),
     )

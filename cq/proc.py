@@ -13,6 +13,8 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
+from cq.config import PYPROJECT
+
 # The log file of the tool being run: every command, its exit code, timing and stderr go there.
 _log_file: ContextVar[Path | None] = ContextVar("log_file", default=None)
 
@@ -118,7 +120,7 @@ def log(text: str) -> None:
 
 def has_dev_extra(app_dir: Path) -> bool:
     """Whether the app declares a ``dev`` extra (optional-dependencies) rather than a dev group."""
-    pyproject = app_dir / "pyproject.toml"
+    pyproject = app_dir / PYPROJECT
     if not pyproject.exists():
         return False
     # aislop-ignore-next-line ai-slop/python-chained-dict-get -- a pyproject may have no [project] table or optional dependencies
@@ -134,7 +136,37 @@ def uv_app(app_dir: Path, *args: str, overlay: tuple[str, ...] = ()) -> list[str
     """
     extra = ["--extra", "dev"] if has_dev_extra(app_dir) else []
     with_args = [arg for pkg in overlay for arg in ("--with", pkg)]
-    return ["uv", "run", "-q", *extra, *with_args, *args]
+    return ["uv", "run", "-q", *unlocked(app_dir), *extra, *with_args, *args]
+
+
+def has_lock(app_dir: Path) -> bool:
+    """Whether uv runs the app against an existing uv.lock: its own, or that of a workspace it's a
+    member of.
+
+    uv is asked, with `uv tree --frozen`: it never writes a lock, and it fails when no lock covers
+    the app. So uv's own rules decide (workspace members and exclude globs, nesting), not a copy
+    of them.
+    """
+    if (app_dir / "uv.lock").exists():
+        return True
+    if not (app_dir / PYPROJECT).exists():
+        return False
+    try:
+        run(["uv", "tree", "--frozen", "--depth", "0", "-q"], app_dir)
+    # A specific, expected exception: uv exits non-zero when no lock covers the app, which is the
+    # answer, not an error.
+    except ToolError:
+        return False
+    return True
+
+
+def unlocked(app_dir: Path) -> list[str]:
+    """``--isolated`` for a uv project without a lock: uv would write a uv.lock into the user's repo.
+
+    The app's dependencies are still installed, into a temporary environment. An app with a lock,
+    its own or its workspace's, runs as before, against it.
+    """
+    return ["--isolated"] if (app_dir / PYPROJECT).exists() and not has_lock(app_dir) else []
 
 
 def run_app_tool(
@@ -158,5 +190,5 @@ def run_app_tool(
             raise
     with_args = [arg for pkg in (*packages, *overlay) for arg in ("--with", pkg)]
     # An app without its own pyproject would otherwise resolve the repo root's project.
-    isolate = [] if (cwd / "pyproject.toml").exists() else ["--no-project"]
-    return run(["uv", "run", "-q", *isolate, *with_args, *args], cwd, ok_codes=ok_codes, env=env)
+    isolate = [] if (cwd / PYPROJECT).exists() else ["--no-project"]
+    return run(["uv", "run", "-q", *isolate, *unlocked(cwd), *with_args, *args], cwd, ok_codes=ok_codes, env=env)

@@ -7,7 +7,7 @@ dependencies only (``--omit=dev``): what ships in the image.
 import json
 
 from cq.context import Context
-from cq.proc import ToolError, own, read_report, run
+from cq.proc import has_lock, own, read_report, run
 
 KINDS = ("python", "typescript")
 
@@ -16,8 +16,9 @@ NPM_LEVELS = ("critical", "high", "moderate", "low", "info")
 
 def collect_python(ctx: Context) -> dict:
     """Export the app's locked requirements, then audit them without re-resolving."""
-    if not (ctx.app_dir / "uv.lock").exists():
-        raise ToolError("no uv.lock to audit")
+    if not has_lock(ctx.app_dir):
+        # No lock to audit, and cq writes none into the user's repo (#53): a blind spot that says so.
+        return {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
     req = ctx.raw_dir / "requirements.txt"
     req.write_text(
         run(

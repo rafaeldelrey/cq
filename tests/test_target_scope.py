@@ -121,6 +121,23 @@ def test_a_nested_target_whose_path_has_a_comma_is_a_tool_error() -> None:
         ruff_collector.glob_literal("a,b")
 
 
+def test_an_outer_target_on_ruff_before_0_16_still_counts_only_its_files(tmp_path: Path) -> None:
+    """ruff 0.15's `format` rejects --extend-exclude: the count comes from its per-file lines."""
+    outer = pyproject("outer") + "\n[dependency-groups]\ndev = ['ruff==0.15.0']\n"
+    repo = committed(
+        tmp_path / "r",
+        {
+            "cq.toml": TARGETS,
+            "apps/outer/pyproject.toml": outer,
+            "apps/outer/outer/__init__.py": MODULE.format(name="Outer"),
+            "apps/outer/inner/pyproject.toml": pyproject("inner"),
+            "apps/outer/inner/inner/__init__.py": MODULE.format(name="Inner"),
+        },
+    )
+    ruff = measured(repo)["outer"]["ruff"]  # no tool error
+    assert (ruff["violations"], ruff["unformatted_files"]) == (1, 1)
+
+
 def test_a_target_inheriting_a_parent_pyright_config_counts_only_its_own_files(tmp_path: Path) -> None:
     """The app has no [tool.pyright]: pyright uses the parent's, which also covers other/."""
     repo = committed(

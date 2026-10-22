@@ -45,6 +45,30 @@ def glob_literal(path: str) -> str:
     return "".join(f"[{c}]" if c in GLOB_SPECIAL else c for c in path)
 
 
+OLD_FORMAT = "unexpected argument '--extend-exclude'"  # ruff before 0.16: `format` has no such flag
+
+
+def format_count(ctx: Context, nested: list[str]) -> int:
+    """Files ``ruff format --check`` would reformat, of this target's own.
+
+    ruff 0.16 and later exclude nested targets with ``--extend-exclude``. Older ruff rejects that
+    flag on ``format``, but lists each file on a "Would reformat: <path>" line, so cq counts the
+    lines whose file the target owns.
+    """
+    try:
+        return unformatted_count(
+            run_app_tool(("ruff",), ["ruff", "format", "--check", *nested, "."], ctx.app_dir, ok_codes=(0, 1))
+        )
+    # A specific, expected exception: an older ruff refusing the flag; any other failure propagates.
+    except ToolError as exc:
+        if not nested or OLD_FORMAT not in str(exc):
+            raise
+    out = run_app_tool(("ruff",), ["ruff", "format", "--check", "."], ctx.app_dir, ok_codes=(0, 1))
+    roots = ctx.nested_roots
+    files = [line.removeprefix("Would reformat: ") for line in out.splitlines() if line.startswith("Would reformat: ")]
+    return sum(1 for f in files if ctx.owns(f, roots))
+
+
 def collect(ctx: Context) -> dict:
     """ruff check over the whole app (its config decides the scope), and ruff format --check."""
     # A target nested inside this one counts its own files (#48). "./" anchors each pattern to the
@@ -60,12 +84,11 @@ def collect(ctx: Context) -> dict:
     (ctx.raw_dir / "ruff.json").write_text(out)
     findings = json.loads(out or "[]")
     by_rule = ranked(f.get("code") or "syntax" for f in findings)
-    fmt = run_app_tool(("ruff",), ["ruff", "format", "--check", *nested, "."], ctx.app_dir, ok_codes=(0, 1))
     return {
         "violations": len(findings),
         "fixable": sum(1 for f in findings if f.get("fix")),
         "by_rule": by_rule,
-        "unformatted_files": unformatted_count(fmt),
+        "unformatted_files": format_count(ctx, nested),
         "items": [
             {"file": ctx.rel(f["filename"]), "line": f["location"]["row"], "code": f.get("code"), "msg": f["message"]}
             for f in ctx.cap(findings, 30)

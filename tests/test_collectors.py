@@ -185,9 +185,8 @@ def test_pip_audit_on_the_locked_requirements(ctx: Context, monkeypatch: pytest.
     assert "--no-deps" in commands[1]
 
 
-def test_pip_audit_needs_a_lock(ctx: Context) -> None:
-    with pytest.raises(ToolError, match=r"no uv\.lock"):
-        vulnerabilities.collect(ctx)
+def test_pip_audit_without_a_lock_is_skipped_with_the_reason(ctx: Context) -> None:
+    assert vulnerabilities.collect(ctx) == {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
 
 
 def busy_module(n: int) -> str:

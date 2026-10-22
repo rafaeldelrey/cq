@@ -22,7 +22,8 @@ def fake_versions(monkeypatch: pytest.MonkeyPatch, found: dict[str, str]) -> Non
     monkeypatch.setattr(doctor, "version_line", lambda name, flag: found.get(name, ""))
 
 
-ALL = {t.name: f"{t.name} 1.0" for t in doctor.TOOLS} | {"qlty": QLTY_LINE}
+UV_LINE = "uv 0.12.22 (70fe1196a 2026-10-01 aarch64-apple-darwin)"
+ALL = {t.name: f"{t.name} 1.0" for t in doctor.TOOLS} | {"qlty": QLTY_LINE, "uv": UV_LINE}
 
 
 # ── doctor ────────────────────────────────────────────────────────────────────────────────────
@@ -184,6 +185,7 @@ def test_init_asks_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_dev_tools_as_an_extra_or_a_group(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n\n[dependency-groups]\ndev = ['pytest']\n")
+    (tmp_path / "uv.lock").write_text("")  # a locked app: uv run as is
     assert proc.uv_app(tmp_path, "pytest") == ["uv", "run", "-q", "pytest"]  # uv run includes the dev group
     (tmp_path / "pyproject.toml").write_text(
         "[project]\nname = 'x'\n\n[project.optional-dependencies]\ndev = ['pytest']\n"
@@ -326,3 +328,54 @@ def test_init_offers_the_gitignore_to_a_repo_set_up_before(
     init.add_qlty(load_settings(tmp_path), assume_yes=True)
     assert (tmp_path / ".qlty" / ".gitignore").read_text() == (DEFAULTS_DIR / QLTY_IGNORE_DEFAULT).read_text()
     assert (tmp_path / ".qlty" / "qlty.toml").read_text() == 'config_version = "0"\n'  # the config is kept
+
+
+def test_the_overlay_fallback_runs_isolated_in_an_unlocked_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the app's environment lacks the tool, the retry with ``--with`` doesn't lock the app either."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+    commands: list[list[str]] = []
+
+    def fake_run(cmd: list[str], cwd: Path, **kwargs: object) -> str:
+        commands.append(cmd)
+        if len(commands) == 1:
+            raise proc.ToolError("error: Failed to spawn: `ruff`")
+        return "ok"
+
+    monkeypatch.setattr(proc, "run", fake_run)
+    assert proc.run_app_tool(("ruff",), ["ruff", "check"], tmp_path) == "ok"
+    assert commands[1] == ["uv", "run", "-q", "--isolated", "--with", "ruff", "ruff", "check"]
+
+
+def test_has_lock_stops_at_the_repo_root(tmp_path: Path) -> None:
+    """A uv.lock above the repository, or beside a pyproject that isn't a workspace, isn't the app's."""
+    (tmp_path / "uv.lock").write_text("")
+    (tmp_path / "pyproject.toml").write_text("[tool.uv.workspace]\nmembers = ['repo/app']\n")
+    app = tmp_path / "repo" / "app"
+    app.mkdir(parents=True)
+    (tmp_path / "repo" / ".git").mkdir()
+    assert not proc.has_lock(app)  # the workspace lock is outside the repo
+    (tmp_path / "repo" / "uv.lock").write_text("")
+    (tmp_path / "repo" / "pyproject.toml").write_text("[project]\nname = 'root'\n")
+    assert not proc.has_lock(app)  # the repo root's own project, not a workspace
+    (tmp_path / "repo" / "pyproject.toml").unlink()
+    assert not proc.has_lock(app)  # a stray uv.lock with no pyproject beside it
+
+
+@pytest.mark.parametrize(
+    ("line", "ok"),
+    [
+        ("uv 0.8.6 (Homebrew 2025-08-07)", False),
+        ("uv 0.8.7", True),
+        ("uv 0.12.22 (70fe1196a 2026-10-01)", True),
+        ("uv", False),
+    ],
+)
+def test_doctor_needs_a_uv_that_runs_isolated_without_a_lock(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], line: str, ok: bool
+) -> None:
+    """uv 0.8.6 and older write a uv.lock even under ``uv run --isolated`` (#53)."""
+    fake_versions(monkeypatch, ALL | {"uv": line})
+    assert doctor.doctor() == (0 if ok else 1)
+    text = capsys.readouterr().out
+    assert ("(cq needs 0.8.7 or later)" in text) == (not ok)
+    assert ("uv self update, or brew upgrade uv" in text) == (not ok)

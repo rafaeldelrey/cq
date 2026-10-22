@@ -8,8 +8,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from cq import cli, complexity_gate, gate, runner
+from cq import cli, complexity_gate, gate, proc, runner
 from cq.backfill import commits_to_measure
+from cq.collectors import freshness, vulnerabilities
 from cq.config import DEFAULTS_DIR, QLTY_IGNORE_DEFAULT, Target, load_settings
 from cq.context import Context
 from cq.proc import ToolError
@@ -195,7 +196,52 @@ def test_the_app_environment_tools_run_on_a_dependency_group_repo(repo: Path) ->
     assert "violations" in measured["ruff"]
     assert measured["pyright"]["errors"] >= 0
     assert measured["duplication"]["clones"] == 0
-    assert measured["freshness"]["outdated"] >= 0
+    assert measured["freshness"]["skipped"] == freshness.SKIP_NO_LOCK  # no uv.lock in this repo
+
+
+def test_a_run_writes_no_lock_into_an_app_without_one(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The uv-based tools run isolated when the app has no uv.lock, freshness and vulnerabilities
+    say they have no lock to read, and pytest leaves no bytecode behind."""
+    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)  # as on a machine that doesn't set it
+    pyproject = repo / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "dependencies = []\n")
+    git(repo, "commit", "-qam", "deps")
+    tools = ("ruff", "pyright", "dependencies", "tests", "freshness", "vulnerabilities")
+    assert run_cq(repo, "run", "--no-history", *(arg for t in tools for arg in ("--tool", t))) == 0
+    assert git(repo, "status", "--porcelain", "--untracked-files=all", "--", ".", ":!.cq") == ""
+    assert not (repo / "uv.lock").exists() and not (repo / ".venv").exists()
+    run_dir = latest_run(load_settings(repo).runs_dir)
+    assert run_dir is not None
+    snap = json.loads((run_dir / "snapshot.json").read_text())
+    assert snap["errors"] == {}, snap["errors"]
+    assert snap["targets"]["acme"]["freshness"]["skipped"] == freshness.SKIP_NO_LOCK  # never off a stray lock
+    assert snap["targets"]["acme"]["vulnerabilities"]["skipped"].startswith("no uv.lock to audit")
+
+
+def test_a_workspace_member_runs_against_the_workspace_lock(tmp_path: Path) -> None:
+    """A uv workspace member has no uv.lock of its own: it's locked at the root, and stays so."""
+    root = tmp_path / "ws"
+    member = root / "apps" / "a"
+    (member / "a").mkdir(parents=True)
+    (root / "pyproject.toml").write_text("[tool.uv.workspace]\nmembers = ['apps/*']\n")
+    (member / "pyproject.toml").write_text(
+        "[project]\nname = 'a'\nversion = '0.1.0'\nrequires-python = '>=3.12'\ndependencies = ['six==1.15.0']\n"
+    )
+    (member / "a" / "__init__.py").write_text('"""A."""\n')
+    subprocess.run(["uv", "lock", "-q"], cwd=root, check=True, capture_output=True)
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "ws")
+    assert proc.has_lock(member) and proc.unlocked(member) == []
+    target = Target(name="a", kind="python", root="apps/a", source=("a",), tests=False)
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    ctx = Context(target=target, checkout=root, raw_dir=raw, settings=load_settings(root))
+    result = freshness.collect(ctx)
+    assert [i["package"] for i in result["items"]] == ["six"]  # the root lock's 1.15.0, behind the latest
+    audit = vulnerabilities.collect(ctx)  # the member's own packages, from the workspace lock
+    assert (audit["packages"], audit["vulnerable_packages"]) == (1, 0)
+    assert git(root, "status", "--porcelain", "--untracked-files=all") == ""
 
 
 def test_pytest_coverage_and_deptry_on_a_python_repo(repo: Path) -> None:

@@ -194,7 +194,9 @@ def test_doctor_reports_the_plugin_and_never_fails_on_it(
         use(monkeypatch, FakeClaude(installed=installed))
     monkeypatch.chdir(repo)
     monkeypatch.setattr(
-        doctor, "version_line", lambda name, flag: f"qlty {doctor.PINS['qlty']}" if name == "qlty" else "1.0"
+        doctor,
+        "version_line",
+        lambda name, flag: {"qlty": f"qlty {doctor.PINS['qlty']}", "uv": "uv 0.12.22"}.get(name, "1.0"),
     )
     assert doctor.doctor() == 0  # the plugin is optional
     assert line in capsys.readouterr().out
@@ -263,7 +265,9 @@ def test_cq_doctor_reports_the_plugin_for_the_repo_given(
     seen: list[Path] = []
     monkeypatch.setattr(plugin, "status", lambda folder: seen.append(folder) or (False, "not installed", "cq init"))
     monkeypatch.setattr(
-        doctor, "version_line", lambda name, flag: f"qlty {doctor.PINS['qlty']}" if name == "qlty" else "1.0"
+        doctor,
+        "version_line",
+        lambda name, flag: {"qlty": f"qlty {doctor.PINS['qlty']}", "uv": "uv 0.12.22"}.get(name, "1.0"),
     )
     monkeypatch.chdir(tmp_path)
     assert cli.main(["--repo", str(repo), "doctor"]) == 0
@@ -310,7 +314,9 @@ def test_doctor_points_out_a_missing_qlty_gitignore(
 ) -> None:
     monkeypatch.chdir(repo)
     monkeypatch.setattr(
-        doctor, "version_line", lambda name, flag: f"qlty {doctor.PINS['qlty']}" if name == "qlty" else "1.0"
+        doctor,
+        "version_line",
+        lambda name, flag: {"qlty": f"qlty {doctor.PINS['qlty']}", "uv": "uv 0.12.22"}.get(name, "1.0"),
     )
     assert doctor.doctor() == 0
     assert ".qlty/.gitignore" not in capsys.readouterr().out  # no qlty config here: nothing to say

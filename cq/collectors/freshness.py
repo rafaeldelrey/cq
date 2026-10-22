@@ -14,8 +14,9 @@ import re
 import urllib.request
 from datetime import datetime
 
+from cq.config import PYPROJECT
 from cq.context import Context
-from cq.proc import run
+from cq.proc import has_lock, run
 
 KINDS = ("python", "typescript")
 
@@ -23,6 +24,9 @@ UV_OUTDATED = re.compile(
     r"[├└]── (?P<name>[\w.\-\[\]]+) v(?P<current>\S+)(?: \([^)]*\))*? \(latest: v(?P<latest>[^)]+)\)"
 )
 YEAR = 365.25 * 86400
+UV_TREE = ["uv", "tree", "--outdated", "--depth", "1", "--frozen"]
+# The installed versions come from the lock, and cq doesn't write one into the user's repo (#53).
+SKIP_NO_LOCK = "no uv.lock: freshness reads the locked versions, and cq writes no lock into the repo"
 
 
 def major(version: str) -> int | None:
@@ -73,7 +77,9 @@ def summarise(ctx: Context, rows: list[dict]) -> dict:
 
 def collect_python(ctx: Context) -> dict:
     """`uv tree --outdated` for the direct dependencies, release dates from PyPI."""
-    out = run(["uv", "tree", "--outdated", "--depth", "1", "--frozen"], ctx.app_dir)
+    if (ctx.app_dir / PYPROJECT).exists() and not has_lock(ctx.app_dir):
+        return {"skipped": SKIP_NO_LOCK}
+    out = run(UV_TREE, ctx.app_dir)  # with no pyproject either, uv says so (#56)
     (ctx.raw_dir / "uv-outdated.txt").write_text(out)
     rows = []
     for m in UV_OUTDATED.finditer(out):

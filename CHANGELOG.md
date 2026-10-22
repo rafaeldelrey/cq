@@ -4,6 +4,16 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.11.2] - 2026-10-22
+
+### Fixed
+
+- **An `npm audit` error reply is a tool error with npm's message, not a `KeyError`.** When the
+  registry or npm can't produce a report, `npm audit --json` prints an error body instead, and cq
+  crashed reading it. The tool error now says what npm said (`npm audit: 400 Invalid package
+  tree…`, `npm audit: ENOLOCK …`). A registry error is tried once more first, since one has passed
+  on a rerun; a local error isn't.
+
 ## [0.11.1] - 2026-10-22
 
 ### Fixed

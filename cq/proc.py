@@ -1,5 +1,6 @@
 """Running the measuring tools as subprocesses."""
 
+import fnmatch
 import json
 import os
 import shutil
@@ -139,13 +140,26 @@ def uv_app(app_dir: Path, *args: str, overlay: tuple[str, ...] = ()) -> list[str
     return ["uv", "run", "-q", *unlocked(app_dir), *extra, *with_args, *args]
 
 
-def is_workspace_root(folder: Path) -> bool:
-    """Whether ``folder`` holds a uv workspace's root pyproject.toml."""
+def workspace_of(folder: Path) -> dict:
+    """The ``[tool.uv.workspace]`` table of ``folder``'s pyproject.toml; empty when it has none."""
     pyproject = folder / PYPROJECT
     if not pyproject.exists():
-        return False
+        return {}
     tool = tomllib.loads(pyproject.read_text()).get("tool", {})
-    return "workspace" in tool.get("uv", {})
+    uv = tool.get("uv", {})
+    return uv.get("workspace", {})
+
+
+def is_member(workspace: dict, relative: str) -> bool:
+    """Whether the folder at ``relative`` (from the workspace root) is one of its members.
+
+    uv matches ``members`` and ``exclude`` as glob patterns; an excluded folder has no part in the
+    workspace's lock.
+    """
+
+    member = any(fnmatch.fnmatchcase(relative, p.rstrip("/")) for p in workspace.get("members", []))
+    excluded = any(fnmatch.fnmatchcase(relative, p.rstrip("/")) for p in workspace.get("exclude", []))
+    return member and not excluded
 
 
 def has_lock(app_dir: Path) -> bool:
@@ -155,8 +169,9 @@ def has_lock(app_dir: Path) -> bool:
     """
     if (app_dir / "uv.lock").exists():
         return True
-    for folder in app_dir.resolve().parents:
-        if (folder / "uv.lock").exists() and is_workspace_root(folder):
+    app = app_dir.resolve()
+    for folder in app.parents:
+        if (folder / "uv.lock").exists() and is_member(workspace_of(folder), app.relative_to(folder).as_posix()):
             return True
         if (folder / ".git").exists():
             return False

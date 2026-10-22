@@ -379,3 +379,21 @@ def test_doctor_needs_a_uv_that_runs_isolated_without_a_lock(
     text = capsys.readouterr().out
     assert ("(cq needs 0.8.7 or later)" in text) == (not ok)
     assert ("uv self update, or brew upgrade uv" in text) == (not ok)
+
+
+def test_an_app_excluded_from_the_workspace_has_no_lock(tmp_path: Path) -> None:
+    """uv's members and exclude globs decide whose lock the workspace's is."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "uv.lock").write_text("")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.uv.workspace]\nmembers = ['apps/*']\nexclude = ['apps/standalone']\n"
+    )
+    for name in ("a", "standalone"):
+        (tmp_path / "apps" / name).mkdir(parents=True)
+        (tmp_path / "apps" / name / "pyproject.toml").write_text(f"[project]\nname = '{name}'\n")
+    assert proc.has_lock(tmp_path / "apps" / "a")
+    assert not proc.has_lock(tmp_path / "apps" / "standalone")
+    assert proc.unlocked(tmp_path / "apps" / "standalone") == ["--isolated"]
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "pyproject.toml").write_text("[project]\nname = 'tools'\n")
+    assert not proc.has_lock(tmp_path / "tools")  # not listed in members at all

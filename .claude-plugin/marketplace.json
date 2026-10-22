@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "cq",
-      "description": "Code-quality snapshots, trends and a PR gate: the /code-quality and /setup-cq skills for the cq CLI",
+      "description": "Code-quality snapshots, trends and a PR gate: the /cq and /setup-cq skills for the cq CLI",
       "source": "./",
       "category": "development"
     }

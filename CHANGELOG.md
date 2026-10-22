@@ -4,6 +4,17 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.7.0] - 2026-10-21
+
+### Changed
+
+- **The `/code-quality` skill is now `/cq`**, the name of the command it drives: `/cq`,
+  `/cq report`, `/cq backfill <since>` and `/cq gate`. The old name is gone, with no alias: after
+  upgrading the plugin, type `/cq`. `/setup-cq` and `/improve-code-quality` keep their names, and
+  `cq init` and `cq doctor` name the new one.
+
+No measurement changed: snapshots from 0.6.2 and 0.7.0 compare directly.
+
 ## [0.6.2] - 2026-10-20
 
 ### Added

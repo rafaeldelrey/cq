@@ -177,7 +177,7 @@ def test_a_list_claude_cannot_answer_counts_as_not_installed(repo: Path, monkeyp
         (
             True,
             [],
-            "--  claude plugin  not installed\n      for /code-quality, /setup-cq and /improve-code-quality: cq init",
+            "--  claude plugin  not installed\n      for /cq, /setup-cq and /improve-code-quality: cq init",
         ),
         (True, [{"id": "cq@cq", "scope": "user", "version": "0.2.0"}], "ok  claude plugin  cq@cq (user 0.2.0)"),
     ],
@@ -333,7 +333,7 @@ def test_init_names_every_skill_the_plugin_brings(
     monkeypatch.setattr(sys, "stdin", tty("u"))
     init.add_plugin(load_settings(repo), skills=None, assume_yes=False)
     out = capsys.readouterr().out
-    named = "/code-quality, /setup-cq and /improve-code-quality"
+    named = "/cq, /setup-cq and /improve-code-quality"
     assert f"Install the cq skills for Claude Code ({named})?" in out
     assert f"Installed for you: {named} work in every repo." in out
 

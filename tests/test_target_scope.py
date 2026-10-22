@@ -4,10 +4,13 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from cq import cli
 from cq.collectors import ruff as ruff_collector
 from cq.config import load_settings
 from cq.context import Context
+from cq.proc import ToolError
 from cq.report import latest_run
 
 # One ruff violation (F401), one unformatted line and one type error per module.
@@ -110,6 +113,12 @@ def test_a_nested_target_with_glob_characters_in_its_name_excludes_only_itself(t
 
 def test_glob_literal_escapes_each_glob_character() -> None:
     assert ruff_collector.glob_literal("a[1]/b*c?{d}") == "a[[]1[]]/b[*]c[?][{]d[}]"
+
+
+def test_a_nested_target_whose_path_has_a_comma_is_a_tool_error() -> None:
+    """ruff splits --extend-exclude on commas: an exclusion it can't express is an error, not a miscount."""
+    with pytest.raises(ToolError, match="has a comma"):
+        ruff_collector.glob_literal("a,b")
 
 
 def test_a_target_inheriting_a_parent_pyright_config_counts_only_its_own_files(tmp_path: Path) -> None:

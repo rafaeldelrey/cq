@@ -88,7 +88,7 @@ def fix_label(fix: object) -> str:
     return "yes" if fix else "no"
 
 
-def table(data: dict, key: str) -> dict:
+def json_object(data: dict, key: str) -> dict:
     """``data[key]`` when it is a JSON object, else an empty one."""
     value = data.get(key)
     return value if isinstance(value, dict) else {}
@@ -103,26 +103,47 @@ def npm_error(data: dict) -> str | None:
     """
     if "metadata" in data:
         return None
-    body, error = table(data, "body"), table(data, "error")
-    if "statusCode" in data:
-        return f"{data['statusCode']} {body.get('message') or data.get('message', '')}".strip()
+    body, error = json_object(data, "body"), json_object(data, "error")
+    if from_registry(data):
+        status = str(data["statusCode"])
+        message = body.get("message") or data.get("message") or body.get("error") or "no message"
+        return f"{status} {message.removeprefix(status).strip()}"
     if error.get("code") or error.get("summary"):
         return f"{error.get('code', '')} {error.get('summary', '')}".strip()
-    return json.dumps({k: v for k, v in data.items() if k != "headers"})[:300]
+    # Only the keys of a reply cq doesn't know: its values could hold anything.
+    return f"no report and no message (keys: {', '.join(sorted(data))})"
+
+
+def from_registry(data: dict) -> bool:
+    """Whether npm's reply is the registry's error (it carries the HTTP status), which a rerun can clear."""
+    return "statusCode" in data and "metadata" not in data
 
 
 def audit_attempt(ctx: Context) -> dict:
-    """One ``npm audit`` of the production tree, its JSON kept in the run's folder."""
-    out = run(["npm", "audit", "--json", "--omit=dev"], ctx.app_dir, ok_codes=(0, 1))
-    (ctx.raw_dir / "npm-audit.json").write_text(out)
-    return json.loads(out)
+    """One ``npm audit`` of the production tree, its JSON kept in the run's folder.
+
+    A registry error also carries the response's ``headers`` (a ``set-cookie`` among them), which
+    are left out of the kept file.
+    """
+    try:
+        out = run(["npm", "audit", "--json", "--omit=dev"], ctx.app_dir, ok_codes=(0, 1))
+    # A specific, expected exception: npm exiting otherwise with its JSON reply on stdout goes through
+    # the same reading (and retry) as exit 1, and never quotes the reply's headers. Anything else propagates.
+    except ToolError as exc:
+        if not exc.stdout.lstrip().startswith("{"):
+            raise
+        out = exc.stdout
+    data = json.loads(out)
+    kept = json.dumps({k: v for k, v in data.items() if k != "headers"}, indent=2) if "headers" in data else out
+    (ctx.raw_dir / "npm-audit.json").write_text(kept)
+    return data
 
 
 def audit_report(ctx: Context) -> dict:
     """npm audit's report. A registry error is tried once more (they have passed on a rerun);
     a local one isn't. Either, left standing, is a tool error with npm's message (#66)."""
     data = audit_attempt(ctx)
-    if npm_error(data) is not None and "statusCode" in data:
+    if from_registry(data):
         data = audit_attempt(ctx)
     message = npm_error(data)
     if message is not None:

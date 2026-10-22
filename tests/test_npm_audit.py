@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from cq import proc
 from cq.collectors import vulnerabilities
 from cq.config import Settings, Target
 from cq.context import Context
@@ -41,7 +42,7 @@ REPORT = {
 def ui_context(tmp_path: Path, lock: bool = True) -> Context:
     """A Context for a TypeScript app at ``tmp_path/ui``, with or without a package-lock.json."""
     app = tmp_path / "ui"
-    app.mkdir()
+    app.mkdir(parents=True)
     (app / "package.json").write_text('{"name": "demo-ui", "version": "1.0.0"}\n')
     if lock:
         (app / "package-lock.json").write_text('{"name": "demo-ui", "lockfileVersion": 3, "packages": {}}\n')
@@ -84,13 +85,54 @@ def test_a_registry_error_twice_is_a_tool_error_with_npm_s_message(
     assert len(commands) == 2
     assert str(excinfo.value) == "npm audit: 400 Invalid package tree, run npm install"
     assert "abc123" not in str(excinfo.value)
+    kept = json.loads((tmp_path / "raw" / "npm-audit.json").read_text())
+    assert "headers" not in kept and kept["statusCode"] == 400  # the error kept, its cookie not
 
 
 def test_a_registry_error_without_a_body_uses_its_top_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     bare = {"statusCode": 503, "message": "503 Service Unavailable"}
     npm_replies(monkeypatch, bare, bare)
-    with pytest.raises(ToolError, match=r"^npm audit: 503 503 Service Unavailable$"):
+    with pytest.raises(ToolError, match=r"^npm audit: 503 Service Unavailable$"):
         vulnerabilities.collect(ui_context(tmp_path))
+
+
+def test_a_registry_error_with_no_message_names_its_status(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    silent = {"statusCode": 502, "body": {"error": "Bad Gateway"}}
+    npm_replies(monkeypatch, silent, {"statusCode": 502})
+    with pytest.raises(ToolError, match=r"^npm audit: 502 no message$"):
+        vulnerabilities.collect(ui_context(tmp_path))
+    npm_replies(monkeypatch, silent, silent)
+    with pytest.raises(ToolError, match=r"^npm audit: 502 Bad Gateway$"):
+        vulnerabilities.collect(ui_context(tmp_path / "again"))
+
+
+def test_another_exit_code_with_npm_s_reply_is_read_the_same_way(tmp_path: Path) -> None:
+    """A real command that prints the registry error and exits 3: retried, then npm's message, no cookie."""
+    ctx = ui_context(tmp_path)
+    reply = ctx.app_dir / "reply.json"
+    reply.write_text(json.dumps(REGISTRY_ERROR))
+    attempts = ctx.app_dir / "attempts"
+    script = f'echo x >> "{attempts}"; cat "{reply}"; exit 3'
+
+    def npm(cmd: list[str], cwd: Path, **kwargs: object) -> str:
+        return proc.run(["sh", "-c", script], cwd, ok_codes=(0, 1))
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(vulnerabilities, "run", npm)
+        with pytest.raises(ToolError) as excinfo:
+            vulnerabilities.collect(ctx)
+    assert str(excinfo.value) == "npm audit: 400 Invalid package tree, run npm install"
+    assert attempts.read_text().count("x") == 2
+
+
+def test_another_exit_code_without_a_json_reply_is_npm_s_own_error(tmp_path: Path) -> None:
+    def npm(cmd: list[str], cwd: Path, **kwargs: object) -> str:
+        return proc.run(["sh", "-c", "echo 'npm error code ECONNRESET' >&2; exit 7"], cwd, ok_codes=(0, 1))
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(vulnerabilities, "run", npm)
+        with pytest.raises(ToolError, match="ECONNRESET"):
+            vulnerabilities.collect(ui_context(tmp_path))
 
 
 def test_a_local_error_is_not_retried(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -106,7 +148,7 @@ def test_an_unknown_reply_is_a_tool_error_without_npm_s_headers(
     npm_replies(monkeypatch, {"headers": {"set-cookie": ["session=abc123"]}, "oops": True})
     with pytest.raises(ToolError) as excinfo:
         vulnerabilities.collect(ui_context(tmp_path))
-    assert str(excinfo.value) == 'npm audit: {"oops": true}'
+    assert str(excinfo.value) == "npm audit: no report and no message (keys: headers, oops)"
 
 
 def test_a_report_measures_on_the_first_attempt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

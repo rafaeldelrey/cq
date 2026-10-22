@@ -30,6 +30,15 @@ def unformatted_count(output: str) -> int:
     raise ToolError(f"ruff format --check: output with no count cq can read: {output[-300:]}")
 
 
+GLOB_SPECIAL = set("[]*?{}")
+
+
+def glob_literal(path: str) -> str:
+    """``path`` as a ruff exclude pattern that matches only itself: ruff reads excludes as globs, so
+    each glob character goes in a one-character class (``[[]``, ``[*]``)."""
+    return "".join(f"[{c}]" if c in GLOB_SPECIAL else c for c in path)
+
+
 def collect(ctx: Context) -> dict:
     """ruff check over the whole app (its config decides the scope), and ruff format --check."""
     # A target nested inside this one counts its own files (#48). "./" anchors each pattern to the
@@ -37,7 +46,7 @@ def collect(ctx: Context) -> dict:
     nested = [
         arg
         for root in ctx.nested_roots
-        for arg in ("--extend-exclude", f"./{root.relative_to(ctx.app_dir.resolve()).as_posix()}")
+        for arg in ("--extend-exclude", f"./{glob_literal(root.relative_to(ctx.app_dir.resolve()).as_posix())}")
     ]
     out = run_app_tool(
         ("ruff",), ["ruff", "check", "--output-format", "json", "--exit-zero", *nested, "."], ctx.app_dir

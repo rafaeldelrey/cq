@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from cq import cli
+from cq.collectors import ruff as ruff_collector
 from cq.config import load_settings
 from cq.context import Context
 from cq.report import latest_run
@@ -81,6 +82,34 @@ def test_a_nested_targets_files_count_toward_it_alone(tmp_path: Path) -> None:
             errors,
         ), name
         assert sorted(i["file"] for i in pyright["items"]) == files, name
+
+
+def test_a_nested_target_with_glob_characters_in_its_name_excludes_only_itself(tmp_path: Path) -> None:
+    """ruff reads excludes as globs: "inner[1]" must not match the outer target's "inner1"."""
+    targets = TARGETS.replace('root = "apps/outer/inner"', 'root = "apps/outer/inner[1]"')
+    repo = committed(
+        tmp_path / "r",
+        {
+            "cq.toml": targets,
+            "apps/outer/pyproject.toml": pyproject("outer"),
+            "apps/outer/outer/__init__.py": MODULE.format(name="Outer"),
+            "apps/outer/inner1/mod.py": MODULE.format(name="Decoy"),
+            "apps/outer/inner[1]/pyproject.toml": pyproject("inner"),
+            "apps/outer/inner[1]/inner/__init__.py": MODULE.format(name="Inner"),
+        },
+    )
+    ruff = {name: target["ruff"] for name, target in measured(repo).items() if name != "repo"}
+    assert (ruff["outer"]["violations"], ruff["outer"]["unformatted_files"]) == (2, 2)
+    # The same counts with the glob unescaped (inner1 hidden, inner[1] counted): the files tell.
+    assert sorted(i["file"] for i in ruff["outer"]["items"]) == [
+        "apps/outer/inner1/mod.py",
+        "apps/outer/outer/__init__.py",
+    ]
+    assert (ruff["inner"]["violations"], ruff["inner"]["unformatted_files"]) == (1, 1)
+
+
+def test_glob_literal_escapes_each_glob_character() -> None:
+    assert ruff_collector.glob_literal("a[1]/b*c?{d}") == "a[[]1[]]/b[*]c[?][{]d[}]"
 
 
 def test_a_target_inheriting_a_parent_pyright_config_counts_only_its_own_files(tmp_path: Path) -> None:

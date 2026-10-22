@@ -50,13 +50,17 @@ class Context:
         )
         return sorted(r for r in roots if r != own and r.is_relative_to(own))
 
-    def owns(self, path: Path | str) -> bool:
+    def owns(self, path: Path | str, nested: list[Path] | None = None) -> bool:
         """Whether a file a tool reported is this target's: under its root, and not under a target
-        nested inside it. A relative path is taken from the app directory, where the tools run."""
+        nested inside it. A relative path is taken from the app directory, where the tools run.
+
+        ``nested`` is ``nested_roots``, passed in by a caller checking many files.
+        """
         p = Path(path)
         p = (self.app_dir / p).resolve() if not p.is_absolute() else p.resolve()
         own = self.app_dir.resolve()
-        return p.is_relative_to(own) and not any(p.is_relative_to(r) for r in self.nested_roots)
+        roots = self.nested_roots if nested is None else nested
+        return p.is_relative_to(own) and not any(p.is_relative_to(r) for r in roots)
 
     def rel(self, path: Path | str, base: Path | None = None) -> str:
         """A path relative to the checkout, so snapshots from a worktree read like the repo's.

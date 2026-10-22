@@ -62,17 +62,25 @@ def test_a_nested_targets_files_count_toward_it_alone(tmp_path: Path) -> None:
             "cq.toml": TARGETS,
             "apps/outer/pyproject.toml": pyproject("outer"),
             "apps/outer/outer/__init__.py": MODULE.format(name="Outer"),
+            # A folder named like the nested target, inside the outer one: still the outer's.
+            "apps/outer/outer/inner/__init__.py": MODULE.format(name="Decoy"),
             "apps/outer/inner/pyproject.toml": pyproject("inner"),
             "apps/outer/inner/inner/__init__.py": MODULE.format(name="Inner"),
         },
     )
     targets = measured(repo)
-    for name in ("outer", "inner"):
+    expected = {
+        "outer": (2, 2, 2, ["apps/outer/outer/__init__.py", "apps/outer/outer/inner/__init__.py"]),
+        "inner": (1, 1, 1, ["apps/outer/inner/inner/__init__.py"]),
+    }
+    for name, (violations, unformatted, errors, files) in expected.items():
         ruff, pyright = targets[name]["ruff"], targets[name]["pyright"]
-        assert (ruff["violations"], ruff["unformatted_files"], pyright["errors"]) == (1, 1, 1), name
-        assert [i["file"] for i in pyright["items"]] == [
-            f"apps/outer/{'' if name == 'outer' else 'inner/'}{name}/__init__.py"
-        ]
+        assert (ruff["violations"], ruff["unformatted_files"], pyright["errors"]) == (
+            violations,
+            unformatted,
+            errors,
+        ), name
+        assert sorted(i["file"] for i in pyright["items"]) == files, name
 
 
 def test_a_target_inheriting_a_parent_pyright_config_counts_only_its_own_files(tmp_path: Path) -> None:

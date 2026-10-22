@@ -32,11 +32,12 @@ def unformatted_count(output: str) -> int:
 
 def collect(ctx: Context) -> dict:
     """ruff check over the whole app (its config decides the scope), and ruff format --check."""
-    # A target nested inside this one counts its own files (#48).
+    # A target nested inside this one counts its own files (#48). "./" anchors each pattern to the
+    # app directory: a bare name would exclude every folder of that name in the app, and hide it.
     nested = [
         arg
         for root in ctx.nested_roots
-        for arg in ("--extend-exclude", root.relative_to(ctx.app_dir.resolve()).as_posix())
+        for arg in ("--extend-exclude", f"./{root.relative_to(ctx.app_dir.resolve()).as_posix()}")
     ]
     out = run_app_tool(
         ("ruff",), ["ruff", "check", "--output-format", "json", "--exit-zero", *nested, "."], ctx.app_dir

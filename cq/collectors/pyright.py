@@ -24,7 +24,8 @@ def collect(ctx: Context) -> dict:
     except json.JSONDecodeError as exc:
         raise ToolError(f"pyright printed no JSON: {out[-500:]}") from exc
     summary = data["summary"]
-    diagnostics = [d for d in data.get("generalDiagnostics", []) if ctx.owns(d["file"])]
+    nested = ctx.nested_roots
+    diagnostics = [d for d in data.get("generalDiagnostics", []) if ctx.owns(d.get("file", ""), nested)]
     errors = [d for d in diagnostics if d.get("severity") == "error"]
     by_rule = ranked(d.get("rule", "other") for d in errors)
     return {

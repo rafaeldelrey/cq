@@ -4,6 +4,21 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.10.0] - 2026-10-22
+
+### Fixed
+
+- **Measurement change: ruff and pyright count only their own target's files.**
+  - A target nested inside another (a uv workspace member under an outer app, say) was also counted
+    by the outer target. ruff now runs with `--extend-exclude` for each nested target, so its
+    violations and unformatted files count once.
+  - pyright, in an app without a pyright config of its own, used an ancestor's config and reported
+    every file that config covers, so unrelated apps showed the same repo-wide count. cq now keeps
+    only the diagnostics in the target's own files, and counts errors and warnings from them.
+  - **What moves:** ruff and pyright numbers drop for outer targets with nested ones, and for apps
+    that inherit a parent pyright config. pyright's `files` is still pyright's own
+    `filesAnalyzed`.
+
 ## [0.9.0] - 2026-10-21
 
 ### Fixed

@@ -32,11 +32,19 @@ def unformatted_count(output: str) -> int:
 
 def collect(ctx: Context) -> dict:
     """ruff check over the whole app (its config decides the scope), and ruff format --check."""
-    out = run_app_tool(("ruff",), ["ruff", "check", "--output-format", "json", "--exit-zero", "."], ctx.app_dir)
+    # A target nested inside this one counts its own files (#48).
+    nested = [
+        arg
+        for root in ctx.nested_roots
+        for arg in ("--extend-exclude", root.relative_to(ctx.app_dir.resolve()).as_posix())
+    ]
+    out = run_app_tool(
+        ("ruff",), ["ruff", "check", "--output-format", "json", "--exit-zero", *nested, "."], ctx.app_dir
+    )
     (ctx.raw_dir / "ruff.json").write_text(out)
     findings = json.loads(out or "[]")
     by_rule = ranked(f.get("code") or "syntax" for f in findings)
-    fmt = run_app_tool(("ruff",), ["ruff", "format", "--check", "."], ctx.app_dir, ok_codes=(0, 1))
+    fmt = run_app_tool(("ruff",), ["ruff", "format", "--check", *nested, "."], ctx.app_dir, ok_codes=(0, 1))
     return {
         "violations": len(findings),
         "fixable": sum(1 for f in findings if f.get("fix")),

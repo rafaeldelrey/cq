@@ -1,0 +1,102 @@
+"""ruff and pyright count only their own target's files (#47, #48), through a real `cq run`."""
+
+import json
+import subprocess
+from pathlib import Path
+
+from cq import cli
+from cq.config import load_settings
+from cq.context import Context
+from cq.report import latest_run
+
+# One ruff violation (F401), one unformatted line and one type error per module.
+MODULE = '"""{name}."""\n\nimport os\n\nx: int = "a"\ny=1\n'
+
+
+def committed(root: Path, files: dict[str, str]) -> Path:
+    """A git repo at ``root`` holding ``files``, all committed."""
+    for name, text in files.items():
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text(text)
+    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false"]
+    subprocess.run([*git, "init", "-q", "-b", "main"], cwd=root, check=True)
+    subprocess.run([*git, "add", "-A"], cwd=root, check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "x"], cwd=root, check=True)
+    return root
+
+
+def measured(repo: Path) -> dict:
+    """``cq run --tool ruff --tool pyright`` on ``repo``: the snapshot's targets."""
+    assert cli.main(["--repo", str(repo), "run", "--tool", "ruff", "--tool", "pyright", "--no-history"]) == 0
+    run_dir = latest_run(repo / ".cq" / "runs")
+    assert run_dir is not None
+    snapshot = json.loads((run_dir / "snapshot.json").read_text())
+    assert snapshot["errors"] == {}, snapshot["errors"]
+    return snapshot["targets"]
+
+
+def pyproject(name: str) -> str:
+    """A dependency-free project."""
+    return f"[project]\nname = '{name}'\nversion = '0.1.0'\nrequires-python = '>=3.12'\ndependencies = []\n"
+
+
+TARGETS = """
+[[targets]]
+name = "outer"
+kind = "python"
+root = "apps/outer"
+source = ["outer"]
+
+[[targets]]
+name = "inner"
+kind = "python"
+root = "apps/outer/inner"
+source = ["inner"]
+"""
+
+
+def test_a_nested_targets_files_count_toward_it_alone(tmp_path: Path) -> None:
+    repo = committed(
+        tmp_path / "r",
+        {
+            "cq.toml": TARGETS,
+            "apps/outer/pyproject.toml": pyproject("outer"),
+            "apps/outer/outer/__init__.py": MODULE.format(name="Outer"),
+            "apps/outer/inner/pyproject.toml": pyproject("inner"),
+            "apps/outer/inner/inner/__init__.py": MODULE.format(name="Inner"),
+        },
+    )
+    targets = measured(repo)
+    for name in ("outer", "inner"):
+        ruff, pyright = targets[name]["ruff"], targets[name]["pyright"]
+        assert (ruff["violations"], ruff["unformatted_files"], pyright["errors"]) == (1, 1, 1), name
+        assert [i["file"] for i in pyright["items"]] == [
+            f"apps/outer/{'' if name == 'outer' else 'inner/'}{name}/__init__.py"
+        ]
+
+
+def test_a_target_inheriting_a_parent_pyright_config_counts_only_its_own_files(tmp_path: Path) -> None:
+    """The app has no [tool.pyright]: pyright uses the parent's, which also covers other/."""
+    repo = committed(
+        tmp_path / "r",
+        {
+            "cq.toml": '[[targets]]\nname = "a"\nkind = "python"\nroot = "apps/a"\nsource = ["a"]\n',
+            "pyproject.toml": "[tool.pyright]\ninclude = ['.']\n",
+            "apps/a/pyproject.toml": pyproject("a"),
+            "apps/a/a/__init__.py": MODULE.format(name="A"),
+            "other/b.py": MODULE.format(name="B"),
+        },
+    )
+    pyright = measured(repo)["a"]["pyright"]
+    assert pyright["errors"] == 1
+    assert [i["file"] for i in pyright["items"]] == ["apps/a/a/__init__.py"]
+
+
+def test_owns_and_nested_roots(tmp_path: Path) -> None:
+    repo = committed(tmp_path / "r", {"cq.toml": TARGETS, "apps/outer/x.py": "", "apps/outer/inner/y.py": ""})
+    settings = load_settings(repo)
+    outer = next(t for t in settings.targets if t.name == "outer")
+    ctx = Context(target=outer, checkout=repo, raw_dir=tmp_path, settings=settings)
+    assert ctx.nested_roots == [(repo / "apps" / "outer" / "inner").resolve()]
+    assert ctx.owns("x.py") and ctx.owns(repo / "apps" / "outer" / "x.py")
+    assert not ctx.owns("inner/y.py") and not ctx.owns(repo / "elsewhere.py")

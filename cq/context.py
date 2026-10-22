@@ -39,6 +39,25 @@ class Context:
         """The target's production paths in this checkout."""
         return self.target.source_paths(self.checkout)
 
+    @property
+    def nested_roots(self) -> list[Path]:
+        """The roots of the other targets inside this one's: their files are theirs to count."""
+        own = self.app_dir.resolve()
+        roots = (
+            t.app_dir(self.checkout).resolve()
+            for t in self.settings.targets
+            if t.kind != "repo" and t.name != self.target.name
+        )
+        return sorted(r for r in roots if r != own and r.is_relative_to(own))
+
+    def owns(self, path: Path | str) -> bool:
+        """Whether a file a tool reported is this target's: under its root, and not under a target
+        nested inside it. A relative path is taken from the app directory, where the tools run."""
+        p = Path(path)
+        p = (self.app_dir / p).resolve() if not p.is_absolute() else p.resolve()
+        own = self.app_dir.resolve()
+        return p.is_relative_to(own) and not any(p.is_relative_to(r) for r in self.nested_roots)
+
     def rel(self, path: Path | str, base: Path | None = None) -> str:
         """A path relative to the checkout, so snapshots from a worktree read like the repo's.
 

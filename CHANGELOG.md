@@ -4,6 +4,24 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.11.0] - 2026-10-22
+
+### Added
+
+- **Measurement change: requirements.txt apps are measured.** A Python target with a
+  `requirements.txt` and no `pyproject.toml` got tool errors from three collectors; now:
+  - **tests** install `requirements.txt` and `requirements-dev.txt` (or `requirements/dev.txt`)
+    with uv, and run `python -m pytest`;
+  - **vulnerabilities** resolve those files with `uv pip compile`, in the run's folder, and audit
+    every resolved package, transitive ones included;
+  - **freshness** compares each exact `==` pin with PyPI's latest release, and counts the other
+    lines in a new metric, `freshness.unpinned` ("Unpinned dependencies").
+  - **What moves:** these apps get tests, vulnerability and freshness numbers where they had tool
+    errors.
+- **An app with no dependency file** (no `uv.lock`, `pyproject.toml` or `requirements.txt`) is
+  `skipped` with the reason in vulnerabilities and freshness, instead of a tool error. Its tests
+  still run.
+
 ## [0.10.0] - 2026-10-22
 
 ### Fixed

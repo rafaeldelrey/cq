@@ -1,11 +1,17 @@
 """Known vulnerabilities in dependencies: pip-audit on each Python app's lock, npm audit on the UI.
 
+A requirements.txt app has no lock: its requirements are resolved with ``uv pip compile`` into the
+run's own folder, then audited the same way.
+
 Both need network (the OSV / PyPI and npm advisory databases). The UI counts production
 dependencies only (``--omit=dev``): what ships in the image.
 """
 
 import json
+from pathlib import Path
 
+from cq import requirements
+from cq.config import PYPROJECT
 from cq.context import Context
 from cq.proc import has_lock, own, read_report, run
 
@@ -14,11 +20,8 @@ KINDS = ("python", "typescript")
 NPM_LEVELS = ("critical", "high", "moderate", "low", "info")
 
 
-def collect_python(ctx: Context) -> dict:
-    """Export the app's locked requirements, then audit them without re-resolving."""
-    if not has_lock(ctx.app_dir):
-        # No lock to audit, and cq writes none into the user's repo (#53): a blind spot that says so.
-        return {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
+def exported_lock(ctx: Context) -> Path:
+    """The app's locked requirements, exported from uv.lock (the dev group included, as uv does by default)."""
     req = ctx.raw_dir / "requirements.txt"
     req.write_text(
         run(
@@ -26,6 +29,28 @@ def collect_python(ctx: Context) -> dict:
             ctx.app_dir,
         )
     )
+    return req
+
+
+def resolved_requirements(ctx: Context) -> Path:
+    """A requirements.txt app's requirements and dev requirements, resolved to exact versions in the run's folder."""
+    req = ctx.raw_dir / "requirements.txt"
+    sources = [str(path) for path in requirements.files(ctx.app_dir)]
+    run(["uv", "pip", "compile", "-q", "--no-header", "--no-annotate", *sources, "-o", str(req)], ctx.app_dir)
+    return req
+
+
+def collect_python(ctx: Context) -> dict:
+    """Pin the app's dependencies to exact versions, then audit them without re-resolving."""
+    if requirements.is_requirements_app(ctx.app_dir):
+        req = resolved_requirements(ctx)
+    elif not (ctx.app_dir / PYPROJECT).exists() and not has_lock(ctx.app_dir):
+        return {"skipped": requirements.SKIP_NO_MANIFEST}
+    elif not has_lock(ctx.app_dir):
+        # No lock to audit, and cq writes none into the user's repo (#53): a blind spot that says so.
+        return {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
+    else:
+        req = exported_lock(ctx)
     out = ctx.raw_dir / "pip-audit.json"
     run(
         [own("pip-audit"), "-r", str(req), "--no-deps", "--disable-pip", "-f", "json", "-o", str(out)],

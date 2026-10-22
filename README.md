@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.10.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.11.0
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.10.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.11.0
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -257,7 +257,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.10.0"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.11.0"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -346,6 +346,17 @@ mode = "warn"                    # "block": exit 1 on a blocking finding or a to
 block = ["secrets:*", "semgrep:cq-*", "smells:*", "ratchet:*"]   # tool:rule patterns that block
 ```
 
+### Where a Python app's dependencies come from
+
+pytest, the vulnerability audit and dependency freshness read them from the app's folder:
+
+| The app has | tests run in | vulnerabilities and freshness |
+|---|---|---|
+| `pyproject.toml` and a `uv.lock` (its own or its workspace's) | the app's uv environment | audited and compared from the lock |
+| `pyproject.toml`, no lock | a temporary uv environment | `skipped`: cq writes no lock into the repo |
+| `requirements.txt`, no `pyproject.toml` | uv with `requirements.txt` and `requirements-dev.txt` (or `requirements/dev.txt`) installed, as `python -m pytest` | resolved with `uv pip compile` for the audit; the exact `==` pins compared with PyPI, and the others counted as `unpinned` |
+| none of these | uv, with pytest only | `skipped` |
+
 ### Which config each tool reads
 
 Each tool reads the first of these that exists:
@@ -413,7 +424,7 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.10.0    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.11.0    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

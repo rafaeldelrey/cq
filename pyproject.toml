@@ -1,6 +1,6 @@
 [project]
 name = "cq"
-version = "0.10.0"
+version = "0.11.0"
 description = "Code-quality snapshots of a repository, stored as history and reported as trends, plus a PR gate"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -16,6 +16,8 @@ dependencies = [
     "pip-audit==2.10.1",
     "deptry==0.25.1",
     "import-linter==2.15",
+    # Not a measuring tool: PEP 440 versions and PEP 508 markers in requirements files.
+    "packaging>=24",
 ]
 
 [tool.uv]

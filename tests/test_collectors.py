@@ -13,6 +13,7 @@ from cq.collectors.tests import parse_pytest_summary
 from cq.config import Settings, Target
 from cq.context import Context
 from cq.proc import ToolError
+from cq.requirements import SKIP_NO_MANIFEST
 
 SOURCE = '''
 """Module."""
@@ -174,6 +175,7 @@ def test_pip_audit_on_the_locked_requirements(ctx: Context, monkeypatch: pytest.
         return ""
 
     monkeypatch.setattr(vulnerabilities, "run", fake_run)
+    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
     (ctx.app_dir / "uv.lock").write_text("")
     result = vulnerabilities.collect(ctx)
     assert (result["packages"], result["vulnerable_packages"], result["vulnerabilities"]) == (3, 2, 3)
@@ -186,7 +188,12 @@ def test_pip_audit_on_the_locked_requirements(ctx: Context, monkeypatch: pytest.
 
 
 def test_pip_audit_without_a_lock_is_skipped_with_the_reason(ctx: Context) -> None:
+    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
     assert vulnerabilities.collect(ctx) == {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
+
+
+def test_pip_audit_without_any_manifest_is_skipped_with_the_reason(ctx: Context) -> None:
+    assert vulnerabilities.collect(ctx) == {"skipped": SKIP_NO_MANIFEST}
 
 
 def busy_module(n: int) -> str:

@@ -502,13 +502,14 @@ wheels = [
 
 [[package]]
 name = "cq"
-version = "0.10.0"
+version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "complexipy" },
     { name = "deptry" },
     { name = "import-linter" },
     { name = "interrogate" },
+    { name = "packaging" },
     { name = "pip-audit" },
     { name = "radon" },
     { name = "semgrep" },
@@ -529,6 +530,7 @@ requires-dist = [
     { name = "deptry", specifier = "==0.25.1" },
     { name = "import-linter", specifier = "==2.15" },
     { name = "interrogate", specifier = "==1.7.0" },
+    { name = "packaging", specifier = ">=24" },
     { name = "pip-audit", specifier = "==2.10.1" },
     { name = "radon", specifier = "==6.0.1" },
     { name = "semgrep", specifier = "==1.180.0" },

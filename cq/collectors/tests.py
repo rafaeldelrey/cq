@@ -8,6 +8,7 @@ import json
 import re
 import tomllib
 
+from cq import requirements
 from cq.context import Context
 from cq.proc import ToolError, read_report, require_node_modules, run, run_app_tool
 
@@ -78,18 +79,28 @@ def coverage_summary(data: dict, ctx: Context) -> dict:
     }
 
 
+def run_pytest(ctx: Context, args: list[str], env: dict[str, str]) -> str:
+    """pytest in the app's environment: its uv project, or its requirements files installed by uv."""
+    ok_codes = (0, 1)  # 1: some tests failed — counted, not an error of the measurement
+    if requirements.is_requirements_app(ctx.app_dir):
+        # The app's own pins win where they name pytest or pytest-cov; otherwise uv adds them. The app
+        # isn't installed, so `python -m` puts its folder on the import path, as such apps run their tests.
+        with_args = [arg for path in requirements.files(ctx.app_dir) for arg in ("--with-requirements", str(path))]
+        tools = ["--with", "pytest", "--with", "pytest-cov"]
+        cmd = ["uv", "run", "-q", "--no-project", *with_args, *tools, "python", "-m", *args]
+        return run(cmd, ctx.app_dir, ok_codes=ok_codes, env=env)
+    # pytest-cov is overlaid: older commits ran tests without it, and its version doesn't move the numbers.
+    return run_app_tool(("pytest",), args, ctx.app_dir, ok_codes=ok_codes, env=env, overlay=("pytest-cov",))
+
+
 def collect_python(ctx: Context) -> dict:
     """pytest with branch coverage; integration tests stay excluded by each app's addopts."""
     cov_json = ctx.raw_dir / "coverage.json"
-    out = run_app_tool(
-        ("pytest",),
+    out = run_pytest(
+        ctx,
         ["pytest", "-q", "-p", "no:cacheprovider", "--cov", f"--cov-report=json:{cov_json}", "--cov-report="],
-        ctx.app_dir,
-        ok_codes=(0, 1),  # 1: some tests failed — counted, not an error of the measurement
         # Coverage's data file and pytest's bytecode stay out of the user's tree.
-        env={"COVERAGE_FILE": str(ctx.raw_dir / ".coverage"), "PYTHONDONTWRITEBYTECODE": "1"},
-        # pytest-cov is overlaid: older commits ran tests without it, and its version doesn't move the numbers.
-        overlay=("pytest-cov",),
+        {"COVERAGE_FILE": str(ctx.raw_dir / ".coverage"), "PYTHONDONTWRITEBYTECODE": "1"},
     )
     (ctx.raw_dir / "pytest.txt").write_text(out)
     result = {"results": parse_pytest_summary(out)}

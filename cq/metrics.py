@@ -112,6 +112,7 @@ METRICS: tuple[Metric, ...] = (
     Metric("freshness.libyear", "Dependency lag (libyears)", "down", group=DEPENDENCIES),
     Metric("freshness.outdated", "Outdated direct dependencies", "down", group=DEPENDENCIES),
     Metric("freshness.major_behind", "A major version behind", "down", group=DEPENDENCIES),
+    Metric("freshness.unpinned", "Unpinned dependencies (requirements.txt)", "down", group=DEPENDENCIES),
     Metric("size.sloc", "Source lines (SLOC)", "none", group=SIZE),
     Metric("duplication.lines", "Lines scanned", "none", group=SIZE),
 )

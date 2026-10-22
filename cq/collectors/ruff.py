@@ -25,9 +25,28 @@ def unformatted_count(output: str) -> int:
     counts = WOULD_REFORMAT.findall(output)
     if counts:
         return int(counts[-1])
-    if not output.strip() or ALL_FORMATTED.fullmatch(output.strip()):
+    # The summary is the last line; diagnostics (an unparsable file's, from ruff 0.16) may come first.
+    if not output.strip() or ALL_FORMATTED.fullmatch(output.strip().splitlines()[-1]):
         return 0
     raise ToolError(f"ruff format --check: output with no count cq can read: {output[-300:]}")
+
+
+UNPARSABLE = 2  # ruff format's exit code when a file can't be parsed: it still checked, and summed up, the rest
+
+
+def format_check(ctx: Context, extra: list[str]) -> str:
+    """``ruff format --check``'s stdout, also when a file can't be parsed.
+
+    That file's syntax error is ``ruff check``'s finding; the summary still counts the other files.
+    Exit 2 without a summary (a config error, a crash) stays a tool error, with ruff's message.
+    """
+    try:
+        return run_app_tool(("ruff",), ["ruff", "format", "--check", *extra, "."], ctx.app_dir, ok_codes=(0, 1))
+    # A specific, expected exception: exit 2 after a summary is a measurement; anything else propagates.
+    except ToolError as exc:
+        if exc.returncode == UNPARSABLE and (WOULD_REFORMAT.search(exc.stdout) or ALL_FORMATTED.search(exc.stdout)):
+            return exc.stdout
+        raise
 
 
 GLOB_SPECIAL = set("[]*?{}")
@@ -58,14 +77,12 @@ def format_count(ctx: Context, nested: list[str]) -> int:
     lines whose file the target owns.
     """
     try:
-        return unformatted_count(
-            run_app_tool(("ruff",), ["ruff", "format", "--check", *nested, "."], ctx.app_dir, ok_codes=(0, 1))
-        )
+        return unformatted_count(format_check(ctx, nested))
     # A specific, expected exception: an older ruff refusing the flag; any other failure propagates.
     except ToolError as exc:
         if not nested or OLD_FORMAT not in str(exc):
             raise
-    out = run_app_tool(("ruff",), ["ruff", "format", "--check", "."], ctx.app_dir, ok_codes=(0, 1))
+    out = format_check(ctx, [])
     roots = ctx.nested_roots
     files = [line.removeprefix("Would reformat: ") for line in out.splitlines() if line.startswith("Would reformat: ")]
     return sum(1 for f in files if ctx.owns(f, roots))

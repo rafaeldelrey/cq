@@ -4,6 +4,18 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.11.1] - 2026-10-22
+
+### Fixed
+
+- **A file ruff can't parse no longer loses the ruff results.** `ruff format --check` exits 2 on a
+  syntax error, after counting the other files, and cq recorded the whole collector as a tool
+  error. cq now reads the count from ruff's summary; the syntax error stays a lint finding with its
+  file and line. An exit 2 without a summary (a config error) is still a tool error.
+- **A `-q` in the project's pytest `addopts` no longer loses the test results.** It stacked with
+  cq's own `-q` into `-qq`, where pytest drops the summary line cq reads. cq now passes
+  `--verbosity=-1`, which sets the level outright.
+
 ## [0.11.0] - 2026-10-22
 
 ### Added

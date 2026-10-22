@@ -1,6 +1,5 @@
 """Running the measuring tools as subprocesses."""
 
-import fnmatch
 import json
 import os
 import shutil
@@ -140,42 +139,25 @@ def uv_app(app_dir: Path, *args: str, overlay: tuple[str, ...] = ()) -> list[str
     return ["uv", "run", "-q", *unlocked(app_dir), *extra, *with_args, *args]
 
 
-def workspace_of(folder: Path) -> dict:
-    """The ``[tool.uv.workspace]`` table of ``folder``'s pyproject.toml; empty when it has none."""
-    pyproject = folder / PYPROJECT
-    if not pyproject.exists():
-        return {}
-    tool = tomllib.loads(pyproject.read_text()).get("tool", {})
-    uv = tool.get("uv", {})
-    return uv.get("workspace", {})
-
-
-def is_member(workspace: dict, relative: str) -> bool:
-    """Whether the folder at ``relative`` (from the workspace root) is one of its members.
-
-    uv matches ``members`` and ``exclude`` as glob patterns; an excluded folder has no part in the
-    workspace's lock.
-    """
-
-    member = any(fnmatch.fnmatchcase(relative, p.rstrip("/")) for p in workspace.get("members", []))
-    excluded = any(fnmatch.fnmatchcase(relative, p.rstrip("/")) for p in workspace.get("exclude", []))
-    return member and not excluded
-
-
 def has_lock(app_dir: Path) -> bool:
-    """Whether uv runs the app against an existing uv.lock: its own, or its workspace root's.
+    """Whether uv runs the app against an existing uv.lock: its own, or that of a workspace it's a
+    member of.
 
-    The search stops at the repository's root (the folder holding .git).
+    uv is asked, with `uv tree --frozen`: it never writes a lock, and it fails when no lock covers
+    the app. So uv's own rules decide (workspace members and exclude globs, nesting), not a copy
+    of them.
     """
     if (app_dir / "uv.lock").exists():
         return True
-    app = app_dir.resolve()
-    for folder in app.parents:
-        if (folder / "uv.lock").exists() and is_member(workspace_of(folder), app.relative_to(folder).as_posix()):
-            return True
-        if (folder / ".git").exists():
-            return False
-    return False
+    if not (app_dir / PYPROJECT).exists():
+        return False
+    try:
+        run(["uv", "tree", "--frozen", "--depth", "0", "-q"], app_dir)
+    # A specific, expected exception: uv exits non-zero when no lock covers the app, which is the
+    # answer, not an error.
+    except ToolError:
+        return False
+    return True
 
 
 def unlocked(app_dir: Path) -> list[str]:

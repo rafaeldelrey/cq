@@ -336,6 +336,8 @@ def test_the_overlay_fallback_runs_isolated_in_an_unlocked_app(tmp_path: Path, m
     commands: list[list[str]] = []
 
     def fake_run(cmd: list[str], cwd: Path, **kwargs: object) -> str:
+        if cmd[:2] == ["uv", "tree"]:
+            raise proc.ToolError("error: Unable to find lockfile")  # uv's answer: no lock covers the app
         commands.append(cmd)
         if len(commands) == 1:
             raise proc.ToolError("error: Failed to spawn: `ruff`")
@@ -343,57 +345,34 @@ def test_the_overlay_fallback_runs_isolated_in_an_unlocked_app(tmp_path: Path, m
 
     monkeypatch.setattr(proc, "run", fake_run)
     assert proc.run_app_tool(("ruff",), ["ruff", "check"], tmp_path) == "ok"
-    assert commands[1] == ["uv", "run", "-q", "--isolated", "--with", "ruff", "ruff", "check"]
+    assert commands == [
+        ["uv", "run", "-q", "--isolated", "ruff", "check"],
+        ["uv", "run", "-q", "--isolated", "--with", "ruff", "ruff", "check"],
+    ]
 
 
-def test_has_lock_stops_at_the_repo_root(tmp_path: Path) -> None:
-    """A uv.lock above the repository, or beside a pyproject that isn't a workspace, isn't the app's."""
-    (tmp_path / "uv.lock").write_text("")
-    (tmp_path / "pyproject.toml").write_text("[tool.uv.workspace]\nmembers = ['repo/app']\n")
-    app = tmp_path / "repo" / "app"
-    app.mkdir(parents=True)
-    (tmp_path / "repo" / ".git").mkdir()
-    assert not proc.has_lock(app)  # the workspace lock is outside the repo
-    (tmp_path / "repo" / "uv.lock").write_text("")
-    (tmp_path / "repo" / "pyproject.toml").write_text("[project]\nname = 'root'\n")
-    assert not proc.has_lock(app)  # the repo root's own project, not a workspace
-    (tmp_path / "repo" / "pyproject.toml").unlink()
-    assert not proc.has_lock(app)  # a stray uv.lock with no pyproject beside it
+def uv_workspace(root: Path, workspace: str, apps: dict[str, str]) -> None:
+    """A uv workspace at ``root`` with dependency-free apps, locked by uv itself."""
+    (root / "pyproject.toml").write_text(f"[tool.uv.workspace]\n{workspace}")
+    for folder, name in apps.items():
+        (root / folder).mkdir(parents=True)
+        (root / folder / "pyproject.toml").write_text(
+            f"[project]\nname = '{name}'\nversion = '0.1.0'\nrequires-python = '>=3.12'\ndependencies = []\n"
+        )
+    subprocess.run(["uv", "lock", "-q"], cwd=root, check=True, capture_output=True)
 
 
-@pytest.mark.parametrize(
-    ("line", "ok"),
-    [
-        ("uv 0.8.6 (Homebrew 2025-08-07)", False),
-        ("uv 0.8.7", True),
-        ("uv 0.12.22 (70fe1196a 2026-10-01)", True),
-        ("uv", False),
-    ],
-)
-def test_doctor_needs_a_uv_that_runs_isolated_without_a_lock(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], line: str, ok: bool
-) -> None:
-    """uv 0.8.6 and older write a uv.lock even under ``uv run --isolated`` (#53)."""
-    fake_versions(monkeypatch, ALL | {"uv": line})
-    assert doctor.doctor() == (0 if ok else 1)
-    text = capsys.readouterr().out
-    assert ("(cq needs 0.8.7 or later)" in text) == (not ok)
-    assert ("uv self update, or brew upgrade uv" in text) == (not ok)
-
-
-def test_an_app_excluded_from_the_workspace_has_no_lock(tmp_path: Path) -> None:
-    """uv's members and exclude globs decide whose lock the workspace's is."""
-    (tmp_path / ".git").mkdir()
-    (tmp_path / "uv.lock").write_text("")
-    (tmp_path / "pyproject.toml").write_text(
-        "[tool.uv.workspace]\nmembers = ['apps/*']\nexclude = ['apps/standalone']\n"
-    )
-    for name in ("a", "standalone"):
-        (tmp_path / "apps" / name).mkdir(parents=True)
-        (tmp_path / "apps" / name / "pyproject.toml").write_text(f"[project]\nname = '{name}'\n")
-    assert proc.has_lock(tmp_path / "apps" / "a")
-    assert not proc.has_lock(tmp_path / "apps" / "standalone")
+def test_has_lock_follows_uvs_own_membership_rules(tmp_path: Path) -> None:
+    """Members, excluded folders, unlisted apps and ** globs, as uv itself decides them."""
+    apps = {"apps/a": "a", "apps/standalone": "standalone", "packages/foo": "foo", "tools": "tools"}
+    uv_workspace(tmp_path, "members = ['apps/*', 'packages/**/foo']\nexclude = ['apps/standalone']\n", apps)
+    locked = {folder: proc.has_lock(tmp_path / folder) for folder in apps}
+    assert locked == {"apps/a": True, "apps/standalone": False, "packages/foo": True, "tools": False}
     assert proc.unlocked(tmp_path / "apps" / "standalone") == ["--isolated"]
-    (tmp_path / "tools").mkdir()
-    (tmp_path / "tools" / "pyproject.toml").write_text("[project]\nname = 'tools'\n")
-    assert not proc.has_lock(tmp_path / "tools")  # not listed in members at all
+    assert proc.unlocked(tmp_path / "packages" / "foo") == []
+    assert sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("uv.lock")) == ["uv.lock"]
+
+
+def test_has_lock_without_a_pyproject_asks_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(proc, "run", lambda *a, **k: pytest.fail("uv was asked"))
+    assert not proc.has_lock(tmp_path)

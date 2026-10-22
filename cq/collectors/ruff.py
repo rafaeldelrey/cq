@@ -31,7 +31,7 @@ def unformatted_count(output: str) -> int:
     raise ToolError(f"ruff format --check: output with no count cq can read: {output[-300:]}")
 
 
-UNPARSABLE = 2  # ruff format's exit code when a file can't be parsed: it still checked, and summed up, the rest
+EXIT_UNPARSABLE = 2  # ruff format's exit code when a file can't be parsed: it still checked, and summed up, the rest
 
 
 def format_check(ctx: Context, extra: list[str]) -> str:
@@ -44,7 +44,9 @@ def format_check(ctx: Context, extra: list[str]) -> str:
         return run_app_tool(("ruff",), ["ruff", "format", "--check", *extra, "."], ctx.app_dir, ok_codes=(0, 1))
     # A specific, expected exception: exit 2 after a summary is a measurement; anything else propagates.
     except ToolError as exc:
-        if exc.returncode == UNPARSABLE and (WOULD_REFORMAT.search(exc.stdout) or ALL_FORMATTED.search(exc.stdout)):
+        if exc.returncode == EXIT_UNPARSABLE and (
+            WOULD_REFORMAT.search(exc.stdout) or ALL_FORMATTED.search(exc.stdout)
+        ):
             return exc.stdout
         raise
 

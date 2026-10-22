@@ -83,13 +83,15 @@ source = ["inner"]
 """
 
 
-def test_an_unparsable_file_on_ruff_before_0_16_keeps_the_per_file_count(tmp_path: Path) -> None:
-    """ruff 0.15 takes the per-file fallback (#48), which exits 2 the same way."""
+@pytest.mark.parametrize("pin", ["ruff==0.15.0", "ruff"], ids=["ruff-0.15-fallback", "latest-ruff"])
+def test_an_unparsable_file_in_an_outer_target_keeps_its_own_count(tmp_path: Path, pin: str) -> None:
+    """With a nested target: ruff 0.15 takes the per-file fallback (#48), ruff 0.16+ --extend-exclude.
+    Both exit 2 the same way."""
     repo = committed(
         tmp_path / "r",
         {
             "cq.toml": TARGETS,
-            "apps/outer/pyproject.toml": pyproject("outer", "\n[dependency-groups]\ndev = ['ruff==0.15.0']\n"),
+            "apps/outer/pyproject.toml": pyproject("outer", f"\n[dependency-groups]\ndev = ['{pin}']\n"),
             "apps/outer/outer/__init__.py": MESSY,
             "apps/outer/outer/broken.py": UNPARSABLE,
             "apps/outer/inner/pyproject.toml": pyproject("inner"),
@@ -99,6 +101,15 @@ def test_an_unparsable_file_on_ruff_before_0_16_keeps_the_per_file_count(tmp_pat
     outer = measured(repo, "ruff")["outer"]["ruff"]
     assert outer["unformatted_files"] == 1  # its own messy file, not the inner target's
     assert {i["file"] for i in outer["items"]} == {"apps/outer/outer/__init__.py", "apps/outer/outer/broken.py"}
+
+
+def test_an_unparsable_file_beside_formatted_ones_counts_zero(tmp_path: Path) -> None:
+    """Exit 2 whose summary says only "already formatted"."""
+    repo = committed(
+        tmp_path / "acme",
+        {"pyproject.toml": pyproject("acme"), "acme/__init__.py": '"""Acme."""\n', "acme/broken.py": UNPARSABLE},
+    )
+    assert measured(repo, "ruff")["acme"]["ruff"]["unformatted_files"] == 0
 
 
 def test_ruff_exit_2_without_a_summary_is_still_a_tool_error_with_ruff_s_message(tmp_path: Path) -> None:

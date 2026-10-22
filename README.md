@@ -355,7 +355,7 @@ pytest, the vulnerability audit and dependency freshness read them from the app'
 | `pyproject.toml` and a `uv.lock` (its own or its workspace's) | the app's uv environment | audited and compared from the lock |
 | `pyproject.toml`, no lock | a temporary uv environment | `skipped`: cq writes no lock into the repo |
 | `requirements.txt`, no `pyproject.toml` | uv with `requirements.txt` and `requirements-dev.txt` (or `requirements/dev.txt`) installed, as `python -m pytest` | resolved with `uv pip compile` for the audit; the exact `==` pins compared with PyPI, and the others counted as `unpinned` |
-| none of these | uv, with pytest only | `skipped` |
+| none of these (a `uv.lock` alone included) | uv, with pytest only | `skipped` |
 
 ### Which config each tool reads
 

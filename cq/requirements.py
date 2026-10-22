@@ -14,13 +14,15 @@ from cq.config import PYPROJECT
 REQUIREMENTS = "requirements.txt"
 # Test tools usually live in a dev file; the first of these that exists joins requirements.txt.
 DEV_FILES = ("requirements-dev.txt", "requirements/dev.txt")
-SKIP_NO_MANIFEST = "no uv.lock, pyproject.toml or requirements.txt: the app declares no dependencies to read"
+SKIP_NO_MANIFEST = "no pyproject.toml or requirements.txt: the app declares no dependencies cq can read"
 
 INCLUDE = re.compile(r"^(?:-r|--requirement)(?:\s+|=)(?P<path>\S+)")
 EDITABLE = re.compile(r"^(?:-e|--editable)(?:\s+|=)(?P<target>\S+)")
 EGG = re.compile(r"#egg=(?P<name>[\w.\-]+)")
 NAME = re.compile(r"^(?P<name>[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)\s*(?:\[[^\]]*\])?\s*(?P<spec>[^;]*)")
 PIN = re.compile(r"^===?\s*(?P<version>[^\s,*]+)$")
+# Per-requirement options (`--hash=…`, from pip-compile --generate-hashes) follow the version.
+LINE_OPTION = re.compile(r"\s--?[a-z][\w-]*(?:[=\s]\S+)?")
 # A `#` starts a comment at the line's start or after whitespace; `#egg=` inside a URL does not.
 COMMENT = re.compile(r"(^|\s)#.*$")
 
@@ -70,7 +72,7 @@ def url_name(target: str) -> str:
     return path.rstrip("/").rsplit("/", 1)[-1].split("@")[0] or "(url)"
 
 
-def requirement(line: str) -> Requirement | None:
+def parse_line(line: str) -> Requirement | None:
     """One line as a requirement; None for an option line that names no package (``--index-url``, ``-c``)."""
     editable = EDITABLE.match(line)
     if editable:
@@ -80,8 +82,13 @@ def requirement(line: str) -> Requirement | None:
     m = NAME.match(line)
     if not m or "://" in line.split("@")[0] or line.startswith((".", "/")):
         return Requirement(url_name(line), None)  # a bare URL or path: never a pin
-    pin = PIN.match(m["spec"].strip())
-    return Requirement(m["name"], pin["version"] if pin else None)
+    pin = PIN.match(LINE_OPTION.sub("", f" {m['spec']}").strip())
+    return Requirement(canonical(m["name"]), pin["version"] if pin else None)
+
+
+def canonical(name: str) -> str:
+    """A package name as PyPI compares them (PEP 503): ``Foo_Bar`` and ``foo-bar`` are one package."""
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def parse(path: Path, seen: frozenset[Path] = frozenset()) -> list[Requirement]:
@@ -95,7 +102,7 @@ def parse(path: Path, seen: frozenset[Path] = frozenset()) -> list[Requirement]:
         if include:
             found += parse(path.parent / include["path"], seen | {resolved})
             continue
-        req = requirement(line)
+        req = parse_line(line)
         if req:
             found.append(req)
     return found

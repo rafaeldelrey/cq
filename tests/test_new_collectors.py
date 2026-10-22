@@ -542,6 +542,7 @@ def no_report_cases(tmp_path: Path) -> dict[str, tuple[ModuleType, Callable[[], 
     ctx = make_ctx(tmp_path)
     (tmp_path / "apps" / "demo" / "pkg").mkdir(parents=True, exist_ok=True)
     (tmp_path / "apps" / "demo" / "uv.lock").write_text("")
+    (tmp_path / "apps" / "demo" / "pyproject.toml").write_text("[project]\nname = 'demo'\n")
     (tmp_path / "apps" / "demo" / "node_modules").mkdir(exist_ok=True)
     (tmp_path / "wiki").mkdir(exist_ok=True)
     out = tmp_path / "raw" / "semgrep.json"

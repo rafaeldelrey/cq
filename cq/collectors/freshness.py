@@ -87,12 +87,27 @@ def summarise(ctx: Context, rows: list[dict]) -> dict:
     }
 
 
+def outdated_row(name: str, current: str, latest: str, dates: dict[str, datetime], key: str = "") -> dict:
+    """One dependency behind its latest release; ``key`` is the release ``current`` names on PyPI."""
+    return {
+        "package": name,
+        "current": current,
+        "latest": latest,
+        "major": (major(latest) or 0) > (major(current) or 0),
+        "years": round(lag_years(dates, key or current, latest), 2),
+    }
+
+
+def trimmed(version: str) -> str:
+    """A version without its trailing ``.0`` parts, so ``2.31`` and ``2.31.0`` compare equal."""
+    return re.sub(r"(\.0)+$", "", version.lower())
+
+
 def release_key(dates: dict[str, datetime], version: str) -> str:
     """The PyPI release a pin names: ``2.31`` pins the release PyPI lists as ``2.31.0``."""
     if version in dates:
         return version
-    trimmed = re.sub(r"(\.0)+$", "", version.lower())
-    return next((v for v in dates if re.sub(r"(\.0)+$", "", v.lower()) == trimmed), version)
+    return next((v for v in dates if trimmed(v) == trimmed(version)), version)
 
 
 def pinned_row(name: str, pin: str) -> dict | None:
@@ -102,13 +117,7 @@ def pinned_row(name: str, pin: str) -> dict | None:
     current, latest = release_key(dates, pin), project["info"]["version"]
     if current == latest or (current in dates and latest in dates and dates[current] >= dates[latest]):
         return None  # the latest, or a pre-release newer than it
-    return {
-        "package": name,
-        "current": pin,
-        "latest": latest,
-        "major": (major(latest) or 0) > (major(pin) or 0),
-        "years": round(lag_years(dates, current, latest), 2),
-    }
+    return outdated_row(name, pin, latest, dates, current)
 
 
 def collect_requirements(ctx: Context) -> dict:
@@ -121,6 +130,7 @@ def collect_requirements(ctx: Context) -> dict:
                 unpinned.add(req.name)
             else:
                 pins.setdefault(req.name, req.version)
+    unpinned -= pins.keys()  # pinned in one file and left open in another: the pin is what installs
     rows = [row for name, pin in pins.items() if (row := pinned_row(name, pin))]
     return {**summarise(ctx, rows), "unpinned": len(unpinned), "unpinned_packages": sorted(unpinned)}
 
@@ -138,15 +148,7 @@ def collect_python(ctx: Context) -> dict:
     rows = []
     for m in UV_OUTDATED.finditer(out):
         name, current, latest = m["name"], m["current"], m["latest"]
-        rows.append(
-            {
-                "package": name,
-                "current": current,
-                "latest": latest,
-                "major": (major(latest) or 0) > (major(current) or 0),
-                "years": round(lag_years(pypi_dates(name), current, latest), 2),
-            }
-        )
+        rows.append(outdated_row(name, current, latest, pypi_dates(name)))
     return summarise(ctx, rows)
 
 
@@ -160,15 +162,7 @@ def collect_typescript(ctx: Context) -> dict:
         current, latest = info.get("current"), info.get("latest")
         if not current or not latest or current == latest:
             continue
-        rows.append(
-            {
-                "package": name,
-                "current": current,
-                "latest": latest,
-                "major": (major(latest) or 0) > (major(current) or 0),
-                "years": round(lag_years(npm_dates(ctx, name), current, latest), 2),
-            }
-        )
+        rows.append(outdated_row(name, current, latest, npm_dates(ctx, name)))
     return summarise(ctx, rows)
 
 

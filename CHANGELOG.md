@@ -18,9 +18,9 @@ numbers, and the trend shows a step there.
     lines in a new metric, `freshness.unpinned` ("Unpinned dependencies").
   - **What moves:** these apps get tests, vulnerability and freshness numbers where they had tool
     errors.
-- **An app with no dependency file** (no `uv.lock`, `pyproject.toml` or `requirements.txt`) is
-  `skipped` with the reason in vulnerabilities and freshness, instead of a tool error. Its tests
-  still run.
+- **An app with no dependency file cq can read** (no `pyproject.toml` or `requirements.txt`; a
+  `uv.lock` alone is no project uv can export) is `skipped` with the reason in vulnerabilities and
+  freshness, instead of a tool error. Its tests still run.
 
 ## [0.10.0] - 2026-10-22
 

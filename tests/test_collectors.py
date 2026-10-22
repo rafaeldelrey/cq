@@ -175,6 +175,7 @@ def test_pip_audit_on_the_locked_requirements(ctx: Context, monkeypatch: pytest.
         return ""
 
     monkeypatch.setattr(vulnerabilities, "run", fake_run)
+    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
     (ctx.app_dir / "uv.lock").write_text("")
     result = vulnerabilities.collect(ctx)
     assert (result["packages"], result["vulnerable_packages"], result["vulnerabilities"]) == (3, 2, 3)

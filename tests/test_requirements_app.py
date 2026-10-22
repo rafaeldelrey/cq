@@ -16,7 +16,9 @@ from pathlib import Path
 import pytest
 
 from cq import cli, requirements
-from cq.collectors import freshness
+from cq.collectors import freshness, vulnerabilities
+from cq.config import Settings, Target
+from cq.context import Context
 from cq.requirements import Requirement
 
 SETTINGS = """
@@ -191,3 +193,56 @@ def test_an_app_without_a_dependency_file_says_so_and_still_runs_its_tests(measu
     assert bare["vulnerabilities"]["skipped"] == requirements.SKIP_NO_MANIFEST
     assert bare["freshness"]["skipped"] == requirements.SKIP_NO_MANIFEST
     assert bare["tests"]["results"]["passed"] == 1
+
+
+def test_hashes_after_a_pin_keep_it_a_pin(tmp_path: Path) -> None:
+    (tmp_path / "requirements.txt").write_text(
+        "requests==2.31.0 \\\n    --hash=sha256:aaaa \\\n    --hash=sha256:bbbb\nFoo_Bar.baz==1.0 ; python_version > '3'\n"
+    )
+    assert requirements.parse(tmp_path / "requirements.txt") == [
+        Requirement("requests", "2.31.0"),
+        Requirement("foo-bar-baz", "1.0"),  # PEP 503: compared as PyPI compares names
+    ]
+
+
+def app_context(tmp_path: Path) -> Context:
+    """A Context for the Python app at ``tmp_path/app``."""
+    (tmp_path / "app").mkdir()
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    target = Target(name="app", kind="python", root="app", source=("app",), tests=False)
+    return Context(target=target, checkout=tmp_path, raw_dir=raw, settings=Settings(targets=(target,)))
+
+
+def test_a_package_pinned_in_one_file_is_not_also_unpinned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = app_context(tmp_path)
+    (ctx.app_dir / "requirements.txt").write_text("Requests==1.0.0\nsix\n")
+    (ctx.app_dir / "requirements-dev.txt").write_text("requests>=1\nSix>=1\n")
+    monkeypatch.setattr(freshness, "pypi_project", lambda name: project("2.0.0", "1.0.0", "2.0.0"))
+    result = freshness.collect(ctx)
+    assert [i["package"] for i in result["items"]] == ["requests"]
+    assert (result["unpinned"], result["unpinned_packages"]) == (1, ["six"])
+
+
+def test_a_lock_without_a_project_is_skipped_by_both_collectors(tmp_path: Path) -> None:
+    ctx = app_context(tmp_path)
+    (ctx.app_dir / "uv.lock").write_text("")
+    assert vulnerabilities.collect(ctx) == {"skipped": requirements.SKIP_NO_MANIFEST}
+    assert freshness.collect(ctx) == {"skipped": requirements.SKIP_NO_MANIFEST}
+
+
+def test_npm_freshness_rows_match_the_python_ones(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The npm side builds its rows with the same helper: an up-to-date package is left out."""
+    ctx = app_context(tmp_path)
+    outdated = {"left-pad": {"current": "1.0.0", "latest": "2.0.0"}, "same": {"current": "1.0.0", "latest": "1.0.0"}}
+    times = {"created": "x", "1.0.0": "2020-01-01T00:00:00Z", "2.0.0": "2022-01-01T00:00:00Z"}
+
+    def fake_npm(cmd: list[str], cwd: Path, **_: object) -> str:
+        return json.dumps(outdated if cmd[1] == "outdated" else times)
+
+    monkeypatch.setattr(freshness, "run", fake_npm)
+    result = freshness.collect_typescript(ctx)
+    assert result["items"] == [
+        {"package": "left-pad", "current": "1.0.0", "latest": "2.0.0", "major": True, "years": 2.0}
+    ]
+    assert (result["outdated"], result["libyear"]) == (1, 2.0)

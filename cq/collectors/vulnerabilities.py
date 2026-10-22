@@ -40,17 +40,23 @@ def resolved_requirements(ctx: Context) -> Path:
     return req
 
 
+def pinned_requirements(ctx: Context) -> Path | str:
+    """The app's dependencies at exact versions, or why there are none to audit."""
+    if requirements.is_requirements_app(ctx.app_dir):
+        return resolved_requirements(ctx)
+    if not (ctx.app_dir / PYPROJECT).exists():  # a uv.lock alone is no project uv can export
+        return requirements.SKIP_NO_MANIFEST
+    if not has_lock(ctx.app_dir):
+        # No lock to audit, and cq writes none into the user's repo (#53): a blind spot that says so.
+        return "no uv.lock to audit, and cq writes no lock into the repo"
+    return exported_lock(ctx)
+
+
 def collect_python(ctx: Context) -> dict:
     """Pin the app's dependencies to exact versions, then audit them without re-resolving."""
-    if requirements.is_requirements_app(ctx.app_dir):
-        req = resolved_requirements(ctx)
-    elif not (ctx.app_dir / PYPROJECT).exists() and not has_lock(ctx.app_dir):
-        return {"skipped": requirements.SKIP_NO_MANIFEST}
-    elif not has_lock(ctx.app_dir):
-        # No lock to audit, and cq writes none into the user's repo (#53): a blind spot that says so.
-        return {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
-    else:
-        req = exported_lock(ctx)
+    req = pinned_requirements(ctx)
+    if isinstance(req, str):
+        return {"skipped": req}
     out = ctx.raw_dir / "pip-audit.json"
     run(
         [own("pip-audit"), "-r", str(req), "--no-deps", "--disable-pip", "-f", "json", "-o", str(out)],

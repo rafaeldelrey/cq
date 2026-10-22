@@ -34,4 +34,4 @@ jobs:
       - name: complexity ratchet (no function over CC 15 outside .complexity-baseline.json)
         run: uv run cq complexity check cq
       - name: pytest (coverage floor in pyproject)
-        run: uv run pytest -q --cov --cov-report=term
+        run: uv run pytest -q --cov --cov-report=term --durations=15

@@ -52,6 +52,22 @@ def pinned_requirements(ctx: Context) -> Path | str:
     return exported_lock(ctx)
 
 
+def distinct(vulns: list[dict]) -> list[dict]:
+    """One entry per advisory: pip-audit 2.10 lists some twice for the same package (#69).
+
+    Two entries are one advisory when their IDs and aliases meet: the same ID, or a PYSEC advisory
+    and the GHSA (or CVE) it aliases. The first entry of each is kept.
+    """
+    kept, seen = [], set()
+    for vuln in vulns:
+        names = {vuln["id"], *vuln.get("aliases", [])}
+        if not names.isdisjoint(seen):
+            continue
+        kept.append(vuln)
+        seen |= names
+    return kept
+
+
 def collect_python(ctx: Context) -> dict:
     """Pin the app's dependencies to exact versions, then audit them without re-resolving."""
     req = pinned_requirements(ctx)
@@ -64,7 +80,7 @@ def collect_python(ctx: Context) -> dict:
         ok_codes=(0, 1),
     )
     deps = json.loads(read_report(out, "pip-audit"))["dependencies"]
-    vulnerable = [d for d in deps if d.get("vulns")]
+    vulnerable = [{**d, "vulns": distinct(d["vulns"])} for d in deps if d.get("vulns")]
     return {
         "packages": len(deps),
         "vulnerable_packages": len(vulnerable),

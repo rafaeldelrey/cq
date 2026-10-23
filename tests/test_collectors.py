@@ -187,6 +187,44 @@ def test_pip_audit_on_the_locked_requirements(ctx: Context, monkeypatch: pytest.
     assert "--no-deps" in commands[1]
 
 
+def test_pip_audit_s_repeated_advisories_count_once(ctx: Context, monkeypatch: pytest.MonkeyPatch) -> None:
+    """pip-audit 2.10 lists some advisories twice (#69): the same ID, or a PYSEC ID and the GHSA it aliases."""
+    first = {"id": "PYSEC-2026-1", "aliases": ["GHSA-aaaa", "CVE-2026-1"], "fix_versions": ["2.0"], "description": "a"}
+    other = {"id": "PYSEC-2026-2", "aliases": ["GHSA-bbbb"], "fix_versions": ["3.0"], "description": "b"}
+    audit = {
+        "dependencies": [
+            {
+                "name": "demo-http",
+                "version": "1.0",
+                "vulns": [
+                    first,
+                    other,
+                    first,  # an identical copy
+                    {**other, "description": "b, reworded"},  # a copy with another description
+                    {"id": "GHSA-aaaa", "aliases": ["CVE-2026-1"], "fix_versions": ["2.0"]},  # first, by its alias
+                ],
+            },
+            {"name": "demo-yaml", "version": "0.1", "vulns": [{"id": "PYSEC-2026-3"}, {"id": "PYSEC-2026-4"}]},
+        ]
+    }
+
+    def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        if cmd[0] == "uv":
+            return "demo-http==1.0\ndemo-yaml==0.1\n"
+        Path(cmd[cmd.index("-o") + 1]).write_text(json.dumps(audit))
+        return ""
+
+    monkeypatch.setattr(vulnerabilities, "run", fake_run)
+    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
+    (ctx.app_dir / "uv.lock").write_text("")
+    result = vulnerabilities.collect(ctx)
+    assert (result["packages"], result["vulnerable_packages"], result["vulnerabilities"]) == (2, 2, 4)
+    assert [(i["package"], i["ids"], i["fix"]) for i in result["items"]] == [
+        ("demo-http", "PYSEC-2026-1, PYSEC-2026-2", "2.0, 3.0"),
+        ("demo-yaml", "PYSEC-2026-3, PYSEC-2026-4", "none yet"),  # distinct advisories stay
+    ]
+
+
 def test_pip_audit_without_a_lock_is_skipped_with_the_reason(ctx: Context) -> None:
     (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
     assert vulnerabilities.collect(ctx) == {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}

@@ -20,6 +20,12 @@ name = "app"
 kind = "python"
 root = "apps/app"
 source = ["app"]
+
+[[targets]]
+name = "tools"
+kind = "python"
+root = "apps/tools"
+source = ["tools"]
 """
 
 
@@ -35,7 +41,7 @@ def committed(root: Path, files: dict[str, str]) -> Path:
     return root
 
 
-def test_a_target_without_a_manifest_is_skipped_and_one_with_it_measured(tmp_path: Path) -> None:
+def test_a_target_without_a_manifest_is_skipped_and_the_others_measured(tmp_path: Path) -> None:
     repo = committed(
         tmp_path / "demo",
         {
@@ -45,6 +51,8 @@ def test_a_target_without_a_manifest_is_skipped_and_one_with_it_measured(tmp_pat
                 "[project]\nname = 'app'\nversion = '0.1.0'\nrequires-python = '>=3.12'\ndependencies = []\n"
             ),
             "apps/app/app/__init__.py": '"""App."""\n\nimport yaml\n',  # imported, never declared: DEP001
+            "apps/tools/requirements.in": "requests\n",  # pip-tools' input, which deptry reads on its own
+            "apps/tools/tools/__init__.py": '"""Tools."""\n\nimport yaml\n',
         },
     )
     assert cli.main(["--repo", str(repo), "run", "--tool", "dependencies", "--no-history"]) == 0
@@ -55,3 +63,5 @@ def test_a_target_without_a_manifest_is_skipped_and_one_with_it_measured(tmp_pat
     assert snapshot["targets"]["bare"]["dependencies"]["skipped"] == SKIP_NO_MANIFEST
     app = snapshot["targets"]["app"]["dependencies"]
     assert (app["missing"], [i["module"] for i in app["items"]]) == (1, ["yaml"])
+    tools = snapshot["targets"]["tools"]["dependencies"]
+    assert sorted((i["code"], i["module"]) for i in tools["items"]) == [("DEP001", "yaml"), ("DEP002", "requests")]

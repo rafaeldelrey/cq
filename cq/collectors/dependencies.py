@@ -16,6 +16,9 @@ from cq.requirements import REQUIREMENTS, SKIP_NO_MANIFEST
 
 KINDS = ("python", "typescript")
 
+# The files deptry reads the dependencies from on its own; requirements.in is pip-tools' input.
+DEPTRY_MANIFESTS = (PYPROJECT, REQUIREMENTS, "requirements.in")
+
 DEPTRY_LABELS = {
     "DEP001": "missing",
     "DEP002": "unused",
@@ -50,7 +53,7 @@ def package_names(path: Path) -> list[str]:
 
 def collect_python(ctx: Context) -> dict:
     """deptry over the app, with the app's own pyproject (or requirements.txt) declaring the dependencies."""
-    if not any((ctx.app_dir / name).exists() for name in (PYPROJECT, REQUIREMENTS)):
+    if not any((ctx.app_dir / name).exists() for name in DEPTRY_MANIFESTS):
         # deptry has nothing to compare the imports with, and would fail (#58): a blind spot that says so.
         return {"skipped": SKIP_NO_MANIFEST}
     out = ctx.raw_dir / "deptry.json"

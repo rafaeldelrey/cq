@@ -9,8 +9,8 @@ numbers, and the trend shows a step there.
 ### Fixed
 
 - **deptry on a target with no manifest is `skipped`, not a tool error.** With no
-  `pyproject.toml` or `requirements.txt` in the target's folder, deptry has nothing to compare the
-  imports with. The dependencies collector now records `skipped` with the same reason
+  `pyproject.toml`, `requirements.txt` or `requirements.in` in the target's folder, deptry has
+  nothing to compare the imports with. The dependencies collector now records `skipped` with the same reason
   vulnerabilities and freshness give, instead of deptry's `DependencySpecificationNotFoundError`.
 
 ## [0.12.0] - 2026-10-22

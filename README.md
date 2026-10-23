@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.11.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.11.3
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.11.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.11.3
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -257,7 +257,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.11.2"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.11.3"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -422,16 +422,25 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ## 9. Upgrade or uninstall
 
+There is one `cq` per machine. Every repo you measure there uses it, and so does any CI runner on
+that machine. An upgrade changes the version all of them use at once. Before you upgrade:
+
+- **Check the repos that pin cq.** A repo can expect a version, for example in a wrapper script or
+  a CI step, and refuse any other. Its gate then fails on every PR until the pin moves. Move those
+  pins in the same go, or wait.
+- **Expect a step in the trend.** The first snapshot after an upgrade flags the change.
+
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.11.2    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.11.3    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 
 `uv tool upgrade cq` keeps the tag you installed, so move between versions with
-`install --force` at the new tag. A new version can pin newer measuring tools. The first snapshot
-after an upgrade then flags the change ("cq: 0.2.0 → 0.3.0"), and [CHANGELOG.md](CHANGELOG.md)
-says which numbers can move. To remove a repo's data, delete its `.cq/` folder.
+`install --force` at the new tag. Going back is the same command at the old tag. A new version
+can pin newer measuring tools. The first snapshot after an upgrade then flags the change ("cq:
+0.2.0 → 0.3.0"), and [CHANGELOG.md](CHANGELOG.md) says which numbers can move. To remove a repo's
+data, delete its `.cq/` folder.
 
 ---
 

@@ -21,13 +21,24 @@ Use the newest release tag (`git ls-remote --tags git@github.com:rafaeldelrey/cq
 the measuring tools, so snapshots stay comparable. The repo is private, so this needs the user's
 GitHub ssh access. If `uv` is missing, the user installs it first (`brew install uv`).
 
-If cq is already installed, compare its version with the newest release tag:
+If cq is already installed, compare its version (`cq --version` prints `cq 0.11.3`, without the
+tag's `v`) with the newest release tag, the first line of:
 
-- **The same:** go on.
-- **Older:** tell the user both versions, and offer the upgrade (`uv tool install --force` at the
-  newest tag). Say what it changes: there is one cq per machine, so every repo measured here and
-  any CI runner on this machine switch to the new version at once. A repo can pin the cq version
-  it expects, and its gate then fails until its pin moves. Upgrade only on a yes; otherwise go on
+```bash
+git ls-remote --tags --refs --sort=-v:refname git@github.com:rafaeldelrey/cq.git 'v*'
+```
+
+- **The same, or newer** (a build from main): go on.
+- **Older:** tell the user both versions, and offer the upgrade, showing the command with the
+  newest tag in place of this one:
+
+  ```bash
+  uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.11.3
+  ```
+
+  Say what it changes: there is one cq per machine, so every repo measured here and a self-hosted
+  CI runner on this machine switch to the new version at once. A repo can pin the cq version it
+  expects, and its gate then fails until its pin moves. Upgrade only on a yes; otherwise go on
   with the installed cq.
 
 ## 2. The measuring tools

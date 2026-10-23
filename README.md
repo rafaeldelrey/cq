@@ -422,13 +422,14 @@ Each gate run writes `.cq/runs/<time>_gate_<sha>/` (`gate.md`, `gate-findings.js
 
 ## 9. Upgrade or uninstall
 
-There is one `cq` per machine. Every repo you measure there uses it, and so does any CI runner on
-that machine. An upgrade changes the version all of them use at once. Before you upgrade:
+There is one `cq` per machine. Every repo you measure there uses it, and so does a self-hosted CI
+runner on that machine (a GitHub-hosted runner installs its own each run). An upgrade changes the
+version all of them use at once. Before you upgrade:
 
 - **Check the repos that pin cq.** A repo can expect a version, for example in a wrapper script or
   a CI step, and refuse any other. Its gate then fails on every PR until the pin moves. Move those
-  pins in the same go, or wait.
-- **Expect a step in the trend.** The first snapshot after an upgrade flags the change.
+  pins in the same go.
+- **Know the way back:** the same `install --force` at the tag you had.
 
 ```bash
 cq --version                                                        # what you have
@@ -437,10 +438,9 @@ uv tool uninstall cq                                                # remove it
 ```
 
 `uv tool upgrade cq` keeps the tag you installed, so move between versions with
-`install --force` at the new tag. Going back is the same command at the old tag. A new version
-can pin newer measuring tools. The first snapshot after an upgrade then flags the change ("cq:
-0.2.0 → 0.3.0"), and [CHANGELOG.md](CHANGELOG.md) says which numbers can move. To remove a repo's
-data, delete its `.cq/` folder.
+`install --force` at the new tag. A new version can pin newer measuring tools. The first snapshot
+after an upgrade then flags the change ("cq: 0.2.0 → 0.3.0"), and [CHANGELOG.md](CHANGELOG.md)
+says which numbers can move. To remove a repo's data, delete its `.cq/` folder.
 
 ---
 

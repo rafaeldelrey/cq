@@ -9,9 +9,10 @@ used in production code.
 import json
 from pathlib import Path
 
-from cq.config import PINS, has_python
+from cq.config import PINS, PYPROJECT, has_python
 from cq.context import Context
 from cq.proc import has_dev_extra, read_report, run, uv_app
+from cq.requirements import REQUIREMENTS, SKIP_NO_MANIFEST
 
 KINDS = ("python", "typescript")
 
@@ -48,7 +49,10 @@ def package_names(path: Path) -> list[str]:
 
 
 def collect_python(ctx: Context) -> dict:
-    """deptry over the app, with the app's own pyproject declaring the dependencies."""
+    """deptry over the app, with the app's own pyproject (or requirements.txt) declaring the dependencies."""
+    if not any((ctx.app_dir / name).exists() for name in (PYPROJECT, REQUIREMENTS)):
+        # deptry has nothing to compare the imports with, and would fail (#58): a blind spot that says so.
+        return {"skipped": SKIP_NO_MANIFEST}
     out = ctx.raw_dir / "deptry.json"
     # Inside the app's own environment: deptry maps import names to distributions (sklearn →
     # scikit-learn) from the installed metadata. A dev extra is dev-only, not unused; deptry reads a

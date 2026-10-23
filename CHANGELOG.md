@@ -4,6 +4,18 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.11.3] - 2026-10-22
+
+### Changed
+
+- **Upgrading cq says what it changes.** There is one cq per machine, so an upgrade switches every
+  repo measured there, and any CI runner on that machine, to the new version at once. A repo that
+  pins the cq version it expects then fails its gate until its pin moves.
+  - The README's [upgrade section](README.md#9-upgrade-or-uninstall) says so, says to check the
+    repos that pin cq, and says how to go back.
+  - `/setup-cq` now compares an installed cq with the newest release. When it's older, it names
+    both versions and the effect, and upgrades only on a yes.
+
 ## [0.11.2] - 2026-10-22
 
 ### Fixed

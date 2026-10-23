@@ -55,8 +55,8 @@ def pinned_requirements(ctx: Context) -> Path | str:
 def distinct(vulns: list[dict]) -> list[dict]:
     """One entry per advisory: pip-audit 2.10 lists some twice for the same package (#69).
 
-    Two entries are one advisory when their IDs and aliases meet: the same ID, or a PYSEC advisory
-    and the GHSA (or CVE) it aliases. The first entry of each is kept.
+    Two entries are one advisory when their IDs and aliases meet: the same ID, or a PyPI advisory
+    and the GitHub or CVE ID it aliases. The first entry of each is kept.
     """
     kept, seen = [], set()
     for vuln in vulns:

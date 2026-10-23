@@ -4,6 +4,18 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.12.0] - 2026-10-22
+
+### Fixed
+
+- **Measurement change: each Python advisory counts once.** pip-audit 2.10 lists some advisories
+  twice for the same package, so `vulnerabilities` counted them twice, and an item's IDs repeated.
+  cq now counts one advisory per group of entries whose IDs and aliases meet (the same ID, or a
+  PyPI advisory and the GitHub or CVE ID it aliases), with every fix version the group names.
+  - **What moves:** `vulnerabilities` drops for Python apps where pip-audit repeated advisories,
+    by half in the case seen. A vulnerable package's finding message lists each ID once.
+    `vulnerable_packages`, `packages`, npm audit's counts and finding keys don't change.
+
 ## [0.11.3] - 2026-10-22
 
 ### Changed

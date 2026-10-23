@@ -14,15 +14,15 @@ let them commit.
 Check with `cq --version` (or `command -v cq`). If it is missing:
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.11.3
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.12.0
 ```
 
 Use the newest release tag (`git ls-remote --tags git@github.com:rafaeldelrey/cq.git`): a tag pins
 the measuring tools, so snapshots stay comparable. The repo is private, so this needs the user's
 GitHub ssh access. If `uv` is missing, the user installs it first (`brew install uv`).
 
-If cq is already installed, compare its version (`cq --version` prints `cq 0.11.3`, without the
-tag's `v`) with the newest release tag, the first line of:
+If cq is already installed, compare its version (`cq --version` prints it without the tag's
+`v`: `cq 1.2.3` for `v1.2.3`) with the newest release tag, the first line of:
 
 ```bash
 git ls-remote --tags --refs --sort=-v:refname git@github.com:rafaeldelrey/cq.git 'v*'
@@ -33,7 +33,7 @@ git ls-remote --tags --refs --sort=-v:refname git@github.com:rafaeldelrey/cq.git
   newest tag in place of this one:
 
   ```bash
-  uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.11.3
+  uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.12.0
   ```
 
   Say what it changes: there is one cq per machine, so every repo measured here and a self-hosted

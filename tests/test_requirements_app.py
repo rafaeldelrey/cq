@@ -185,6 +185,9 @@ def test_every_collector_measures_a_requirements_app(measured: tuple[Path, dict]
     assert svc["tests"]["coverage"]["percent"] == pytest.approx(100.0)
     audited = {i["package"] for i in svc["vulnerabilities"]["items"]}
     assert "requests" in audited and svc["vulnerabilities"]["packages"] > 3  # resolved: transitive ones too
+    for item in svc["vulnerabilities"]["items"]:  # pip-audit lists some twice; each counts once (#69)
+        ids = item["ids"].split(", ")
+        assert len(ids) == len(set(ids)), item
     outdated = {i["package"]: i["current"] for i in svc["freshness"]["items"]}
     assert outdated == {"requests": "2.31.0", "pytest": "8.3.3"}  # the dev file's pins are read too
     assert (svc["freshness"]["unpinned"], svc["freshness"]["unpinned_packages"]) == (1, ["six"])

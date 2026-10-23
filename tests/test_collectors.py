@@ -187,6 +187,44 @@ def test_pip_audit_on_the_locked_requirements(ctx: Context, monkeypatch: pytest.
     assert "--no-deps" in commands[1]
 
 
+def test_repeated_pip_audit_advisories_count_once(ctx: Context, monkeypatch: pytest.MonkeyPatch) -> None:
+    """pip-audit 2.10 lists some advisories twice (#69): the same ID, or a PYSEC ID and the GHSA it aliases."""
+    first = {"id": "PYSEC-2026-1", "aliases": ["GHSA-aaaa", "CVE-2026-1"], "fix_versions": ["2.0"], "description": "a"}
+    other = {"id": "PYSEC-2026-2", "aliases": ["GHSA-bbbb"], "fix_versions": ["3.0"], "description": "b"}
+    audit = {
+        "dependencies": [
+            {
+                "name": "demo-http",
+                "version": "1.0",
+                "vulns": [
+                    first,
+                    other,
+                    first,  # an identical copy
+                    {**other, "description": "b, reworded"},  # a copy with another description
+                    {"id": "GHSA-aaaa", "aliases": ["CVE-2026-1"], "fix_versions": ["2.0"]},  # first, by its alias
+                ],
+            },
+            {"name": "demo-yaml", "version": "0.1", "vulns": [{"id": "PYSEC-2026-3"}, {"id": "PYSEC-2026-4"}]},
+        ]
+    }
+
+    def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        if cmd[0] == "uv":
+            return "demo-http==1.0\ndemo-yaml==0.1\n"
+        Path(cmd[cmd.index("-o") + 1]).write_text(json.dumps(audit))
+        return ""
+
+    monkeypatch.setattr(vulnerabilities, "run", fake_run)
+    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
+    (ctx.app_dir / "uv.lock").write_text("")
+    result = vulnerabilities.collect(ctx)
+    assert (result["packages"], result["vulnerable_packages"], result["vulnerabilities"]) == (2, 2, 4)
+    assert [(i["package"], i["ids"], i["fix"]) for i in result["items"]] == [
+        ("demo-http", "PYSEC-2026-1, PYSEC-2026-2", "2.0, 3.0"),
+        ("demo-yaml", "PYSEC-2026-3, PYSEC-2026-4", "none yet"),  # distinct advisories stay
+    ]
+
+
 def test_pip_audit_without_a_lock_is_skipped_with_the_reason(ctx: Context) -> None:
     (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
     assert vulnerabilities.collect(ctx) == {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
@@ -245,3 +283,28 @@ def test_cuts_belong_to_the_collector_that_made_them(ctx: Context) -> None:
     second, _ = runner.run_collector(ctx, "size")  # same context, next collector: nothing carried over
     assert first is not None and second is not None
     assert "truncated" in first and "truncated" not in second
+
+
+@pytest.mark.parametrize("order", [(0, 1, 2), (2, 0, 1), (1, 2, 0)])
+def test_advisories_linked_through_aliases_are_one_whatever_the_order(order: tuple[int, int, int]) -> None:
+    """A and B share nothing, C aliases both: one advisory, with every fix version, in any order."""
+    entries = [
+        {"id": "GHSA-aaaa", "fix_versions": ["1.1"]},
+        {"id": "CVE-2026-9", "fix_versions": ["1.2"]},
+        {"id": "PYSEC-2026-9", "aliases": ["GHSA-aaaa", "CVE-2026-9"], "fix_versions": []},
+    ]
+    (merged,) = vulnerabilities.distinct_advisories([entries[i] for i in order])
+    assert merged["id"] == entries[order[0]]["id"]
+    assert merged["fix_versions"] == ["1.1", "1.2"]
+
+
+def test_a_later_pypi_id_aliasing_an_earlier_github_one_is_the_same_advisory() -> None:
+    entries = [
+        {"id": "GHSA-bbbb", "aliases": ["CVE-2026-8"], "fix_versions": ["2.0"]},
+        {"id": "PYSEC-2026-8", "aliases": ["GHSA-bbbb"], "fix_versions": ["2.1"]},
+        {"id": "PYSEC-2026-7", "fix_versions": []},
+    ]
+    assert [(v["id"], v["fix_versions"]) for v in vulnerabilities.distinct_advisories(entries)] == [
+        ("GHSA-bbbb", ["2.0", "2.1"]),
+        ("PYSEC-2026-7", []),
+    ]

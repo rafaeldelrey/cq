@@ -52,6 +52,31 @@ def pinned_requirements(ctx: Context) -> Path | str:
     return exported_lock(ctx)
 
 
+def distinct_advisories(vulns: list[dict]) -> list[dict]:
+    """One entry per advisory: pip-audit 2.10 lists some twice for the same package (#69).
+
+    Entries whose IDs and aliases meet, directly or through others, are one advisory: the same ID,
+    or a PyPI advisory and the GitHub or CVE ID it aliases. Each group keeps its first entry's ID
+    and every fix version any of its entries names, whatever order pip-audit lists them in.
+    """
+    groups: list[tuple[set[str], dict]] = []
+    for vuln in vulns:
+        names = {vuln["id"], *vuln.get("aliases", [])}
+        fixes = set(vuln.get("fix_versions", []))
+        touching = [g for g in groups if not g[0].isdisjoint(names)]
+        if not touching:
+            groups.append((names, {**vuln, "fix_versions": fixes}))
+            continue
+        first = touching[0]
+        for other in touching[1:]:
+            first[0].update(other[0])
+            fixes |= set(other[1]["fix_versions"])
+            groups.remove(other)
+        first[0].update(names)
+        first[1]["fix_versions"] = first[1]["fix_versions"] | fixes
+    return [{**entry, "fix_versions": sorted(entry["fix_versions"])} for _, entry in groups]
+
+
 def collect_python(ctx: Context) -> dict:
     """Pin the app's dependencies to exact versions, then audit them without re-resolving."""
     req = pinned_requirements(ctx)
@@ -64,7 +89,7 @@ def collect_python(ctx: Context) -> dict:
         ok_codes=(0, 1),
     )
     deps = json.loads(read_report(out, "pip-audit"))["dependencies"]
-    vulnerable = [d for d in deps if d.get("vulns")]
+    vulnerable = [{**d, "vulns": distinct_advisories(d["vulns"])} for d in deps if d.get("vulns")]
     return {
         "packages": len(deps),
         "vulnerable_packages": len(vulnerable),

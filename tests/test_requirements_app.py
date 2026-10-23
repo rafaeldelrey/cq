@@ -177,7 +177,7 @@ def measured(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, dict]:
 
 def test_every_collector_measures_a_requirements_app(measured: tuple[Path, dict]) -> None:
     repo, snapshot = measured
-    assert set(snapshot["errors"]) == {"bare.dependencies"}  # deptry without a manifest is #58
+    assert snapshot["errors"] == {}
     assert not snapshot["dirty"]
     assert git(repo, "status", "--porcelain", "--untracked-files=all", "--", ".", ":!.cq") == ""
     svc = snapshot["targets"]["svc"]
@@ -199,6 +199,7 @@ def test_an_app_without_a_dependency_file_says_so_and_still_runs_its_tests(measu
     bare = snapshot["targets"]["bare"]
     assert bare["vulnerabilities"]["skipped"] == requirements.SKIP_NO_MANIFEST
     assert bare["freshness"]["skipped"] == requirements.SKIP_NO_MANIFEST
+    assert bare["dependencies"]["skipped"] == requirements.SKIP_NO_MANIFEST  # deptry too (#58)
     assert bare["tests"]["results"]["passed"] == 1
 
 

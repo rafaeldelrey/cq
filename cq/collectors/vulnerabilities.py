@@ -47,7 +47,7 @@ def resolved_requirements(ctx: Context) -> Path:
 PINNED_LINE = re.compile(r"^[A-Za-z0-9][\w.\-]*(?:\[[^\]]*\])?==")
 
 
-NO_BUILD = "is disabled"  # uv: "Building source distributions for `<name>` is disabled"
+NO_BUILD = "disabled"  # uv: "Building source distributions for `x` is disabled", "building from source is disabled"
 
 
 def compiled_project(ctx: Context) -> Path | str:
@@ -55,21 +55,21 @@ def compiled_project(ctx: Context) -> Path | str:
 
     Run there, uv applies the app's own settings (its uv.toml, its or a parent's [tool.uv], its
     sources), as `uv lock` would. The dev group comes too, as `uv export` includes it, and so does a
-    dev extra. A path or workspace dependency is never built: its build would write into the repo,
-    so one that needs a build makes the app skipped, with the reason.
+    dev extra. Nothing is built (``--no-build``): a build would run the app's or a dependency's own
+    code, and a build from the repo writes into it (#60). When resolving needs one, the app is
+    skipped, with the reason.
     """
     req = ctx.raw_dir / AUDITED
     group = ["--group", "dev"] if requirements.has_dev_group(ctx.app_dir) else []
     extra = ["--extra", "dev"] if has_dev_extra(ctx.app_dir) else []
-    no_build = [arg for name in sorted(requirements.in_repo_sources(ctx.app_dir)) for arg in ("--only-binary", name)]
-    cmd = ["uv", "pip", "compile", "-q", "--no-header", "--no-annotate", PYPROJECT, *group, *extra, *no_build]
+    cmd = ["uv", "pip", "compile", "-q", "--no-build", "--no-header", "--no-annotate", PYPROJECT, *group, *extra]
     try:
         run([*cmd, "-o", str(req)], ctx.app_dir)
-    # A specific, expected exception: uv refusing to build a dependency from the repo; anything else propagates.
+    # A specific, expected exception: uv refusing a build it would need; anything else propagates.
     except ToolError as exc:
-        if not no_build or NO_BUILD not in exc.stderr:
+        if NO_BUILD not in exc.stderr:
             raise
-        return requirements.SKIP_LOCAL_BUILD
+        return requirements.SKIP_NEEDS_BUILD
     return req
 
 

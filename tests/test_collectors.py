@@ -1,6 +1,7 @@
 """Parsing the tools' output, and the collectors that need no subprocess."""
 
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -277,6 +278,24 @@ def test_hashed_pins_are_kept_whole(tmp_path: Path) -> None:
     ]
 
 
+def test_a_resolution_that_needs_a_build_is_skipped_with_the_reason(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A PyPI package with only a source distribution can't resolve without a build: cq runs none (#60)."""
+    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\ndependencies = ['old']\n")
+
+    def refused(cmd: list[str], cwd: Path, **_: object) -> str:
+        assert "--no-build" in cmd
+        raise ToolError(
+            "uv pip compile exited 1",
+            returncode=1,
+            stderr="hint: Wheels are required for `old` because building from source is disabled for all packages",
+        )
+
+    monkeypatch.setattr(vulnerabilities, "run", refused)
+    assert vulnerabilities.collect(ctx) == {"skipped": requirements.SKIP_NEEDS_BUILD}
+
+
 def test_a_failed_resolution_other_than_a_refused_build_is_a_tool_error(
     ctx: Context, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -311,16 +330,20 @@ def test_an_unlocked_app_with_dynamic_dependencies_is_skipped_and_nothing_built(
 
 
 def test_a_dependency_taken_from_a_local_source_is_not_a_pypi_pin(tmp_path: Path) -> None:
+    """Path, git, URL and workspace sources aren't PyPI's; one whose marker doesn't hold here still is."""
+    here, elsewhere = sys.platform, "no-such-platform"
     (tmp_path / "pyproject.toml").write_text(
         "[project]\nname = 'demo'\nversion = '0.1.0'\n"
-        "dependencies = ['Helper_Lib', 'tool', 'mirror==1.0', 'member', 'six>=1']\n\n"
+        "dependencies = ['Helper_Lib', 'tool', 'other==2.0', 'mirror==1.0', 'member', 'six>=1']\n\n"
         "[tool.uv.sources]\n"
         "helper-lib = { path = '../libs/helper' }\n"
-        "tool = [{ git = 'https://example.com/tool.git', marker = \"sys_platform == 'linux'\" }]\n"
+        f"tool = [{{ git = 'https://example.com/tool.git', marker = \"sys_platform == '{here}'\" }}]\n"
+        f"other = [{{ git = 'https://example.com/other.git', marker = \"sys_platform == '{elsewhere}'\" }}]\n"
         "mirror = { index = 'internal' }\n"
         "member = { workspace = true }\n"
     )
     assert requirements.project_requirements(tmp_path) == [
+        requirements.Requirement("other", "2.0"),  # its git source is for another platform: PyPI's here
         requirements.Requirement("mirror", "1.0"),  # an index is still a registry: compared
         requirements.Requirement("six", None),
     ]

@@ -421,13 +421,17 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
       const r = svgEl.getBoundingClientRect();
       const x = (clientX - r.left) * (W / r.width);
       const date = dates.reduce((a, b) => Math.abs(X(b) - x) < Math.abs(X(a) - x) ? b : a);
-      const p = SERIES.find((s) => s.date === date);
+      // Every run is a point (#54): at a commit measured more than once, show its newest run, the
+      // point the line reaches there, and say how many runs share the date.
+      const runs = SERIES.filter((s) => s.date === date);
+      const p = runs[runs.length - 1];
       cross.setAttribute("x1", X(date)); cross.setAttribute("x2", X(date)); cross.setAttribute("visibility", "visible");
       const rows = lines.map((l) => {
         const v = valueAt(p, l.t, m.path);
         return v === undefined ? "" : `<div class="row"><span class="swatch" style="background:${colorOf(l.t)}"></span>${esc(l.t)}<span class="v">${esc(fmt(v, m))}</span></div>`;
       }).join("");
-      tip.innerHTML = `<div><strong>${esc(et(p.date))}</strong> · <code>${esc(p.short)}</code>${p.dirty ? " (dirty)" : ""}</div>` +
+      const runsNote = runs.length > 1 ? ` · newest of ${runs.length} runs (${esc(et(p.run_at, true))})` : "";
+      tip.innerHTML = `<div><strong>${esc(et(p.date))}</strong> · <code>${esc(p.short)}</code>${p.dirty ? " (dirty)" : ""}${runsNote}</div>` +
         `<div class="sub">${esc(p.subject.slice(0, 80))}</div>${rows}`;
       tip.hidden = false;
       const px = X(date) * (r.width / W);

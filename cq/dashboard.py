@@ -52,6 +52,7 @@ def series_point(snap: dict) -> dict:
     return {
         "short": snap["short"],
         "date": snap["commit_date"],
+        "run_at": snap["run_at"],
         "subject": snap["subject"],
         "dirty": snap["dirty"],
         "values": values,

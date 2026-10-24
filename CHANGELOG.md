@@ -4,6 +4,20 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.12.2] - 2026-10-24
+
+### Fixed
+
+- **Two vulnerable dependencies in cq's lock.** Neither measures anything, so no number moves.
+  - `filelock` 4.2.0 → 4.2.4 (6 CVEs, fixed in 4.2.1), pulled in by pip-audit's cache.
+  - `opentelemetry-api` 1.37.0 → 1.45.1 (CVE-2026-114603), pulled in by semgrep, which pins
+    OpenTelemetry ~=1.37. An override moves the whole family to 1.45 (contrib 0.66): moving the
+    API alone makes semgrep fail at startup. semgrep's results on cq are identical. The lock gains
+    `opentelemetry-exporter-http-transport` and `opentelemetry-exporter-otlp-common`, and drops
+    `importlib-metadata` and `zipp`.
+  - Like the `mcp` override, this covers cq's lock, development and CI; `uv tool install` ignores
+    overrides, so an installed cq gets the newest `filelock` but semgrep's OpenTelemetry pins.
+
 ## [0.12.1] - 2026-10-23
 
 ### Fixed

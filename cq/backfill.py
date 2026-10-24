@@ -7,7 +7,7 @@ that did not exist yet, or a tool its old setup cannot run, is recorded as an er
 
 from cq.config import Settings
 from cq.console import note
-from cq.runner import cleanup_worktrees, first_parent_commits, git, save, snapshot
+from cq.runner import cleanup_worktrees, first_parent_commits, git, history_sha, save, snapshot
 
 
 def commits_to_measure(
@@ -19,7 +19,7 @@ def commits_to_measure(
     if since:
         shas += first_parent_commits(since, every, root, branch)
     # A -dirty snapshot measured uncommitted changes, so it doesn't stand for the commit itself.
-    done = {p.stem.split("_", 1)[1] for p in settings.history_dir.glob("*.json") if not p.stem.endswith("-dirty")}
+    done = {history_sha(p) for p in settings.history_dir.glob("*.json") if not p.stem.endswith("-dirty")}
     return [s for s in dict.fromkeys(shas) if force or s[:7] not in done]
 
 

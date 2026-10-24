@@ -248,10 +248,22 @@ def snapshot(
 
 
 def history_path(snap: dict, settings: Settings) -> Path:
-    """One file per measured commit: re-measuring a commit replaces its file, so trends stay one point per commit."""
+    """One file per complete run: ``<commit date>_<sha>_<run time>[-dirty].json``.
+
+    A re-run at the same commit adds an entry rather than replacing one (#54), so the trend keeps
+    every baseline. The run time is to the second, as the run folder's is, so two runs started in
+    the same second share both. Older history files, named ``<commit date>_<sha>[-dirty].json``,
+    still load.
+    """
     day = snap["commit_date"][:10]
+    run_time = f"{datetime.fromisoformat(snap['run_at']).astimezone(UTC):%Y%m%dT%H%M%SZ}"
     suffix = "-dirty" if snap["dirty"] else ""
-    return settings.history_dir / f"{day}_{snap['short']}{suffix}.json"
+    return settings.history_dir / f"{day}_{snap['short']}_{run_time}{suffix}.json"
+
+
+def history_sha(path: Path) -> str:
+    """The short sha a history file measured, from either name form (with or without the run time)."""
+    return path.stem.removesuffix("-dirty").split("_")[1]
 
 
 def save(snap: dict, settings: Settings, *, to_history: bool) -> list[Path]:

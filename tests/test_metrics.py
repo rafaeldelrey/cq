@@ -39,7 +39,7 @@ def snap(day: str, sha: str, coverage: float, over: int, dirty: bool = False) ->
 def write(tmp_path: Path, *snaps: dict) -> list[dict]:
     """Store snapshots in a history dir and load them back."""
     for s in snaps:
-        (tmp_path / f"{s['commit_date'][:10]}_{s['short']}.json").write_text(json.dumps(s))
+        (tmp_path / f"{s['commit_date'][:10]}_{s['short']}_{s['run_id'].split('_')[0]}.json").write_text(json.dumps(s))
     return load_history(tmp_path)
 
 
@@ -135,6 +135,41 @@ def test_history_until_puts_run_last_and_drops_later_commits(tmp_path: Path) -> 
     history = write(tmp_path, snap("2026-09-01", "aaa", 85, 5), snap("2026-10-10", "bbb", 84, 3))
     run = snap("2026-09-15", "ccc", 86, 4)
     assert [s["short"] for s in dashboard.history_until(history, run)] == ["aaa", "ccc"]
+
+
+def test_history_until_keeps_a_commits_earlier_runs_and_drops_its_later_ones(tmp_path: Path) -> None:
+    """Every run is a point (#54): a run's history has its commit's earlier runs, never the later ones."""
+
+    def rerun(day: str, at: str, coverage: float) -> dict:
+        return {**snap(day, "aaa", coverage, 1), "run_id": f"{at}_aaa", "run_at": f"{day}T{at}+00:00"}
+
+    first, second, third = (
+        rerun("2026-09-01", "12:00:00", 80),
+        rerun("2026-09-01", "13:00:00", 81),
+        rerun("2026-09-01", "14:00:00", 82),
+    )
+    history = write(tmp_path, first, second, third)
+    assert [s["run_at"][11:16] for s in dashboard.history_until(history, second)] == ["12:00", "13:00"]
+    assert [s["run_at"][11:16] for s in dashboard.history_until(history, third)] == ["12:00", "13:00", "14:00"]
+
+
+def test_the_dashboard_series_keeps_each_run_of_a_commit_apart(tmp_path: Path) -> None:
+    """Runs of one commit share a date on the chart; their run time tells them apart (#54)."""
+    runs = [
+        {**snap("2026-09-01", "aaa", coverage, 1), "run_id": f"{at}_aaa", "run_at": f"2026-09-01T{at}+00:00"}
+        for at, coverage in (("12:00:00", 80), ("13:00:00", 95))
+    ]
+    history = write(tmp_path, *runs)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    page = dashboard.build(history, history[-1], run_dir)
+    payload = page.split('<script id="data" type="application/json">', 1)[1].split("</script>", 1)[0]
+    series = json.loads(payload)["series"]
+    assert [(p["run_at"][11:16], p["values"]["app"]["tests.coverage.percent"]) for p in series] == [
+        ("12:00", 80),
+        ("13:00", 95),
+    ]
+    assert "runs[runs.length - 1]" in page  # the tooltip reads the newest run at a shared date
 
 
 def test_markdown_to_html() -> None:

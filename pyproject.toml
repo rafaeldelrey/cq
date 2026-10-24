@@ -1,6 +1,6 @@
 [project]
 name = "cq"
-version = "0.12.1"
+version = "0.12.2"
 description = "Code-quality snapshots of a repository, stored as history and reported as trends, plus a PR gate"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -22,8 +22,22 @@ dependencies = [
 
 [tool.uv]
 # semgrep pins mcp==1.29.0 (CVE-2026-59951, fixed in 1.30). Only `semgrep mcp` imports it, and cq runs
-# `semgrep scan`. `uv tool install` ignores this override, so it covers the lock, dev and CI.
-override-dependencies = ["mcp>=1.30,<2"]
+# `semgrep scan`. It also pins OpenTelemetry ~=1.37 (CVE-2026-114603 in opentelemetry-api, fixed in
+# 1.45.1): the family moves together, 1.45.1 with its contrib 0.66b1, or semgrep fails to start.
+# `uv tool install` ignores these overrides, so they cover the lock, dev and CI.
+override-dependencies = [
+    "mcp>=1.30,<2",
+    "opentelemetry-api==1.45.1",
+    "opentelemetry-sdk==1.45.1",
+    "opentelemetry-exporter-otlp-proto-http==1.45.1",
+    "opentelemetry-exporter-otlp-proto-common==1.45.1",
+    "opentelemetry-proto==1.45.1",
+    "opentelemetry-instrumentation==0.66b1",
+    "opentelemetry-instrumentation-requests==0.66b1",
+    "opentelemetry-instrumentation-threading==0.66b1",
+    "opentelemetry-semantic-conventions==0.66b1",
+    "opentelemetry-util-http==0.66b1",
+]
 
 [project.scripts]
 cq = "cq.cli:main"

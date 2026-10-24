@@ -106,7 +106,7 @@ def test_mutation_score_bands(value: float, expected: tuple[str, str]) -> None:
     assert rated("mutation.score", value) == expected
 
 
-def test_only_the_five_metrics_with_a_published_scale_are_rated() -> None:
+def test_only_the_metrics_with_a_published_scale_are_rated() -> None:
     rated_paths = {m.path for m in METRICS if benchmarks.rate(m, 1.0) is not None}
     assert rated_paths == {
         "tests.coverage.percent",
@@ -119,11 +119,9 @@ def test_only_the_five_metrics_with_a_published_scale_are_rated() -> None:
     assert benchmarks.rate(metric("tests.coverage.percent"), None) is None  # not measured: no rating
 
 
-def test_a_value_outside_every_band_is_an_error() -> None:
-    with pytest.raises(ValueError, match="below every band"):
-        benchmarks.rate(metric("tests.coverage.percent"), float("nan"))
-    with pytest.raises(ValueError, match="above every band"):
-        benchmarks.rate(metric("duplication.percent"), float("nan"))
+def test_a_value_that_is_not_a_number_gets_no_rating() -> None:
+    assert benchmarks.rate(metric("tests.coverage.percent"), float("nan")) is None
+    assert benchmarks.rate(metric("duplication.percent"), float("nan")) is None
 
 
 def target(coverage: float | None = None, worst: float | None = None, mean: float | None = None) -> dict:
@@ -193,8 +191,11 @@ def test_the_report_rates_each_rated_metric_and_grades_the_target(tmp_path: Path
     assert "| Worst cyclomatic complexity | 15 | Fair · radon C |" in text
     assert "| Ruff findings | 3 |  |" in text  # no published scale: blank
     assert (
-        "**Grade: Good**, the mean of 3 rated metrics; weakest: Worst cyclomatic complexity, Fair (radon C). "
-        "Ratings: published benchmarks, see `skills/cq/references/benchmarks.md`." in text
+        "**Grade: Good**, the mean of 3 rated metrics; weakest: Worst cyclomatic complexity, Fair (radon C).\n" in text
+    )
+    assert (
+        "Ratings: published benchmarks in cq's own units; the sources are in "
+        "references/benchmarks.md in the cq plugin's /cq skill." in text
     )
 
 
@@ -202,6 +203,13 @@ def test_a_target_with_one_rated_metric_has_no_grade_line(tmp_path: Path) -> Non
     text = render_md.render(history_of(tmp_path, snapshot("2026-10-24", "bbb", target(coverage=50))))
     assert "| Coverage | 50.00% | Poor · under Google's 60 |" in text
     assert "Grade:" not in text
+    assert "Ratings: published benchmarks" in text  # a rating still names its sources
+
+
+def test_a_target_with_no_rated_metric_has_no_ratings_note(tmp_path: Path) -> None:
+    text = render_md.render(history_of(tmp_path, snapshot("2026-10-24", "bbb", {"ruff": {"violations": 3}})))
+    assert "| Ruff findings | 3 |  |" in text
+    assert "Ratings:" not in text
 
 
 def test_a_snapshot_without_the_newer_metrics_rates_what_it_has(tmp_path: Path) -> None:
@@ -226,7 +234,7 @@ def test_the_dashboard_carries_each_rating_and_the_grade(tmp_path: Path) -> None
     assert app["metrics"]["complexity.max"] == {"label": "Fair", "band": "radon C"}
     assert "ruff.violations" not in app["metrics"]
     assert app["grade"] == {"label": "Good", "rated": 3, "weakest": "Worst cyclomatic complexity"}
-    assert data["reference"] == "skills/cq/references/benchmarks.md"
+    assert data["reference"] == "references/benchmarks.md in the cq plugin's /cq skill"
     assert "Fair · radon C" in page  # the static report, for a page whose script doesn't run
 
 

@@ -231,9 +231,14 @@ def errors_section(errors: dict[str, str]) -> list[str]:
 def grade_line(target: dict) -> list[str]:
     """The target's overall grade against the published benchmarks, when it has one."""
     found = benchmarks.grade(target)
-    if found is None:
+    return [] if found is None else [f"{found.text()}.", ""]
+
+
+def rating_note(target: dict) -> list[str]:
+    """Under a table with a rating in it: where the ratings come from."""
+    if not benchmarks.ratings(target):
         return []
-    return [f"{found.text()}. Ratings: published benchmarks, see `{benchmarks.REFERENCE}`.", ""]
+    return [f"Ratings: published benchmarks in cq's own units; the sources are in {benchmarks.REFERENCE}.", ""]
 
 
 def rating_cell(row: Row) -> str:
@@ -257,7 +262,7 @@ def metrics_table(name: str, rows: list[Row], window_days: int, target: dict) ->
             f"| {r.metric.label} | {fmt(r.now, r.metric)} | {rating_cell(r)} | {fmt_delta(r, r.prev)} | "
             f"{fmt_delta(r, r.window)} | {fmt_delta(r, r.first)} | {spark} |"
         )
-    return [*lines, ""]
+    return [*lines, "", *rating_note(target)]
 
 
 def cut_section(cuts: list[dict]) -> list[str]:

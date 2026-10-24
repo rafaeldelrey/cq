@@ -21,13 +21,13 @@ cq's `complexity` collector reports radon's McCabe complexity per function, the 
 | CC | radon rank | radon's reading | Label |
 |---|---|---|---|
 | 1–5 | A | low risk, simple block | Excellent |
-| 6–10 | B | low risk, well structured and stable block | Good |
-| 11–20 | C | moderate risk, slightly complex block | Fair |
-| 21–30 | D | more than moderate risk, more complex block | Poor |
-| 31–40 | E | high risk, complex block, alarming | Critical |
-| 41+ | F | very high risk, error-prone, unstable block | Critical |
+| 6–10 (over 5) | B | low risk, well structured and stable block | Good |
+| 11–20 (over 10) | C | moderate risk, slightly complex block | Fair |
+| 21–30 (over 20) | D | more than moderate risk, more complex block | Poor |
+| 31–40 (over 30) | E | high risk, complex block, alarming | Critical |
+| 41+ (over 40) | F | very high risk, error-prone, unstable block | Critical |
 
-- **Ranks:** radon's `cc_rank` (`radon/complexity.py`), the readings are its own. radon ranks an average the same way (`radon cc -a`), which is how cq rates the mean.
+- **Ranks:** radon's `cc_rank` (`radon/complexity.py`), the readings are its own. radon ranks an average the same way (`radon cc -a`), which is how cq rates the mean: a mean between two bands (10.4) takes the higher one (C).
 - **Limit:** McCabe, "A Complexity Measure", IEEE Transactions on Software Engineering SE-2(4), 1976, proposed 10. NIST SP 500-235 (Watson and McCabe, "Structured Testing", 1996, [PDF](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication500-235.pdf)): "The original limit of 10 as proposed by McCabe has significant supporting evidence, but limits as high as 15 have been used successfully as well", reserved for projects with "several operational advantages", such as experienced staff, formal design, code walkthroughs and a comprehensive test plan. cq's default limit of 15 is that ceiling, not the recommendation.
 
 Say both: the label of the worst function and of the mean, and the count over the limit with the worst offenders by name.
@@ -45,8 +45,8 @@ cq's `maintainability` collector reports radon's MI per file and a line-weighted
 
 | MI (0–100) | radon rank | Visual Studio | Label |
 |---|---|---|---|
-| above 19 | A | green, good maintainability | Good |
-| 10–19 | B | yellow, moderate maintainability | Fair |
+| over 19 | A | green, good maintainability | Good |
+| over 9 to 19 | B | yellow, moderate maintainability | Fair |
 | 9 and under | C | red, low maintainability | Poor |
 
 - **Ranks:** radon's `mi_rank`.
@@ -65,10 +65,10 @@ cq's `tests` collector reports coverage.py's total with the app's own `[tool.cov
 | 75–90% | Google: commendable | Good |
 | 60–75% | Google: acceptable | Fair |
 | 20–60% | under Google's 60 | Poor |
-| under 20% | SIG: lowest band | Critical |
+| under 20% | SIG: under 20 | Critical |
 
 - **Google:** Arguelles, Ivanković and Bender, "[Code Coverage Best Practices](https://testing.googleblog.com/2020/08/code-coverage-best-practices.html)", Google Testing Blog, 2020: "60% as 'acceptable', 75% as 'commendable' and 90% as 'exemplary'". The same post says the coverage of changed code in review matters more than the project total.
-- **SIG:** Heitlager, Kuipers and Visser, "[A Practical Model for Measuring Maintainability](https://www.di.uminho.pt/~joost/publications/HeitlagerKuipersVisser-Quatic2007.pdf)", QUATIC 2007: ++ 95–100%, + 80–95%, o 60–80%, − 20–60%, −− 0–20%.
+- **SIG:** Heitlager, Kuipers and Visser, "[A Practical Model for Measuring Maintainability](https://www.di.uminho.pt/~joost/publications/HeitlagerKuipersVisser-Quatic2007.pdf)", QUATIC 2007: ++ 95–100%, + 80–95%, o 60–80%, − 20–60%, −− 0–20%. The bands share their ends; cq puts 20% itself in Poor.
 - **SonarQube:** the built-in "Sonar way" quality gate fails new code under 80% coverage ([docs](https://docs.sonarsource.com/sonarqube-server/quality-standards-administration/managing-quality-gates/introduction-to-quality-gates)). A gate on changed code, not a band for the total.
 - **OpenSSF Best Practices badge** ([criteria](https://www.bestpractices.dev/en/criteria)): Silver asks for 80% statement coverage; Gold for 90% statement and 80% branch.
 
@@ -102,7 +102,7 @@ cq's `mutation` collector reports the share of judged mutants the tests killed.
 
 ## The overall grade
 
-cq grades each target the way SIG aggregates its model: the mean of the target's ratings (Excellent 5 … Critical 1), truncated to a whole label, with the weakest rated metric named. It needs two rated metrics at least. Each rated metric counts once, so worst and mean complexity count as two.
+cq grades each target by averaging its ratings (Excellent 5 … Critical 1), as SIG's model averages its scores, and rounds the mean down to a whole label, so a grade never reads better than its ratings do (rounding down is cq's choice). The weakest rated metric is named with it. It needs two rated metrics at least. Each rated metric counts once, so worst and mean complexity count as two.
 
 Grades elsewhere, for context, not to be mixed with cq's:
 

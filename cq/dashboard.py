@@ -64,10 +64,9 @@ def ratings(snap: dict) -> dict[str, dict]:
     """Each target's rated metrics and overall grade at this run, against the published benchmarks."""
     out = {}
     for name, target in snap["targets"].items():
-        rated = {m.path: r for m in METRICS if (r := benchmarks.rate(m, m.read(target))) is not None}
         found = benchmarks.grade(target)
         out[name] = {
-            "metrics": {path: {"label": r.label, "band": r.band} for path, r in rated.items()},
+            "metrics": {m.path: {"label": r.label, "band": r.band} for m, r in benchmarks.ratings(target)},
             "grade": None
             if found is None
             else {"label": found.label, "rated": found.rated, "weakest": found.weakest.label},

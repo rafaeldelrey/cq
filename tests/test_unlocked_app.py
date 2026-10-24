@@ -94,7 +94,10 @@ def test_a_path_dependency_stays_out_of_the_audit_and_the_dev_group_is_in(measur
     assert "pytest==8.3.3" in resolved and not any("helper" in line for line in resolved)
     audit = snapshot["targets"]["w"]["vulnerabilities"]
     assert "pytest" in {i["package"] for i in audit["items"]}
-    assert {i["package"] for i in snapshot["targets"]["w"]["freshness"]["items"]} == {"pytest"}
+    assert audit["unaudited"] == 1  # the path dependency, counted rather than read as clean
+    fresh = snapshot["targets"]["w"]["freshness"]
+    assert {i["package"] for i in fresh["items"]} == {"pytest"}
+    assert fresh["unpinned_packages"] == ["six"]  # helper comes from a path, not PyPI
 
 
 def test_the_run_writes_no_lock_into_the_repo(measured: tuple[Path, Path, dict]) -> None:

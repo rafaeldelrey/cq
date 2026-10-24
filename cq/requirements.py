@@ -18,6 +18,7 @@ REQUIREMENTS = "requirements.txt"
 # Test tools usually live in a dev file; the first of these that exists joins requirements.txt.
 DEV_FILES = ("requirements-dev.txt", "requirements/dev.txt")
 SKIP_NO_MANIFEST = "no pyproject.toml or requirements.txt: the app declares no dependencies cq can read"
+SKIP_DYNAMIC = "dynamic dependencies and no uv.lock: resolving them would build the project in the repo"
 
 INCLUDE = re.compile(r"^(?:-r|--requirement)(?:\s+|=)(?P<path>\S+)")
 EDITABLE = re.compile(r"^(?:-e|--editable)(?:\s+|=)(?P<target>\S+)")
@@ -124,7 +125,7 @@ def parse(path: Path, seen: frozenset[Path] = frozenset()) -> list[Requirement]:
     return found
 
 
-def table(data: dict, *keys: str) -> dict:
+def toml_table(data: dict, *keys: str) -> dict:
     """A nested TOML table, or an empty one where any level is missing."""
     for key in keys:
         value = data.get(key)
@@ -139,7 +140,7 @@ def project_data(app_dir: Path) -> dict:
 
 def has_dev_group(app_dir: Path) -> bool:
     """Whether the app's pyproject defines a ``dev`` dependency group."""
-    return "dev" in table(project_data(app_dir), "dependency-groups")
+    return "dev" in toml_table(project_data(app_dir), "dependency-groups")
 
 
 def project_requirements(app_dir: Path) -> list[Requirement]:
@@ -149,10 +150,29 @@ def project_requirements(app_dir: Path) -> list[Requirement]:
     ``include-group`` tables are not followed (#60).
     """
     data = project_data(app_dir)
-    project = table(data, "project")
+    project = toml_table(data, "project")
     lines = [
         *project.get("dependencies", []),
-        *table(project, "optional-dependencies").get("dev", []),
-        *table(data, "dependency-groups").get("dev", []),
+        *toml_table(project, "optional-dependencies").get("dev", []),
+        *toml_table(data, "dependency-groups").get("dev", []),
     ]
-    return [req for line in lines if isinstance(line, str) and (req := parse_line(line))]
+    local = local_sources(data)
+    return [req for line in lines if isinstance(line, str) and (req := parse_line(line)) and req.name not in local]
+
+
+def local_sources(data: dict) -> set[str]:
+    """The packages ``[tool.uv.sources]`` takes from a path, git, a URL or the workspace: not PyPI's to compare."""
+    local = set()
+    for name, source in toml_table(data, "tool", "uv", "sources").items():
+        entries = source if isinstance(source, list) else [source]
+        if any(isinstance(e, dict) and {"path", "git", "url", "workspace"} & e.keys() for e in entries):
+            local.add(canonical(name))
+    return local
+
+
+def dynamic_dependencies(app_dir: Path) -> bool:
+    """Whether the app's dependencies are computed by its build backend (``dynamic``), not written out.
+
+    Resolving them means building the project, which writes ``<name>.egg-info/`` into the repo.
+    """
+    return "dependencies" in toml_table(project_data(app_dir), "project").get("dynamic", [])

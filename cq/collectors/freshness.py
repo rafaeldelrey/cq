@@ -163,6 +163,8 @@ def collect_python(ctx: Context) -> dict:
     if not (ctx.app_dir / PYPROJECT).exists():
         return {"skipped": requirements.SKIP_NO_MANIFEST}
     if not has_lock(ctx.app_dir):  # cq writes no lock into the repo (#53): measure the pins it declares
+        if requirements.dynamic_dependencies(ctx.app_dir):
+            return {"skipped": requirements.SKIP_DYNAMIC}
         return collect_pins(ctx, requirements.project_requirements(ctx.app_dir))
     out = run(UV_TREE, ctx.app_dir)
     (ctx.raw_dir / "uv-outdated.txt").write_text(out)

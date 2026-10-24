@@ -354,7 +354,7 @@ pytest, the vulnerability audit and dependency freshness read them from the app'
 | The app has | tests run in | vulnerabilities and freshness |
 |---|---|---|
 | `pyproject.toml` and a `uv.lock` (its own or its workspace's) | the app's uv environment | audited and compared from the lock |
-| `pyproject.toml`, no lock | a temporary uv environment | resolved with `uv pip compile` in the app's folder (its own uv settings) for the audit; the declared `==` pins compared with PyPI, and the others counted as `unpinned`. No lock is written into the repo |
+| `pyproject.toml`, no lock | a temporary uv environment | resolved with `uv pip compile` in the app's folder (its own uv settings) for the audit, path and VCS dependencies counted as `unaudited`; the declared `==` pins compared with PyPI, and the others counted as `unpinned`. No lock is written into the repo. Dynamic dependencies stay `skipped`: resolving them would build the project in the repo |
 | `requirements.txt`, no `pyproject.toml` | uv with `requirements.txt` and `requirements-dev.txt` (or `requirements/dev.txt`) installed, as `python -m pytest` | resolved with `uv pip compile` for the audit; the exact `==` pins whose marker holds compared with PyPI, and the others counted as `unpinned` |
 | none of these (a `uv.lock` alone included) | uv, with pytest only | `skipped` |
 

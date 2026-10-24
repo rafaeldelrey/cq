@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from cq import findings, runner
-from cq.collectors import complexity, dead_code, maintainability, size, vulnerabilities
+from cq import findings, requirements, runner
+from cq.collectors import complexity, dead_code, freshness, maintainability, size, vulnerabilities
 from cq.collectors import tests as tests_collector
 from cq.collectors.tests import parse_pytest_summary
 from cq.config import Settings, Target
@@ -249,7 +249,8 @@ def test_pip_audit_without_a_lock_audits_a_resolution_in_the_run_folder(
         return ""
 
     monkeypatch.setattr(vulnerabilities, "run", fake_run)
-    assert vulnerabilities.collect(ctx)["packages"] == 0
+    result = vulnerabilities.collect(ctx)
+    assert (result["packages"], result["unaudited"]) == (0, 2)  # the path and the VCS line, counted
     compile_cmd, cwd = commands[0]
     assert compile_cmd[:3] == ["uv", "pip", "compile"] and cwd == ctx.app_dir  # uv applies the app's own settings
     assert "--group" in compile_cmd and Path(compile_cmd[compile_cmd.index("-o") + 1]).parent == ctx.raw_dir
@@ -259,6 +260,39 @@ def test_pip_audit_without_a_lock_audits_a_resolution_in_the_run_folder(
 
 def test_pip_audit_without_any_manifest_is_skipped_with_the_reason(ctx: Context) -> None:
     assert vulnerabilities.collect(ctx) == {"skipped": SKIP_NO_MANIFEST}
+
+
+def test_an_unlocked_app_with_dynamic_dependencies_is_skipped_and_nothing_built(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Resolving dynamic metadata builds the project, which writes <name>.egg-info into the repo (#60)."""
+    (ctx.app_dir / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\ndynamic = ['dependencies']\n"
+    )
+
+    def no_run(cmd: list[str], cwd: Path, **_: object) -> str:
+        raise AssertionError(f"ran {cmd}")
+
+    monkeypatch.setattr(vulnerabilities, "run", no_run)
+    monkeypatch.setattr(freshness, "run", no_run)
+    assert vulnerabilities.collect(ctx) == {"skipped": requirements.SKIP_DYNAMIC}
+    assert freshness.collect(ctx) == {"skipped": requirements.SKIP_DYNAMIC}
+
+
+def test_a_dependency_taken_from_a_local_source_is_not_a_pypi_pin(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\n"
+        "dependencies = ['Helper_Lib', 'tool', 'mirror==1.0', 'member', 'six>=1']\n\n"
+        "[tool.uv.sources]\n"
+        "helper-lib = { path = '../libs/helper' }\n"
+        "tool = [{ git = 'https://example.com/tool.git', marker = \"sys_platform == 'linux'\" }]\n"
+        "mirror = { index = 'internal' }\n"
+        "member = { workspace = true }\n"
+    )
+    assert requirements.project_requirements(tmp_path) == [
+        requirements.Requirement("mirror", "1.0"),  # an index is still a registry: compared
+        requirements.Requirement("six", None),
+    ]
 
 
 def busy_module(n: int) -> str:

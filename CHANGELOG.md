@@ -13,11 +13,16 @@ numbers, and the trend shows a step there.
   freshness, since cq writes no lock into the repo. Now:
   - **vulnerabilities** resolve it with `uv pip compile`, run in the app's folder so uv applies the
     app's own settings (its `uv.toml`, its or a parent's `[tool.uv]`, its sources), into the run's
-    folder. The `dev` group or extra is included, as for a locked app, and path or VCS dependencies
-    are left out of the audit.
-  - **freshness** compares the exact `==` pins the app declares (`[project].dependencies` and its
-    `dev` group or extra) with PyPI's latest, and counts the rest as `unpinned`, as for
-    requirements.txt apps.
+    folder. The `dev` group is included, as for a locked app, and so is a `dev` extra. Path and VCS
+    dependencies aren't on PyPI, so they're left out of the audit and counted in a new field,
+    `unaudited`, for every Python app.
+  - **An app whose dependencies are `dynamic`** (computed by its build backend) stays `skipped`, with
+    the reason: resolving them would build the project, which writes `<name>.egg-info/` into the
+    repo.
+  - **freshness** compares the exact `==` pins the app declares (`[project].dependencies`, its
+    `dev` group and its `dev` extra) with PyPI's latest, and counts the rest as `unpinned`, as for
+    requirements.txt apps. A dependency `[tool.uv.sources]` takes from a path, git, a URL or the
+    workspace is neither.
   - **What moves:** these apps get vulnerability and freshness numbers where they were skipped.
     Still no lock is written into the repo.
 

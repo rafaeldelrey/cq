@@ -51,8 +51,8 @@ def compiled_project(ctx: Context) -> Path:
     """An unlocked uv app's dependencies, resolved by ``uv pip compile`` in its folder, into the run's folder.
 
     Run there, uv applies the app's own settings (its uv.toml, its or a parent's [tool.uv], its
-    sources), as `uv lock` would. The dev group or extra comes too, as `uv export` includes it.
-    Only the `name==version` lines are kept for the audit.
+    sources), as `uv lock` would. The dev group comes too, as `uv export` includes it, and so does a
+    dev extra.
     """
     req = ctx.raw_dir / AUDITED
     group = ["--group", "dev"] if requirements.has_dev_group(ctx.app_dir) else []
@@ -61,8 +61,15 @@ def compiled_project(ctx: Context) -> Path:
         ["uv", "pip", "compile", "-q", "--no-header", "--no-annotate", PYPROJECT, *group, *extra, "-o", str(req)],
         ctx.app_dir,
     )
-    req.write_text("".join(f"{line}\n" for line in req.read_text().splitlines() if PINNED_LINE.match(line)))
     return req
+
+
+def keep_pinned(req: Path) -> int:
+    """Keep only the file's `name==version` lines for pip-audit; how many others (path, VCS) it dropped."""
+    lines = [line for line in req.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    pinned = [line for line in lines if PINNED_LINE.match(line)]
+    req.write_text("".join(f"{line}\n" for line in pinned))
+    return len(lines) - len(pinned)
 
 
 def pinned_requirements(ctx: Context) -> Path | str:
@@ -72,6 +79,8 @@ def pinned_requirements(ctx: Context) -> Path | str:
     if not (ctx.app_dir / PYPROJECT).exists():  # a uv.lock alone is no project uv can export
         return requirements.SKIP_NO_MANIFEST
     if not has_lock(ctx.app_dir):  # cq writes no lock into the repo (#53): resolve one in the run's folder
+        if requirements.dynamic_dependencies(ctx.app_dir):
+            return requirements.SKIP_DYNAMIC
         return compiled_project(ctx)
     return exported_lock(ctx)
 
@@ -106,6 +115,8 @@ def collect_python(ctx: Context) -> dict:
     req = pinned_requirements(ctx)
     if isinstance(req, str):
         return {"skipped": req}
+    # A path or VCS dependency isn't on PyPI: counted, so an app with only those isn't read as clean.
+    unaudited = keep_pinned(req)
     out = ctx.raw_dir / "pip-audit.json"
     run(
         [own("pip-audit"), "-r", str(req), "--no-deps", "--disable-pip", "-f", "json", "-o", str(out)],
@@ -116,6 +127,7 @@ def collect_python(ctx: Context) -> dict:
     vulnerable = [{**d, "vulns": distinct_advisories(d["vulns"])} for d in deps if d.get("vulns")]
     return {
         "packages": len(deps),
+        "unaudited": unaudited,
         "vulnerable_packages": len(vulnerable),
         "vulnerabilities": sum(len(d["vulns"]) for d in vulnerable),
         "items": [

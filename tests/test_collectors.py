@@ -398,6 +398,30 @@ def test_an_app_outside_the_workspace_inherits_nothing(tmp_path: Path) -> None:
         assert requirements.project_requirements(tmp_path / outside) == [requirements.Requirement("demo-dep", "1.0")]
 
 
+@pytest.mark.parametrize(
+    ("path", "pattern", "matches"),
+    [
+        ("apps/a", "apps/*", True),
+        ("apps/a/b", "apps/*", False),
+        ("apps/team/sub/service", "apps/**/service", True),
+        ("apps/service", "apps/**/service", True),  # ** is zero or more folders
+        ("apps/team/other", "apps/**/service", False),
+        ("libs/x", "**", True),
+    ],
+)
+def test_workspace_globs(path: str, pattern: str, matches: bool) -> None:
+    assert requirements.glob_match(path, pattern) is matches
+
+
+def test_uvs_older_dev_dependencies_are_the_dev_group(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\ndependencies = []\n\n"
+        "[tool.uv]\ndev-dependencies = ['pytest==8.3.3']\n"
+    )
+    assert requirements.has_dev_group(tmp_path)
+    assert requirements.project_requirements(tmp_path) == [requirements.Requirement("pytest", "8.3.3")]
+
+
 def busy_module(n: int) -> str:
     """``n`` functions of CC 5 (four branches each): over the test context's CC limit of 3."""
     return "".join(

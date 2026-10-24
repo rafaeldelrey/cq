@@ -141,8 +141,16 @@ def project_data(app_dir: Path) -> dict:
 
 
 def has_dev_group(app_dir: Path) -> bool:
-    """Whether the app's pyproject defines a ``dev`` dependency group."""
-    return "dev" in toml_table(project_data(app_dir), "dependency-groups")
+    """Whether the app has a ``dev`` dependency group, as ``[dependency-groups]`` or uv's older
+    ``[tool.uv] dev-dependencies``, which uv reads as the same group."""
+    data = project_data(app_dir)
+    return "dev" in toml_table(data, "dependency-groups") or bool(legacy_dev(data))
+
+
+def legacy_dev(data: dict) -> list:
+    """uv's older ``[tool.uv] dev-dependencies``: part of the ``dev`` group."""
+    value = toml_table(data, "tool", "uv").get("dev-dependencies", [])
+    return value if isinstance(value, list) else []
 
 
 def project_requirements(app_dir: Path) -> list[Requirement]:
@@ -157,6 +165,7 @@ def project_requirements(app_dir: Path) -> list[Requirement]:
         *project.get("dependencies", []),
         *toml_table(project, "optional-dependencies").get("dev", []),
         *toml_table(data, "dependency-groups").get("dev", []),
+        *legacy_dev(data),
     ]
     local = local_sources(sources_of(app_dir, data))
     return [req for line in lines if isinstance(line, str) and (req := parse_line(line)) and req.name not in local]
@@ -179,9 +188,17 @@ def workspace_root(app_dir: Path) -> Path | None:
 
 
 def glob_match(path: str, pattern: str) -> bool:
-    """Whether a relative path matches a workspace glob, one segment at a time (``*`` stays in its folder)."""
-    parts, globs = path.split("/"), pattern.strip("/").split("/")
-    return len(parts) == len(globs) and all(fnmatch.fnmatchcase(p, g) for p, g in zip(parts, globs, strict=True))
+    """Whether a relative path matches a workspace glob: ``*`` stays within one folder, ``**`` spans any number."""
+    return segments_match(path.split("/"), pattern.strip("/").split("/"))
+
+
+def segments_match(parts: list[str], globs: list[str]) -> bool:
+    """The path's segments against the glob's, ``**`` matching zero or more of them."""
+    if not globs:
+        return not parts
+    if globs[0] == "**":
+        return any(segments_match(parts[i:], globs[1:]) for i in range(len(parts) + 1))
+    return bool(parts) and fnmatch.fnmatchcase(parts[0], globs[0]) and segments_match(parts[1:], globs[1:])
 
 
 def sources_of(app_dir: Path, data: dict) -> dict:

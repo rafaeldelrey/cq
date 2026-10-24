@@ -19,6 +19,9 @@ REQUIREMENTS = "requirements.txt"
 DEV_FILES = ("requirements-dev.txt", "requirements/dev.txt")
 SKIP_NO_MANIFEST = "no pyproject.toml or requirements.txt: the app declares no dependencies cq can read"
 SKIP_DYNAMIC = "dynamic dependencies and no uv.lock: resolving them would build the project in the repo"
+SKIP_LOCAL_BUILD = (
+    "no uv.lock, and a dependency from the repo needs a build to resolve, which would write into the repo"
+)
 
 INCLUDE = re.compile(r"^(?:-r|--requirement)(?:\s+|=)(?P<path>\S+)")
 EDITABLE = re.compile(r"^(?:-e|--editable)(?:\s+|=)(?P<target>\S+)")
@@ -160,14 +163,22 @@ def project_requirements(app_dir: Path) -> list[Requirement]:
     return [req for line in lines if isinstance(line, str) and (req := parse_line(line)) and req.name not in local]
 
 
-def local_sources(data: dict) -> set[str]:
-    """The packages ``[tool.uv.sources]`` takes from a path, git, a URL or the workspace: not PyPI's to compare."""
+def local_sources(data: dict, kinds: frozenset[str] = frozenset({"path", "git", "url", "workspace"})) -> set[str]:
+    """The packages ``[tool.uv.sources]`` takes from one of ``kinds``: by default, any source that isn't an index."""
     local = set()
     for name, source in toml_table(data, "tool", "uv", "sources").items():
         entries = source if isinstance(source, list) else [source]
-        if any(isinstance(e, dict) and {"path", "git", "url", "workspace"} & e.keys() for e in entries):
+        if any(isinstance(e, dict) and kinds & e.keys() for e in entries):
             local.add(canonical(name))
     return local
+
+
+IN_REPO = frozenset({"path", "workspace"})  # sources built from the repo's own folders, unlike git and URLs
+
+
+def in_repo_sources(app_dir: Path) -> set[str]:
+    """The packages the app takes from a folder in the repo: resolving one that needs a build would write there."""
+    return local_sources(project_data(app_dir), IN_REPO)
 
 
 def dynamic_dependencies(app_dir: Path) -> bool:

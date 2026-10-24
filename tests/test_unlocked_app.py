@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from cq import cli
+from cq import cli, requirements
 
 PROJECT = '[project]\nname = "{name}"\nversion = "0.1.0"\nrequires-python = ">=3.12"\ndependencies = ["six"]\n'
 SETTINGS = "".join(
     f'\n[[targets]]\nname = "{name}"\nkind = "python"\nroot = "{root}"\nsource = ["{name}"]\n'
-    for name, root in (("x", "apps/x"), ("y", "apps/y"), ("z", "apps/zone/z"), ("w", "apps/w"))
+    for name, root in (("x", "apps/x"), ("y", "apps/y"), ("z", "apps/zone/z"), ("w", "apps/w"), ("v", "apps/v"))
 )
 # exclude-newer per app, and the six release each date resolves to.
 EXPECTED_SIX = {"x": "1.13.0", "y": "1.12.0", "z": "1.11.0"}
@@ -63,8 +63,16 @@ def measured(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path, dict
         "libs/helper/pyproject.toml": PROJECT.format(name="helper").replace('["six"]', "[]")
         + '\n[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n',
         "libs/helper/helper/__init__.py": "",
+        # A path dependency whose metadata only a build can give (setuptools, dynamic): never built here.
+        "apps/v/pyproject.toml": PROJECT.format(name="v").replace('["six"]', '["six", "dyn"]')
+        + '\n[tool.uv.sources]\ndyn = { path = "../../libs/dyn" }\n',
+        "libs/dyn/pyproject.toml": '[build-system]\nrequires = ["setuptools>=68"]\nbuild-backend = "setuptools.build_meta"\n'
+        '\n[project]\nname = "dyn"\nversion = "0.1.0"\nrequires-python = ">=3.12"\ndynamic = ["dependencies"]\n'
+        '\n[tool.setuptools.dynamic]\ndependencies = { file = ["deps.in"] }\n\n[tool.setuptools]\npackages = ["dyn"]\n',
+        "libs/dyn/deps.in": "six\n",
+        "libs/dyn/dyn/__init__.py": "",
     }
-    for name in ("x", "y", "z", "w"):
+    for name in ("x", "y", "z", "w", "v"):
         folder = "apps/zone/z" if name == "z" else f"apps/{name}"
         files[f"{folder}/{name}/__init__.py"] = f'"""{name}."""\n\nimport six\n'
     for name, text in files.items():
@@ -100,8 +108,17 @@ def test_a_path_dependency_stays_out_of_the_audit_and_the_dev_group_is_in(measur
     assert fresh["unpinned_packages"] == ["six"]  # helper comes from a path, not PyPI
 
 
-def test_the_run_writes_no_lock_into_the_repo(measured: tuple[Path, Path, dict]) -> None:
+def test_a_path_dependency_that_needs_a_build_is_skipped_not_built(measured: tuple[Path, Path, dict]) -> None:
+    _, _, snapshot = measured
+    assert snapshot["targets"]["v"]["vulnerabilities"] == {
+        "skipped": requirements.SKIP_LOCAL_BUILD,
+        "seconds": snapshot["targets"]["v"]["vulnerabilities"]["seconds"],
+    }
+    assert snapshot["targets"]["v"]["freshness"]["unpinned_packages"] == ["six"]  # dyn is the repo's own
+
+
+def test_the_run_writes_nothing_into_the_repo(measured: tuple[Path, Path, dict]) -> None:
     repo, _, snapshot = measured
     assert not snapshot["dirty"]
-    assert git(repo, "status", "--porcelain", "--untracked-files=all", "--", ".", ":!.cq") == ""
-    assert not list(repo.rglob("uv.lock"))
+    assert git(repo, "status", "--porcelain", "--untracked-files=all", "--ignored", "--", ".", ":!.cq") == ""
+    assert not list(repo.rglob("uv.lock")) and not list(repo.rglob("*.egg-info"))

@@ -18,7 +18,11 @@ numbers, and the trend shows a step there.
     `unaudited`, for every Python app.
   - **An app whose dependencies are `dynamic`** (computed by its build backend) stays `skipped`, with
     the reason: resolving them would build the project, which writes `<name>.egg-info/` into the
-    repo.
+    repo. So does an app with a path or workspace dependency that only a build can resolve: cq
+    never builds those (`--only-binary`).
+- **Hashed requirements are audited whole.** With uv's `generate-hashes`, each pin continues over
+  `\` lines of hashes; the audit now keeps the whole requirement, so requirements.txt apps with
+  hashes audit as before.
   - **freshness** compares the exact `==` pins the app declares (`[project].dependencies`, its
     `dev` group and its `dev` extra) with PyPI's latest, and counts the rest as `unpinned`, as for
     requirements.txt apps. A dependency `[tool.uv.sources]` takes from a path, git, a URL or the

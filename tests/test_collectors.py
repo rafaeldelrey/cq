@@ -262,6 +262,37 @@ def test_pip_audit_without_any_manifest_is_skipped_with_the_reason(ctx: Context)
     assert vulnerabilities.collect(ctx) == {"skipped": SKIP_NO_MANIFEST}
 
 
+def test_hashed_pins_are_kept_whole(tmp_path: Path) -> None:
+    """uv's generate-hashes continues each pin over `\\` lines: the requirement is kept, not its first line."""
+    req = tmp_path / "requirements.txt"
+    req.write_text(
+        "attrs==26.1.0 \\\n    --hash=sha256:aaaa \\\n    --hash=sha256:bbbb\n"
+        "six==1.17.0 \\\n    --hash=sha256:cccc\n"
+        "../libs/helper\n"
+    )
+    assert vulnerabilities.keep_pinned(req) == 1
+    assert req.read_text().splitlines() == [
+        "attrs==26.1.0      --hash=sha256:aaaa      --hash=sha256:bbbb",
+        "six==1.17.0      --hash=sha256:cccc",
+    ]
+
+
+def test_a_failed_resolution_other_than_a_refused_build_is_a_tool_error(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (ctx.app_dir / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\ndependencies = ['helper']\n\n"
+        "[tool.uv.sources]\nhelper = { path = '../helper' }\n"
+    )
+
+    def offline(cmd: list[str], cwd: Path, **_: object) -> str:
+        raise ToolError("uv pip compile exited 2", returncode=2, stderr="error: failed to fetch index")
+
+    monkeypatch.setattr(vulnerabilities, "run", offline)
+    with pytest.raises(ToolError, match="exited 2"):
+        vulnerabilities.collect(ctx)
+
+
 def test_an_unlocked_app_with_dynamic_dependencies_is_skipped_and_nothing_built(
     ctx: Context, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -47,26 +47,38 @@ def resolved_requirements(ctx: Context) -> Path:
 PINNED_LINE = re.compile(r"^[A-Za-z0-9][\w.\-]*(?:\[[^\]]*\])?==")
 
 
-def compiled_project(ctx: Context) -> Path:
+NO_BUILD = "is disabled"  # uv: "Building source distributions for `<name>` is disabled"
+
+
+def compiled_project(ctx: Context) -> Path | str:
     """An unlocked uv app's dependencies, resolved by ``uv pip compile`` in its folder, into the run's folder.
 
     Run there, uv applies the app's own settings (its uv.toml, its or a parent's [tool.uv], its
     sources), as `uv lock` would. The dev group comes too, as `uv export` includes it, and so does a
-    dev extra.
+    dev extra. A path or workspace dependency is never built: its build would write into the repo,
+    so one that needs a build makes the app skipped, with the reason.
     """
     req = ctx.raw_dir / AUDITED
     group = ["--group", "dev"] if requirements.has_dev_group(ctx.app_dir) else []
     extra = ["--extra", "dev"] if has_dev_extra(ctx.app_dir) else []
-    run(
-        ["uv", "pip", "compile", "-q", "--no-header", "--no-annotate", PYPROJECT, *group, *extra, "-o", str(req)],
-        ctx.app_dir,
-    )
+    no_build = [arg for name in sorted(requirements.in_repo_sources(ctx.app_dir)) for arg in ("--only-binary", name)]
+    cmd = ["uv", "pip", "compile", "-q", "--no-header", "--no-annotate", PYPROJECT, *group, *extra, *no_build]
+    try:
+        run([*cmd, "-o", str(req)], ctx.app_dir)
+    # A specific, expected exception: uv refusing to build a dependency from the repo; anything else propagates.
+    except ToolError as exc:
+        if not no_build or NO_BUILD not in exc.stderr:
+            raise
+        return requirements.SKIP_LOCAL_BUILD
     return req
 
 
 def keep_pinned(req: Path) -> int:
-    """Keep only the file's `name==version` lines for pip-audit; how many others (path, VCS) it dropped."""
-    lines = [line for line in req.read_text().splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    """Keep only the file's `name==version` requirements for pip-audit; how many others (path, VCS) it dropped.
+
+    Requirements, not lines: with uv's `generate-hashes`, each pin continues over `\\` lines of hashes.
+    """
+    lines = requirements.logical_lines(req.read_text())
     pinned = [line for line in lines if PINNED_LINE.match(line)]
     req.write_text("".join(f"{line}\n" for line in pinned))
     return len(lines) - len(pinned)

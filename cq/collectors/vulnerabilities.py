@@ -18,12 +18,14 @@ from cq.proc import ToolError, has_dev_extra, has_lock, own, read_report, run
 
 KINDS = ("python", "typescript")
 
+AUDITED = "requirements.txt"  # in the run's folder: the exact versions pip-audit checks
+
 NPM_LEVELS = ("critical", "high", "moderate", "low", "info")
 
 
 def exported_lock(ctx: Context) -> Path:
     """The app's locked requirements, exported from uv.lock (the dev group included, as uv does by default)."""
-    req = ctx.raw_dir / "requirements.txt"
+    req = ctx.raw_dir / AUDITED
     req.write_text(
         run(
             ["uv", "export", "-q", "--frozen", "--no-hashes", "--no-emit-project", "--format", "requirements-txt"],
@@ -35,7 +37,7 @@ def exported_lock(ctx: Context) -> Path:
 
 def resolved_requirements(ctx: Context) -> Path:
     """A requirements.txt app's requirements and dev requirements, resolved to exact versions in the run's folder."""
-    req = ctx.raw_dir / "requirements.txt"
+    req = ctx.raw_dir / AUDITED
     sources = [str(path) for path in requirements.files(ctx.app_dir)]
     run(["uv", "pip", "compile", "-q", "--no-header", "--no-annotate", *sources, "-o", str(req)], ctx.app_dir)
     return req
@@ -52,7 +54,7 @@ def compiled_project(ctx: Context) -> Path:
     sources), as `uv lock` would. The dev group or extra comes too, as `uv export` includes it.
     Only the `name==version` lines are kept for the audit.
     """
-    req = ctx.raw_dir / "requirements.txt"
+    req = ctx.raw_dir / AUDITED
     group = ["--group", "dev"] if requirements.has_dev_group(ctx.app_dir) else []
     extra = ["--extra", "dev"] if has_dev_extra(ctx.app_dir) else []
     run(

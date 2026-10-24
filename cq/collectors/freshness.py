@@ -138,7 +138,7 @@ def collect_requirements(ctx: Context) -> dict:
     return collect_pins(ctx, [req for path in requirements.files(ctx.app_dir) for req in requirements.parse(path)])
 
 
-def collect_pins(ctx: Context, reqs: list[requirements.Requirement]) -> dict:
+def collect_pins(ctx: Context, declared: list[requirements.Requirement]) -> dict:
     """Each exact pin against PyPI's latest release; the requirements without one counted as unpinned.
 
     An unlocked uv app (#60) and a requirements.txt app have no installed versions to read, only
@@ -146,7 +146,7 @@ def collect_pins(ctx: Context, reqs: list[requirements.Requirement]) -> dict:
     """
     pins: dict[str, str] = {}
     unpinned: set[str] = set()
-    for req in reqs:
+    for req in declared:
         if req.version is None:
             unpinned.add(req.name)
         else:

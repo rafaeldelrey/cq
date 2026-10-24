@@ -236,14 +236,16 @@ def test_pip_audit_without_a_lock_audits_a_resolution_in_the_run_folder(
     audited: list[str] = []
 
     def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        """uv writes its resolution, pip-audit its report; both print nothing on stdout."""
         commands.append((cmd, cwd))
+        out = Path(cmd[cmd.index("-o") + 1])
         if cmd[0] == "uv":
-            Path(cmd[cmd.index("-o") + 1]).write_text(
+            out.write_text(
                 "../libs/helper\nhelper @ git+https://example.com/helper.git\nsix==1.17.0\nrequests[socks]==2.32.4\n"
             )
-            return ""
-        audited.extend(Path(cmd[cmd.index("-r") + 1]).read_text().splitlines())
-        Path(cmd[cmd.index("-o") + 1]).write_text(json.dumps({"dependencies": []}))
+        else:
+            audited.extend(Path(cmd[cmd.index("-r") + 1]).read_text().splitlines())
+            out.write_text(json.dumps({"dependencies": []}))
         return ""
 
     monkeypatch.setattr(vulnerabilities, "run", fake_run)

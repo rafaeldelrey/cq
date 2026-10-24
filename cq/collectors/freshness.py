@@ -30,8 +30,6 @@ UV_OUTDATED = re.compile(
 )
 YEAR = 365.25 * 86400
 UV_TREE = ["uv", "tree", "--outdated", "--depth", "1", "--frozen"]
-# The installed versions come from the lock, and cq doesn't write one into the user's repo (#53).
-SKIP_NO_LOCK = "no uv.lock: freshness reads the locked versions, and cq writes no lock into the repo"
 
 
 def major(version: str) -> int | None:
@@ -137,14 +135,22 @@ def pinned_row(name: str, pin: str) -> dict | None:
 
 def collect_requirements(ctx: Context) -> dict:
     """The exact pins in the app's requirements files against PyPI; the other lines counted as unpinned."""
+    return collect_pins(ctx, [req for path in requirements.files(ctx.app_dir) for req in requirements.parse(path)])
+
+
+def collect_pins(ctx: Context, declared: list[requirements.Requirement]) -> dict:
+    """Each exact pin against PyPI's latest release; the requirements without one counted as unpinned.
+
+    An unlocked uv app (#60) and a requirements.txt app have no installed versions to read, only
+    what they declare.
+    """
     pins: dict[str, str] = {}
     unpinned: set[str] = set()
-    for path in requirements.files(ctx.app_dir):
-        for req in requirements.parse(path):
-            if req.version is None:
-                unpinned.add(req.name)
-            else:
-                pins.setdefault(req.name, req.version)
+    for req in declared:
+        if req.version is None:
+            unpinned.add(req.name)
+        else:
+            pins.setdefault(req.name, req.version)
     unpinned -= pins.keys()  # pinned in one file and left open in another: the pin is what installs
     rows = [row for name, pin in pins.items() if (row := pinned_row(name, pin))]
     return {**summarise(ctx, rows), "unpinned": len(unpinned), "unpinned_packages": sorted(unpinned)}
@@ -156,8 +162,10 @@ def collect_python(ctx: Context) -> dict:
         return collect_requirements(ctx)
     if not (ctx.app_dir / PYPROJECT).exists():
         return {"skipped": requirements.SKIP_NO_MANIFEST}
-    if not has_lock(ctx.app_dir):
-        return {"skipped": SKIP_NO_LOCK}
+    if not has_lock(ctx.app_dir):  # cq writes no lock into the repo (#53): measure the pins it declares
+        if requirements.dynamic_dependencies(ctx.app_dir):
+            return {"skipped": requirements.SKIP_DYNAMIC}
+        return collect_pins(ctx, requirements.project_requirements(ctx.app_dir))
     out = run(UV_TREE, ctx.app_dir)
     (ctx.raw_dir / "uv-outdated.txt").write_text(out)
     rows = []

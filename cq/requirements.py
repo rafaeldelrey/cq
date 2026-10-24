@@ -5,6 +5,7 @@ tests, vulnerabilities and freshness collectors read its dependencies from these
 """
 
 import re
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -17,6 +18,8 @@ REQUIREMENTS = "requirements.txt"
 # Test tools usually live in a dev file; the first of these that exists joins requirements.txt.
 DEV_FILES = ("requirements-dev.txt", "requirements/dev.txt")
 SKIP_NO_MANIFEST = "no pyproject.toml or requirements.txt: the app declares no dependencies cq can read"
+SKIP_DYNAMIC = "dynamic dependencies and no uv.lock: resolving them would build the project in the repo"
+SKIP_NEEDS_BUILD = "no uv.lock, and resolving the dependencies needs a build, which cq doesn't run"
 
 INCLUDE = re.compile(r"^(?:-r|--requirement)(?:\s+|=)(?P<path>\S+)")
 EDITABLE = re.compile(r"^(?:-e|--editable)(?:\s+|=)(?P<target>\S+)")
@@ -121,3 +124,62 @@ def parse(path: Path, seen: frozenset[Path] = frozenset()) -> list[Requirement]:
         if req:
             found.append(req)
     return found
+
+
+def toml_table(data: dict, *keys: str) -> dict:
+    """A nested TOML table, or an empty one where any level is missing."""
+    for key in keys:
+        value = data.get(key)
+        data = value if isinstance(value, dict) else {}
+    return data
+
+
+def project_data(app_dir: Path) -> dict:
+    """The app's pyproject.toml, parsed."""
+    return tomllib.loads((app_dir / PYPROJECT).read_text())
+
+
+def has_dev_group(app_dir: Path) -> bool:
+    """Whether the app's pyproject defines a ``dev`` dependency group."""
+    return "dev" in toml_table(project_data(app_dir), "dependency-groups")
+
+
+def project_requirements(app_dir: Path) -> list[Requirement]:
+    """An unlocked uv app's own requirements: ``[project].dependencies``, plus its ``dev`` group or extra.
+
+    The same line rules as requirements files (markers evaluated, names normalized). A group's
+    ``include-group`` tables are not followed (#60).
+    """
+    data = project_data(app_dir)
+    project = toml_table(data, "project")
+    lines = [
+        *project.get("dependencies", []),
+        *toml_table(project, "optional-dependencies").get("dev", []),
+        *toml_table(data, "dependency-groups").get("dev", []),
+    ]
+    local = local_sources(data)
+    return [req for line in lines if isinstance(line, str) and (req := parse_line(line)) and req.name not in local]
+
+
+def local_sources(data: dict, kinds: frozenset[str] = frozenset({"path", "git", "url", "workspace"})) -> set[str]:
+    """The packages ``[tool.uv.sources]`` takes from one of ``kinds``: by default, any source that isn't an index."""
+    local = set()
+    for name, source in toml_table(data, "tool", "uv", "sources").items():
+        entries = source if isinstance(source, list) else [source]
+        if any(isinstance(e, dict) and kinds & e.keys() and source_applies(e) for e in entries):
+            local.add(canonical(name))
+    return local
+
+
+def source_applies(entry: dict) -> bool:
+    """Whether a ``[tool.uv.sources]`` entry's marker holds for the Python running cq (no marker: always)."""
+    marker = entry.get("marker")
+    return not marker or Marker(marker).evaluate()
+
+
+def dynamic_dependencies(app_dir: Path) -> bool:
+    """Whether the app's dependencies are computed by its build backend (``dynamic``), not written out.
+
+    Resolving them means building the project, which writes ``<name>.egg-info/`` into the repo.
+    """
+    return "dependencies" in toml_table(project_data(app_dir), "project").get("dynamic", [])

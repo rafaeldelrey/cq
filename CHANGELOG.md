@@ -4,6 +4,34 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.14.0] - 2026-10-24
+
+### Added
+
+- **Measurement change: uv apps without a `uv.lock` are measured.** An app with a
+  `pyproject.toml` and no lock (its own or its workspace's) was `skipped` in vulnerabilities and
+  freshness, since cq writes no lock into the repo. Now:
+  - **vulnerabilities** resolve it with `uv pip compile`, run in the app's folder so uv applies the
+    app's own settings (its `uv.toml`, its or a parent's `[tool.uv]`, its sources), into the run's
+    folder. The `dev` group is included, as for a locked app, and so is a `dev` extra. Path and VCS
+    dependencies aren't on PyPI, so they're left out of the audit and counted in a new field,
+    `unaudited`, for every Python app.
+  - **An app whose dependencies are `dynamic`** (computed by its build backend) stays `skipped`, with
+    the reason: resolving them would build the project, which writes `<name>.egg-info/` into the
+    repo. More generally, nothing is built while resolving (`--no-build`): an app whose metadata,
+    or a dependency's, needs a build to resolve is `skipped`, saying so. That covers dynamic
+    optional dependencies, a path dependency with dynamic metadata, and a PyPI package published
+    only as a source distribution.
+- **Hashed requirements are audited whole.** With uv's `generate-hashes`, each pin continues over
+  `\` lines of hashes; the audit now keeps the whole requirement, so requirements.txt apps with
+  hashes audit as before.
+  - **freshness** compares the exact `==` pins the app declares (`[project].dependencies`, its
+    `dev` group and its `dev` extra) with PyPI's latest, and counts the rest as `unpinned`, as for
+    requirements.txt apps. A dependency `[tool.uv.sources]` takes from a path, git, a URL or the
+    workspace is neither, unless that source's marker doesn't hold here.
+  - **What moves:** these apps get vulnerability and freshness numbers where they were skipped.
+    Still no lock is written into the repo.
+
 ## [0.13.0] - 2026-10-24
 
 ### Changed

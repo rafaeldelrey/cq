@@ -1,13 +1,14 @@
 """Parsing the tools' output, and the collectors that need no subprocess."""
 
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from cq import findings, runner
-from cq.collectors import complexity, dead_code, maintainability, size, vulnerabilities
+from cq import findings, requirements, runner
+from cq.collectors import complexity, dead_code, freshness, maintainability, size, vulnerabilities
 from cq.collectors import tests as tests_collector
 from cq.collectors.tests import parse_pytest_summary
 from cq.config import Settings, Target
@@ -225,13 +226,127 @@ def test_repeated_pip_audit_advisories_count_once(ctx: Context, monkeypatch: pyt
     ]
 
 
-def test_pip_audit_without_a_lock_is_skipped_with_the_reason(ctx: Context) -> None:
-    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
-    assert vulnerabilities.collect(ctx) == {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
+def test_pip_audit_without_a_lock_audits_a_resolution_in_the_run_folder(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unlocked uv app is resolved by uv pip compile in its own folder; only `==` lines are audited (#60)."""
+    (ctx.app_dir / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\n\n[dependency-groups]\ndev = ['pytest']\n"
+    )
+    commands: list[tuple[list[str], Path]] = []
+    audited: list[str] = []
+
+    def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        """uv writes its resolution, pip-audit its report; both print nothing on stdout."""
+        commands.append((cmd, cwd))
+        out = Path(cmd[cmd.index("-o") + 1])
+        if cmd[0] == "uv":
+            out.write_text(
+                "../libs/helper\nhelper @ git+https://example.com/helper.git\nsix==1.17.0\nrequests[socks]==2.32.4\n"
+            )
+        else:
+            audited.extend(Path(cmd[cmd.index("-r") + 1]).read_text().splitlines())
+            out.write_text(json.dumps({"dependencies": []}))
+        return ""
+
+    monkeypatch.setattr(vulnerabilities, "run", fake_run)
+    result = vulnerabilities.collect(ctx)
+    assert (result["packages"], result["unaudited"]) == (0, 2)  # the path and the VCS line, counted
+    compile_cmd, cwd = commands[0]
+    assert compile_cmd[:3] == ["uv", "pip", "compile"] and cwd == ctx.app_dir  # uv applies the app's own settings
+    assert "--group" in compile_cmd and Path(compile_cmd[compile_cmd.index("-o") + 1]).parent == ctx.raw_dir
+    assert audited == ["six==1.17.0", "requests[socks]==2.32.4"]  # no path or VCS line
+    assert not (ctx.app_dir / "uv.lock").exists()
 
 
 def test_pip_audit_without_any_manifest_is_skipped_with_the_reason(ctx: Context) -> None:
     assert vulnerabilities.collect(ctx) == {"skipped": SKIP_NO_MANIFEST}
+
+
+def test_hashed_pins_are_kept_whole(tmp_path: Path) -> None:
+    """uv's generate-hashes continues each pin over `\\` lines: the requirement is kept, not its first line."""
+    req = tmp_path / "requirements.txt"
+    req.write_text(
+        "attrs==26.1.0 \\\n    --hash=sha256:aaaa \\\n    --hash=sha256:bbbb\n"
+        "six==1.17.0 \\\n    --hash=sha256:cccc\n"
+        "../libs/helper\n"
+    )
+    assert vulnerabilities.keep_pinned(req) == 1
+    assert req.read_text().splitlines() == [
+        "attrs==26.1.0      --hash=sha256:aaaa      --hash=sha256:bbbb",
+        "six==1.17.0      --hash=sha256:cccc",
+    ]
+
+
+def test_a_resolution_that_needs_a_build_is_skipped_with_the_reason(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A PyPI package with only a source distribution can't resolve without a build: cq runs none (#60)."""
+    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\ndependencies = ['old']\n")
+
+    def refused(cmd: list[str], cwd: Path, **_: object) -> str:
+        assert "--no-build" in cmd
+        raise ToolError(
+            "uv pip compile exited 1",
+            returncode=1,
+            stderr="hint: Wheels are required for `old` because building from source is disabled for all packages",
+        )
+
+    monkeypatch.setattr(vulnerabilities, "run", refused)
+    assert vulnerabilities.collect(ctx) == {"skipped": requirements.SKIP_NEEDS_BUILD}
+
+
+def test_a_failed_resolution_other_than_a_refused_build_is_a_tool_error(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (ctx.app_dir / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\ndependencies = ['helper']\n\n"
+        "[tool.uv.sources]\nhelper = { path = '../helper' }\n"
+    )
+
+    def offline(cmd: list[str], cwd: Path, **_: object) -> str:
+        raise ToolError("uv pip compile exited 2", returncode=2, stderr="error: failed to fetch index")
+
+    monkeypatch.setattr(vulnerabilities, "run", offline)
+    with pytest.raises(ToolError, match="exited 2"):
+        vulnerabilities.collect(ctx)
+
+
+def test_an_unlocked_app_with_dynamic_dependencies_is_skipped_and_nothing_built(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Resolving dynamic metadata builds the project, which writes <name>.egg-info into the repo (#60)."""
+    (ctx.app_dir / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\ndynamic = ['dependencies']\n"
+    )
+
+    def no_run(cmd: list[str], cwd: Path, **_: object) -> str:
+        raise AssertionError(f"ran {cmd}")
+
+    monkeypatch.setattr(vulnerabilities, "run", no_run)
+    monkeypatch.setattr(freshness, "run", no_run)
+    assert vulnerabilities.collect(ctx) == {"skipped": requirements.SKIP_DYNAMIC}
+    assert freshness.collect(ctx) == {"skipped": requirements.SKIP_DYNAMIC}
+
+
+def test_a_dependency_taken_from_a_local_source_is_not_a_pypi_pin(tmp_path: Path) -> None:
+    """Path, git, URL and workspace sources aren't PyPI's; one whose marker doesn't hold here still is."""
+    here, elsewhere = sys.platform, "no-such-platform"
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\n"
+        "dependencies = ['Helper_Lib', 'tool', 'other==2.0', 'mirror==1.0', 'member', 'six>=1']\n\n"
+        "[tool.uv.sources]\n"
+        "helper-lib = { path = '../libs/helper' }\n"
+        f"tool = [{{ git = 'https://example.com/tool.git', marker = \"sys_platform == '{here}'\" }}]\n"
+        f"other = [{{ git = 'https://example.com/other.git', marker = \"sys_platform == '{elsewhere}'\" }}]\n"
+        "mirror = { index = 'internal' }\n"
+        "member = { workspace = true }\n"
+    )
+    assert requirements.project_requirements(tmp_path) == [
+        requirements.Requirement("other", "2.0"),  # its git source is for another platform: PyPI's here
+        requirements.Requirement("mirror", "1.0"),  # an index is still a registry: compared
+        requirements.Requirement("six", None),
+    ]
 
 
 def busy_module(n: int) -> str:

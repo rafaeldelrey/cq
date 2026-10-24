@@ -8,21 +8,24 @@ dependencies only (``--omit=dev``): what ships in the image.
 """
 
 import json
+import re
 from pathlib import Path
 
 from cq import requirements
 from cq.config import PYPROJECT
 from cq.context import Context
-from cq.proc import ToolError, has_lock, own, read_report, run
+from cq.proc import ToolError, has_dev_extra, has_lock, own, read_report, run
 
 KINDS = ("python", "typescript")
+
+AUDITED = "requirements.txt"  # in the run's folder: the exact versions pip-audit checks
 
 NPM_LEVELS = ("critical", "high", "moderate", "low", "info")
 
 
 def exported_lock(ctx: Context) -> Path:
     """The app's locked requirements, exported from uv.lock (the dev group included, as uv does by default)."""
-    req = ctx.raw_dir / "requirements.txt"
+    req = ctx.raw_dir / AUDITED
     req.write_text(
         run(
             ["uv", "export", "-q", "--frozen", "--no-hashes", "--no-emit-project", "--format", "requirements-txt"],
@@ -34,10 +37,51 @@ def exported_lock(ctx: Context) -> Path:
 
 def resolved_requirements(ctx: Context) -> Path:
     """A requirements.txt app's requirements and dev requirements, resolved to exact versions in the run's folder."""
-    req = ctx.raw_dir / "requirements.txt"
+    req = ctx.raw_dir / AUDITED
     sources = [str(path) for path in requirements.files(ctx.app_dir)]
     run(["uv", "pip", "compile", "-q", "--no-header", "--no-annotate", *sources, "-o", str(req)], ctx.app_dir)
     return req
+
+
+# A resolved `name==version` line; a path or VCS dependency (`../libs/x`, `x @ git+…`) is not on PyPI.
+PINNED_LINE = re.compile(r"^[A-Za-z0-9][\w.\-]*(?:\[[^\]]*\])?==")
+
+
+NO_BUILD = "disabled"  # uv: "Building source distributions for `x` is disabled", "building from source is disabled"
+
+
+def compiled_project(ctx: Context) -> Path | str:
+    """An unlocked uv app's dependencies, resolved by ``uv pip compile`` in its folder, into the run's folder.
+
+    Run there, uv applies the app's own settings (its uv.toml, its or a parent's [tool.uv], its
+    sources), as `uv lock` would. The dev group comes too, as `uv export` includes it, and so does a
+    dev extra. Nothing is built (``--no-build``): a build would run the app's or a dependency's own
+    code, and a build from the repo writes into it (#60). When resolving needs one, the app is
+    skipped, with the reason.
+    """
+    req = ctx.raw_dir / AUDITED
+    group = ["--group", "dev"] if requirements.has_dev_group(ctx.app_dir) else []
+    extra = ["--extra", "dev"] if has_dev_extra(ctx.app_dir) else []
+    cmd = ["uv", "pip", "compile", "-q", "--no-build", "--no-header", "--no-annotate", PYPROJECT, *group, *extra]
+    try:
+        run([*cmd, "-o", str(req)], ctx.app_dir)
+    # A specific, expected exception: uv refusing a build it would need; anything else propagates.
+    except ToolError as exc:
+        if NO_BUILD not in exc.stderr:
+            raise
+        return requirements.SKIP_NEEDS_BUILD
+    return req
+
+
+def keep_pinned(req: Path) -> int:
+    """Keep only the file's `name==version` requirements for pip-audit; how many others (path, VCS) it dropped.
+
+    Requirements, not lines: with uv's `generate-hashes`, each pin continues over `\\` lines of hashes.
+    """
+    lines = requirements.logical_lines(req.read_text())
+    pinned = [line for line in lines if PINNED_LINE.match(line)]
+    req.write_text("".join(f"{line}\n" for line in pinned))
+    return len(lines) - len(pinned)
 
 
 def pinned_requirements(ctx: Context) -> Path | str:
@@ -46,9 +90,10 @@ def pinned_requirements(ctx: Context) -> Path | str:
         return resolved_requirements(ctx)
     if not (ctx.app_dir / PYPROJECT).exists():  # a uv.lock alone is no project uv can export
         return requirements.SKIP_NO_MANIFEST
-    if not has_lock(ctx.app_dir):
-        # No lock to audit, and cq writes none into the user's repo (#53): a blind spot that says so.
-        return "no uv.lock to audit, and cq writes no lock into the repo"
+    if not has_lock(ctx.app_dir):  # cq writes no lock into the repo (#53): resolve one in the run's folder
+        if requirements.dynamic_dependencies(ctx.app_dir):
+            return requirements.SKIP_DYNAMIC
+        return compiled_project(ctx)
     return exported_lock(ctx)
 
 
@@ -82,6 +127,8 @@ def collect_python(ctx: Context) -> dict:
     req = pinned_requirements(ctx)
     if isinstance(req, str):
         return {"skipped": req}
+    # A path or VCS dependency isn't on PyPI: counted, so an app with only those isn't read as clean.
+    unaudited = keep_pinned(req)
     out = ctx.raw_dir / "pip-audit.json"
     run(
         [own("pip-audit"), "-r", str(req), "--no-deps", "--disable-pip", "-f", "json", "-o", str(out)],
@@ -92,6 +139,7 @@ def collect_python(ctx: Context) -> dict:
     vulnerable = [{**d, "vulns": distinct_advisories(d["vulns"])} for d in deps if d.get("vulns")]
     return {
         "packages": len(deps),
+        "unaudited": unaudited,
         "vulnerable_packages": len(vulnerable),
         "vulnerabilities": sum(len(d["vulns"]) for d in vulnerable),
         "items": [

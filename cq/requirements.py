@@ -157,14 +157,34 @@ def project_requirements(app_dir: Path) -> list[Requirement]:
         *toml_table(project, "optional-dependencies").get("dev", []),
         *toml_table(data, "dependency-groups").get("dev", []),
     ]
-    local = local_sources(data)
+    local = local_sources(sources_of(app_dir, data))
     return [req for line in lines if isinstance(line, str) and (req := parse_line(line)) and req.name not in local]
 
 
-def local_sources(data: dict, kinds: frozenset[str] = frozenset({"path", "git", "url", "workspace"})) -> set[str]:
-    """The packages ``[tool.uv.sources]`` takes from one of ``kinds``: by default, any source that isn't an index."""
+def workspace_root(app_dir: Path) -> Path | None:
+    """The nearest folder above the app whose pyproject.toml defines a uv workspace, if any."""
+    for folder in app_dir.resolve().parents:
+        pyproject = folder / PYPROJECT
+        if pyproject.exists() and toml_table(tomllib.loads(pyproject.read_text()), "tool", "uv", "workspace"):
+            return folder
+    return None
+
+
+def sources_of(app_dir: Path, data: dict) -> dict:
+    """The app's ``[tool.uv.sources]``, over its workspace root's: a member inherits the root's, and its own win.
+
+    Names are normalized first, so ``Helper_Lib`` in one and ``helper-lib`` in the other are the same.
+    """
+    root = workspace_root(app_dir)
+    inherited = toml_table(project_data(root), "tool", "uv", "sources") if root else {}
+    own_sources = toml_table(data, "tool", "uv", "sources")
+    return {canonical(name): source for table in (inherited, own_sources) for name, source in table.items()}
+
+
+def local_sources(sources: dict, kinds: frozenset[str] = frozenset({"path", "git", "url", "workspace"})) -> set[str]:
+    """The packages ``sources`` takes from one of ``kinds``: by default, any source that isn't an index."""
     local = set()
-    for name, source in toml_table(data, "tool", "uv", "sources").items():
+    for name, source in sources.items():
         entries = source if isinstance(source, list) else [source]
         if any(isinstance(e, dict) and kinds & e.keys() and source_applies(e) for e in entries):
             local.add(canonical(name))

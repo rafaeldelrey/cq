@@ -361,6 +361,25 @@ def test_a_dependency_taken_from_a_local_source_is_not_a_pypi_pin(tmp_path: Path
     ]
 
 
+def test_a_workspace_member_inherits_the_roots_sources_and_its_own_win(tmp_path: Path) -> None:
+    """In an unlocked workspace, a member's dependency sourced in the root is the repo's own, not PyPI's."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.uv.workspace]\nmembers = ['apps/*']\n\n[tool.uv.sources]\n"
+        "demo-dep = { workspace = true }\nshared = { workspace = true }\n"
+    )
+    member = tmp_path / "apps" / "a"
+    member.mkdir(parents=True)
+    (member / "pyproject.toml").write_text(
+        "[project]\nname = 'a'\nversion = '0.1.0'\ndependencies = ['demo-dep==1', 'shared==2.0', 'six==1.0']\n\n"
+        "[tool.uv.sources]\nshared = { index = 'internal' }\n"  # the member's own source wins over the root's
+    )
+    assert requirements.workspace_root(member) == tmp_path.resolve()
+    assert requirements.project_requirements(member) == [
+        requirements.Requirement("shared", "2.0"),
+        requirements.Requirement("six", "1.0"),
+    ]
+
+
 def busy_module(n: int) -> str:
     """``n`` functions of CC 5 (four branches each): over the test context's CC limit of 3."""
     return "".join(

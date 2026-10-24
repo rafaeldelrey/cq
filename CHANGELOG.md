@@ -28,7 +28,8 @@ numbers, and the trend shows a step there.
   - **freshness** compares the exact `==` pins the app declares (`[project].dependencies`, its
     `dev` group and its `dev` extra) with PyPI's latest, and counts the rest as `unpinned`, as for
     requirements.txt apps. A dependency `[tool.uv.sources]` takes from a path, git, a URL or the
-    workspace is neither, unless that source's marker doesn't hold here.
+    workspace is neither, unless that source's marker doesn't hold here (or it's for an extra or
+    group cq doesn't read). A workspace member inherits the root's sources, and its own win.
   - **What moves:** these apps get vulnerability and freshness numbers where they were skipped.
     Still no lock is written into the repo.
 

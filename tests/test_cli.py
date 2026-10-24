@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import Mock
@@ -104,7 +105,7 @@ def test_a_past_commit_is_measured_in_a_worktree_outside_the_repo(repo: Path) ->
     snap = runner.snapshot(settings, rev=first, tools=["size"])
     paths = runner.save(snap, settings, to_history=True)
     assert paths[-1].parent == settings.history_dir
-    assert paths[-1].name.endswith(f"_{first[:7]}.json")
+    assert runner.history_sha(paths[-1]) == first[:7]
 
 
 def test_commit_info_ignores_cqs_own_output(repo: Path) -> None:
@@ -133,7 +134,7 @@ def test_backfill_measures_into_history(repo: Path, monkeypatch: pytest.MonkeyPa
     first = git(repo, "rev-list", "--max-parents=0", "HEAD")
     monkeypatch.setattr("cq.backfill.snapshot", lambda s, rev: runner.snapshot(s, rev=rev, tools=["size"]))
     assert run_cq(repo, "backfill", "--rev", first) == 0
-    assert [p.name.endswith(f"_{first[:7]}.json") for p in settings.history_dir.glob("*.json")] == [True]
+    assert [runner.history_sha(p) for p in settings.history_dir.glob("*.json")] == [first[:7]]
 
 
 def test_complexity_commands_use_the_settings_baseline(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -396,6 +397,35 @@ def test_a_dirty_snapshot_does_not_count_as_the_commit_backfilled(repo: Path) ->
     (settings.history_dir / f"2026-10-17_{head[:7]}-dirty.json").write_text("{}")
     assert commits_to_measure(settings, [head], None, 14, force=False) == [head]
     (settings.history_dir / f"2026-10-17_{head[:7]}.json").write_text("{}")
+    assert commits_to_measure(settings, [head], None, 14, force=False) == []
+
+
+def test_a_rerun_at_the_same_commit_keeps_both_history_entries(repo: Path) -> None:
+    """Every complete run adds its own entry (#54); an old-style name (no run time) still loads beside them."""
+    settings = load_settings(repo)
+    head = git(repo, "rev-parse", "HEAD")[:7]
+    first = runner.save(runner.snapshot(settings, tools=["size"]), settings, to_history=True)[-1]
+    time.sleep(1.1)  # a run id has one-second resolution; real runs take longer than that
+    second = runner.save(runner.snapshot(settings, tools=["size"]), settings, to_history=True)[-1]
+    entries = sorted(settings.history_dir.glob("*.json"))
+    assert entries == sorted([first, second]) and first != second
+    assert [runner.history_sha(p) for p in entries] == [head, head]
+    assert all(p.stem.count("_") == 2 for p in entries)  # <commit date>_<sha>_<run time>
+    old_style = first.with_name(f"{first.stem.rsplit('_', 1)[0]}.json")  # how cq 0.12 named it
+    first.rename(old_style)
+    assert run_cq(repo, "report") == 0
+    run_dir = latest_run(settings.runs_dir)
+    assert run_dir is not None
+    assert "2 snapshot(s)" in (run_dir / "report.md").read_text()
+
+
+def test_backfill_reads_the_commit_from_either_history_name(repo: Path) -> None:
+    settings = load_settings(repo)
+    head = git(repo, "rev-parse", "HEAD")
+    settings.history_dir.mkdir(parents=True)
+    (settings.history_dir / f"2026-10-17_{head[:7]}_20261017T120000Z-dirty.json").write_text("{}")
+    assert commits_to_measure(settings, [head], None, 14, force=False) == [head]  # dirty never counts
+    (settings.history_dir / f"2026-10-17_{head[:7]}_20261017T120000Z.json").write_text("{}")
     assert commits_to_measure(settings, [head], None, 14, force=False) == []
 
 

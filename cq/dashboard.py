@@ -26,12 +26,21 @@ LIST_ITEM = re.compile(r"^\s*([-*]|\d+\.)\s+(.*)")
 
 
 def history_until(history: list[dict], snap: dict) -> list[dict]:
-    """The history as it stood at this run: earlier commits, then the run's own snapshot last."""
+    """The history as it stood at this run: earlier commits and this commit's earlier runs, then the run itself.
+
+    Every complete run keeps its own entry (#54), so a re-run's report compares it with the run
+    before it at the same commit.
+    """
     cutoff = datetime.fromisoformat(snap["commit_date"])
-    earlier = [
-        s for s in history if s["commit"] != snap["commit"] and datetime.fromisoformat(s["commit_date"]) <= cutoff
-    ]
+    earlier = [s for s in history if s["run_id"] != snap["run_id"] and before(s, snap, cutoff)]
     return [*earlier, snap]
+
+
+def before(other: dict, snap: dict, cutoff: datetime) -> bool:
+    """Whether ``other`` came before ``snap`` in the trend: an earlier commit, or an earlier run of its commit."""
+    if other["commit"] == snap["commit"]:
+        return other["run_at"] < snap["run_at"]
+    return datetime.fromisoformat(other["commit_date"]) <= cutoff
 
 
 def series_point(snap: dict) -> dict:

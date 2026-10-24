@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.12.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.13.0
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.12.2
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.13.0
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -223,8 +223,9 @@ Every run writes a folder under `.cq/runs/<UTC time>_<sha>/`:
 | `run.log` | One line per tool, with its time or its error |
 | `<target>/<tool>.log` | The exact commands a tool ran, their exit codes and output: read this when a tool errors |
 
-`.cq/history/` holds one snapshot per commit; that's the trend. `.cq/` ignores itself, so nothing
-cq writes ever shows up in `git status`.
+`.cq/history/` holds one snapshot per complete run; that's the trend. A second run at the same
+commit adds a point rather than replacing the first. `.cq/` ignores itself, so nothing cq writes
+ever shows up in `git status`.
 
 **When numbers jump without a code change.** If a tool version or a config file changed since the
 previous snapshot, the report and the dashboard say so above the numbers. Typical causes are a cq
@@ -257,7 +258,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.12.2"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.13.0"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -433,7 +434,7 @@ version all of them use at once. Before you upgrade:
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.12.2    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.13.0    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

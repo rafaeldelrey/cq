@@ -4,6 +4,19 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.13.0] - 2026-10-24
+
+### Changed
+
+- **Every complete run keeps its own history entry.** A second `cq run` at the same commit used to
+  replace that commit's entry silently, so the trend lost the earlier baseline (a run before a
+  settings change, say). History files are now named `<commit date>_<sha>_<run time>[-dirty].json`,
+  and the trend shows each run as a point, in run order: a re-run's report compares it with the
+  run before it at the same commit.
+  - **What changes for a trend:** a nightly on an unchanged branch now adds a point each night.
+    `backfill --force` adds entries instead of replacing them.
+  - Older history files, named without the run time, keep loading as they are.
+
 ## [0.12.2] - 2026-10-24
 
 ### Fixed

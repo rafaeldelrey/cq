@@ -278,26 +278,37 @@ def test_hashed_pins_are_kept_whole(tmp_path: Path) -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "hint: Wheels are required for `old` because building from source is disabled for all packages",
+        "error: Building source distributions for `old` is disabled",
+        "error: Building source distributions is disabled",
+    ],
+)
 def test_a_resolution_that_needs_a_build_is_skipped_with_the_reason(
-    ctx: Context, monkeypatch: pytest.MonkeyPatch
+    ctx: Context, monkeypatch: pytest.MonkeyPatch, stderr: str
 ) -> None:
     """A PyPI package with only a source distribution can't resolve without a build: cq runs none (#60)."""
     (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\ndependencies = ['old']\n")
 
     def refused(cmd: list[str], cwd: Path, **_: object) -> str:
         assert "--no-build" in cmd
-        raise ToolError(
-            "uv pip compile exited 1",
-            returncode=1,
-            stderr="hint: Wheels are required for `old` because building from source is disabled for all packages",
-        )
+        raise ToolError("uv pip compile exited 1", returncode=1, stderr=stderr)
 
     monkeypatch.setattr(vulnerabilities, "run", refused)
     assert vulnerabilities.collect(ctx) == {"skipped": requirements.SKIP_NEEDS_BUILD}
 
 
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "error: Failed to fetch `six`: the network was disabled",  # offline: not a refused build
+        "error: failed to fetch index",
+    ],
+)
 def test_a_failed_resolution_other_than_a_refused_build_is_a_tool_error(
-    ctx: Context, monkeypatch: pytest.MonkeyPatch
+    ctx: Context, monkeypatch: pytest.MonkeyPatch, stderr: str
 ) -> None:
     (ctx.app_dir / "pyproject.toml").write_text(
         "[project]\nname = 'demo'\nversion = '0.1.0'\ndependencies = ['helper']\n\n"
@@ -305,7 +316,7 @@ def test_a_failed_resolution_other_than_a_refused_build_is_a_tool_error(
     )
 
     def offline(cmd: list[str], cwd: Path, **_: object) -> str:
-        raise ToolError("uv pip compile exited 2", returncode=2, stderr="error: failed to fetch index")
+        raise ToolError("uv pip compile exited 2", returncode=2, stderr=stderr)
 
     monkeypatch.setattr(vulnerabilities, "run", offline)
     with pytest.raises(ToolError, match="exited 2"):
@@ -341,11 +352,12 @@ def test_a_dependency_taken_from_a_local_source_is_not_a_pypi_pin(tmp_path: Path
         f"other = [{{ git = 'https://example.com/other.git', marker = \"sys_platform == '{elsewhere}'\" }}]\n"
         "mirror = { index = 'internal' }\n"
         "member = { workspace = true }\n"
+        "six = [{ path = '../six', extra = 'other' }]\n"
     )
     assert requirements.project_requirements(tmp_path) == [
         requirements.Requirement("other", "2.0"),  # its git source is for another platform: PyPI's here
         requirements.Requirement("mirror", "1.0"),  # an index is still a registry: compared
-        requirements.Requirement("six", None),
+        requirements.Requirement("six", None),  # its path source is for an extra cq doesn't select
     ]
 
 

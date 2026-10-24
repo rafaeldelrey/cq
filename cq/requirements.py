@@ -171,10 +171,18 @@ def local_sources(data: dict, kinds: frozenset[str] = frozenset({"path", "git", 
     return local
 
 
+SELECTED = "dev"  # the only extra and dependency group cq reads (and installs)
+
+
 def source_applies(entry: dict) -> bool:
-    """Whether a ``[tool.uv.sources]`` entry's marker holds for the Python running cq (no marker: always)."""
+    """Whether a ``[tool.uv.sources]`` entry applies to what cq measures.
+
+    Its marker must hold for the Python running cq, and its extra or group, if it names one, must be
+    the ``dev`` one cq selects.
+    """
     marker = entry.get("marker")
-    return not marker or Marker(marker).evaluate()
+    scoped = [entry[key] for key in ("extra", "group") if key in entry]
+    return (not marker or Marker(marker).evaluate()) and all(name == SELECTED for name in scoped)
 
 
 def dynamic_dependencies(app_dir: Path) -> bool:

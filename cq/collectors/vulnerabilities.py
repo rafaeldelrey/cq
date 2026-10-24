@@ -47,7 +47,10 @@ def resolved_requirements(ctx: Context) -> Path:
 PINNED_LINE = re.compile(r"^[A-Za-z0-9][\w.\-]*(?:\[[^\]]*\])?==")
 
 
-NO_BUILD = "disabled"  # uv: "Building source distributions for `x` is disabled", "building from source is disabled"
+# uv refusing a build it would need: "Building source distributions [for `x`] is disabled", or
+# "Wheels are required for `x` because building from source is disabled". Not any "disabled" (offline: "the
+# network was disabled").
+NO_BUILD = re.compile(r"Building source distributions (?:for .+ )?is disabled|building from source is disabled")
 
 
 def compiled_project(ctx: Context) -> Path | str:
@@ -67,7 +70,7 @@ def compiled_project(ctx: Context) -> Path | str:
         run([*cmd, "-o", str(req)], ctx.app_dir)
     # A specific, expected exception: uv refusing a build it would need; anything else propagates.
     except ToolError as exc:
-        if NO_BUILD not in exc.stderr:
+        if not NO_BUILD.search(exc.stderr):
             raise
         return requirements.SKIP_NEEDS_BUILD
     return req

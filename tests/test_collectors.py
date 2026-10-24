@@ -380,6 +380,24 @@ def test_a_workspace_member_inherits_the_roots_sources_and_its_own_win(tmp_path:
     ]
 
 
+def test_an_app_outside_the_workspace_inherits_nothing(tmp_path: Path) -> None:
+    """Excluded, or matched by no member glob: the app is its own project, and the root's sources aren't its."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.uv.workspace]\nmembers = ['apps/*']\nexclude = ['apps/solo']\n\n"
+        "[tool.uv.sources]\ndemo-dep = { path = 'libs/demo-dep' }\n"
+    )
+    for rel in ("apps/a", "apps/solo", "tools/b", "apps/a/nested"):
+        (tmp_path / rel).mkdir(parents=True)
+        (tmp_path / rel / "pyproject.toml").write_text(
+            "[project]\nname = 'x'\nversion = '0.1.0'\ndependencies = ['demo-dep==1.0']\n"
+        )
+    assert requirements.workspace_root(tmp_path / "apps" / "a") == tmp_path.resolve()
+    assert requirements.project_requirements(tmp_path / "apps" / "a") == []  # a member: the root's path source
+    for outside in ("apps/solo", "tools/b", "apps/a/nested"):  # excluded; no glob; `*` is one folder deep
+        assert requirements.workspace_root(tmp_path / outside) is None
+        assert requirements.project_requirements(tmp_path / outside) == [requirements.Requirement("demo-dep", "1.0")]
+
+
 def busy_module(n: int) -> str:
     """``n`` functions of CC 5 (four branches each): over the test context's CC limit of 3."""
     return "".join(

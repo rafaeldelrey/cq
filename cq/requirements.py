@@ -4,6 +4,7 @@ Such an app has a ``requirements.txt`` and no ``pyproject.toml``, so no uv proje
 tests, vulnerabilities and freshness collectors read its dependencies from these files instead.
 """
 
+import fnmatch
 import re
 import tomllib
 from dataclasses import dataclass
@@ -162,12 +163,25 @@ def project_requirements(app_dir: Path) -> list[Requirement]:
 
 
 def workspace_root(app_dir: Path) -> Path | None:
-    """The nearest folder above the app whose pyproject.toml defines a uv workspace, if any."""
-    for folder in app_dir.resolve().parents:
+    """The root of the uv workspace the app belongs to: the nearest folder above it whose pyproject.toml
+    defines a workspace, when the app matches its ``members`` and none of its ``exclude`` patterns."""
+    app = app_dir.resolve()
+    for folder in app.parents:
         pyproject = folder / PYPROJECT
-        if pyproject.exists() and toml_table(tomllib.loads(pyproject.read_text()), "tool", "uv", "workspace"):
-            return folder
+        workspace = (
+            toml_table(tomllib.loads(pyproject.read_text()), "tool", "uv", "workspace") if pyproject.exists() else {}
+        )
+        if workspace:
+            rel = app.relative_to(folder).as_posix()
+            member = any(glob_match(rel, g) for g in workspace.get("members", []))
+            return folder if member and not any(glob_match(rel, g) for g in workspace.get("exclude", [])) else None
     return None
+
+
+def glob_match(path: str, pattern: str) -> bool:
+    """Whether a relative path matches a workspace glob, one segment at a time (``*`` stays in its folder)."""
+    parts, globs = path.split("/"), pattern.strip("/").split("/")
+    return len(parts) == len(globs) and all(fnmatch.fnmatchcase(p, g) for p, g in zip(parts, globs, strict=True))
 
 
 def sources_of(app_dir: Path, data: dict) -> dict:

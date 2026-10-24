@@ -105,7 +105,7 @@ def test_a_past_commit_is_measured_in_a_worktree_outside_the_repo(repo: Path) ->
     snap = runner.snapshot(settings, rev=first, tools=["size"])
     paths = runner.save(snap, settings, to_history=True)
     assert paths[-1].parent == settings.history_dir
-    assert runner.history_sha(paths[-1]) == first[:7]
+    assert runner.history_sha(paths[-1]) == snap["short"] == git(repo, "rev-parse", "--short=7", first)
 
 
 def test_commit_info_ignores_cqs_own_output(repo: Path) -> None:

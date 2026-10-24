@@ -197,12 +197,13 @@ def test_the_app_environment_tools_run_on_a_dependency_group_repo(repo: Path) ->
     assert "violations" in measured["ruff"]
     assert measured["pyright"]["errors"] >= 0
     assert measured["duplication"]["clones"] == 0
-    assert measured["freshness"]["skipped"] == freshness.SKIP_NO_LOCK  # no uv.lock in this repo
+    # No uv.lock: the declared pins are what freshness reads (#60), and the dev group's are open.
+    assert (measured["freshness"]["unpinned_packages"], measured["freshness"]["outdated"]) == (["pyright", "ruff"], 0)
 
 
 def test_a_run_writes_no_lock_into_an_app_without_one(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The uv-based tools run isolated when the app has no uv.lock, freshness and vulnerabilities
-    say they have no lock to read, and pytest leaves no bytecode behind."""
+    measure what it declares without writing a lock (#60), and pytest leaves no bytecode behind."""
     monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)  # as on a machine that doesn't set it
     pyproject = repo / "pyproject.toml"
     pyproject.write_text(pyproject.read_text() + "dependencies = []\n")
@@ -215,8 +216,8 @@ def test_a_run_writes_no_lock_into_an_app_without_one(repo: Path, monkeypatch: p
     assert run_dir is not None
     snap = json.loads((run_dir / "snapshot.json").read_text())
     assert snap["errors"] == {}, snap["errors"]
-    assert snap["targets"]["acme"]["freshness"]["skipped"] == freshness.SKIP_NO_LOCK  # never off a stray lock
-    assert snap["targets"]["acme"]["vulnerabilities"]["skipped"].startswith("no uv.lock to audit")
+    assert snap["targets"]["acme"]["freshness"]["outdated"] == 0  # never off a stray lock
+    assert snap["targets"]["acme"]["vulnerabilities"]["packages"] == 0  # no dependencies, none audited
 
 
 def test_a_workspace_member_runs_against_the_workspace_lock(tmp_path: Path) -> None:

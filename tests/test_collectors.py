@@ -225,9 +225,34 @@ def test_repeated_pip_audit_advisories_count_once(ctx: Context, monkeypatch: pyt
     ]
 
 
-def test_pip_audit_without_a_lock_is_skipped_with_the_reason(ctx: Context) -> None:
-    (ctx.app_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1.0'\n")
-    assert vulnerabilities.collect(ctx) == {"skipped": "no uv.lock to audit, and cq writes no lock into the repo"}
+def test_pip_audit_without_a_lock_audits_a_resolution_in_the_run_folder(
+    ctx: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unlocked uv app is resolved by uv pip compile in its own folder; only `==` lines are audited (#60)."""
+    (ctx.app_dir / "pyproject.toml").write_text(
+        "[project]\nname = 'demo'\nversion = '0.1.0'\n\n[dependency-groups]\ndev = ['pytest']\n"
+    )
+    commands: list[tuple[list[str], Path]] = []
+    audited: list[str] = []
+
+    def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        commands.append((cmd, cwd))
+        if cmd[0] == "uv":
+            Path(cmd[cmd.index("-o") + 1]).write_text(
+                "../libs/helper\nhelper @ git+https://example.com/helper.git\nsix==1.17.0\nrequests[socks]==2.32.4\n"
+            )
+            return ""
+        audited.extend(Path(cmd[cmd.index("-r") + 1]).read_text().splitlines())
+        Path(cmd[cmd.index("-o") + 1]).write_text(json.dumps({"dependencies": []}))
+        return ""
+
+    monkeypatch.setattr(vulnerabilities, "run", fake_run)
+    assert vulnerabilities.collect(ctx)["packages"] == 0
+    compile_cmd, cwd = commands[0]
+    assert compile_cmd[:3] == ["uv", "pip", "compile"] and cwd == ctx.app_dir  # uv applies the app's own settings
+    assert "--group" in compile_cmd and Path(compile_cmd[compile_cmd.index("-o") + 1]).parent == ctx.raw_dir
+    assert audited == ["six==1.17.0", "requests[socks]==2.32.4"]  # no path or VCS line
+    assert not (ctx.app_dir / "uv.lock").exists()
 
 
 def test_pip_audit_without_any_manifest_is_skipped_with_the_reason(ctx: Context) -> None:

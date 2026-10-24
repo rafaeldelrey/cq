@@ -8,12 +8,13 @@ dependencies only (``--omit=dev``): what ships in the image.
 """
 
 import json
+import re
 from pathlib import Path
 
 from cq import requirements
 from cq.config import PYPROJECT
 from cq.context import Context
-from cq.proc import ToolError, has_lock, own, read_report, run
+from cq.proc import ToolError, has_dev_extra, has_lock, own, read_report, run
 
 KINDS = ("python", "typescript")
 
@@ -40,15 +41,36 @@ def resolved_requirements(ctx: Context) -> Path:
     return req
 
 
+# A resolved `name==version` line; a path or VCS dependency (`../libs/x`, `x @ git+…`) is not on PyPI.
+PINNED_LINE = re.compile(r"^[A-Za-z0-9][\w.\-]*(?:\[[^\]]*\])?==")
+
+
+def compiled_project(ctx: Context) -> Path:
+    """An unlocked uv app's dependencies, resolved by ``uv pip compile`` in its folder, into the run's folder.
+
+    Run there, uv applies the app's own settings (its uv.toml, its or a parent's [tool.uv], its
+    sources), as `uv lock` would. The dev group or extra comes too, as `uv export` includes it.
+    Only the `name==version` lines are kept for the audit.
+    """
+    req = ctx.raw_dir / "requirements.txt"
+    group = ["--group", "dev"] if requirements.has_dev_group(ctx.app_dir) else []
+    extra = ["--extra", "dev"] if has_dev_extra(ctx.app_dir) else []
+    run(
+        ["uv", "pip", "compile", "-q", "--no-header", "--no-annotate", PYPROJECT, *group, *extra, "-o", str(req)],
+        ctx.app_dir,
+    )
+    req.write_text("".join(f"{line}\n" for line in req.read_text().splitlines() if PINNED_LINE.match(line)))
+    return req
+
+
 def pinned_requirements(ctx: Context) -> Path | str:
     """The app's dependencies at exact versions, or why there are none to audit."""
     if requirements.is_requirements_app(ctx.app_dir):
         return resolved_requirements(ctx)
     if not (ctx.app_dir / PYPROJECT).exists():  # a uv.lock alone is no project uv can export
         return requirements.SKIP_NO_MANIFEST
-    if not has_lock(ctx.app_dir):
-        # No lock to audit, and cq writes none into the user's repo (#53): a blind spot that says so.
-        return "no uv.lock to audit, and cq writes no lock into the repo"
+    if not has_lock(ctx.app_dir):  # cq writes no lock into the repo (#53): resolve one in the run's folder
+        return compiled_project(ctx)
     return exported_lock(ctx)
 
 

@@ -5,6 +5,7 @@ tests, vulnerabilities and freshness collectors read its dependencies from these
 """
 
 import re
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -121,3 +122,37 @@ def parse(path: Path, seen: frozenset[Path] = frozenset()) -> list[Requirement]:
         if req:
             found.append(req)
     return found
+
+
+def table(data: dict, *keys: str) -> dict:
+    """A nested TOML table, or an empty one where any level is missing."""
+    for key in keys:
+        value = data.get(key)
+        data = value if isinstance(value, dict) else {}
+    return data
+
+
+def project_data(app_dir: Path) -> dict:
+    """The app's pyproject.toml, parsed."""
+    return tomllib.loads((app_dir / PYPROJECT).read_text())
+
+
+def has_dev_group(app_dir: Path) -> bool:
+    """Whether the app's pyproject defines a ``dev`` dependency group."""
+    return "dev" in table(project_data(app_dir), "dependency-groups")
+
+
+def project_requirements(app_dir: Path) -> list[Requirement]:
+    """An unlocked uv app's own requirements: ``[project].dependencies``, plus its ``dev`` group or extra.
+
+    The same line rules as requirements files (markers evaluated, names normalized). A group's
+    ``include-group`` tables are not followed (#60).
+    """
+    data = project_data(app_dir)
+    project = table(data, "project")
+    lines = [
+        *project.get("dependencies", []),
+        *table(project, "optional-dependencies").get("dev", []),
+        *table(data, "dependency-groups").get("dev", []),
+    ]
+    return [req for line in lines if isinstance(line, str) and (req := parse_line(line))]

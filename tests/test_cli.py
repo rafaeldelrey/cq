@@ -400,19 +400,20 @@ def test_a_dirty_snapshot_does_not_count_as_the_commit_backfilled(repo: Path) ->
     assert commits_to_measure(settings, [head], None, 14, force=False) == []
 
 
-def test_a_rerun_at_the_same_commit_keeps_both_history_entries(repo: Path) -> None:
-    """Every complete run adds its own entry (#54); an old-style name (no run time) still loads beside them."""
+def test_a_rerun_at_the_same_commit_keeps_both_history_entries(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every complete `cq run` adds its own entry (#54); an old-style name (no run time) still loads beside them."""
+    # A complete run measures every collector; one keeps it complete and quick.
+    monkeypatch.setattr(runner, "COLLECTORS", {"size": runner.COLLECTORS["size"]})
     settings = load_settings(repo)
-    head = git(repo, "rev-parse", "HEAD")[:7]
-    first = runner.save(runner.snapshot(settings, tools=["size"]), settings, to_history=True)[-1]
+    head = git(repo, "rev-parse", "--short=7", "HEAD")
+    assert run_cq(repo, "run") == 0
     time.sleep(1.1)  # a run id has one-second resolution; real runs take longer than that
-    second = runner.save(runner.snapshot(settings, tools=["size"]), settings, to_history=True)[-1]
+    assert run_cq(repo, "run") == 0
     entries = sorted(settings.history_dir.glob("*.json"))
-    assert entries == sorted([first, second]) and first != second
     assert [runner.history_sha(p) for p in entries] == [head, head]
     assert all(p.stem.count("_") == 2 for p in entries)  # <commit date>_<sha>_<run time>
-    old_style = first.with_name(f"{first.stem.rsplit('_', 1)[0]}.json")  # how cq 0.12 named it
-    first.rename(old_style)
+    first = entries[0]
+    first.rename(first.with_name(f"{first.stem.rsplit('_', 1)[0]}.json"))  # as cq 0.12 named it
     assert run_cq(repo, "report") == 0
     run_dir = latest_run(settings.runs_dir)
     assert run_dir is not None
@@ -420,6 +421,7 @@ def test_a_rerun_at_the_same_commit_keeps_both_history_entries(repo: Path) -> No
 
 
 def test_backfill_reads_the_commit_from_either_history_name(repo: Path) -> None:
+    """A commit is done when a clean entry of either name form names it; a -dirty one never counts."""
     settings = load_settings(repo)
     head = git(repo, "rev-parse", "HEAD")
     settings.history_dir.mkdir(parents=True)

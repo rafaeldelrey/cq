@@ -16,6 +16,8 @@ numbers, and the trend shows a step there.
   - **What changes for a trend:** a nightly on an unchanged branch now adds a point each night.
     `backfill --force` adds entries instead of replacing them.
   - Older history files, named without the run time, keep loading as they are.
+  - The run time is to the second, as a run folder's is, so two runs started in the same second
+    still share one entry.
 
 ## [0.12.2] - 2026-10-24
 

@@ -39,7 +39,7 @@ def snap(day: str, sha: str, coverage: float, over: int, dirty: bool = False) ->
 def write(tmp_path: Path, *snaps: dict) -> list[dict]:
     """Store snapshots in a history dir and load them back."""
     for s in snaps:
-        (tmp_path / f"{s['commit_date'][:10]}_{s['short']}.json").write_text(json.dumps(s))
+        (tmp_path / f"{s['commit_date'][:10]}_{s['short']}_{s['run_id'].split('_')[0]}.json").write_text(json.dumps(s))
     return load_history(tmp_path)
 
 
@@ -135,6 +135,22 @@ def test_history_until_puts_run_last_and_drops_later_commits(tmp_path: Path) -> 
     history = write(tmp_path, snap("2026-09-01", "aaa", 85, 5), snap("2026-10-10", "bbb", 84, 3))
     run = snap("2026-09-15", "ccc", 86, 4)
     assert [s["short"] for s in dashboard.history_until(history, run)] == ["aaa", "ccc"]
+
+
+def test_history_until_keeps_a_commits_earlier_runs_and_drops_its_later_ones(tmp_path: Path) -> None:
+    """Every run is a point (#54): a run's history has its commit's earlier runs, never the later ones."""
+
+    def rerun(day: str, at: str, coverage: float) -> dict:
+        return {**snap(day, "aaa", coverage, 1), "run_id": f"{at}_aaa", "run_at": f"{day}T{at}+00:00"}
+
+    first, second, third = (
+        rerun("2026-09-01", "12:00:00", 80),
+        rerun("2026-09-01", "13:00:00", 81),
+        rerun("2026-09-01", "14:00:00", 82),
+    )
+    history = write(tmp_path, first, second, third)
+    assert [s["run_at"][11:16] for s in dashboard.history_until(history, second)] == ["12:00", "13:00"]
+    assert [s["run_at"][11:16] for s in dashboard.history_until(history, third)] == ["12:00", "13:00", "14:00"]
 
 
 def test_markdown_to_html() -> None:

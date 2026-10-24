@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from cq import benchmarks
 from cq.metrics import METRICS
 from cq.render_md import measurement_changes
 
@@ -57,6 +58,21 @@ def series_point(snap: dict) -> dict:
         "dirty": snap["dirty"],
         "values": values,
     }
+
+
+def ratings(snap: dict) -> dict[str, dict]:
+    """Each target's rated metrics and overall grade at this run, against the published benchmarks."""
+    out = {}
+    for name, target in snap["targets"].items():
+        rated = {m.path: r for m in METRICS if (r := benchmarks.rate(m, m.read(target))) is not None}
+        found = benchmarks.grade(target)
+        out[name] = {
+            "metrics": {path: {"label": r.label, "band": r.band} for path, r in rated.items()},
+            "grade": None
+            if found is None
+            else {"label": found.label, "rated": found.rated, "weakest": found.weakest.label},
+        }
+    return out
 
 
 def run_files(run_dir: Path) -> list[dict]:
@@ -224,6 +240,8 @@ def build(
             {"path": m.path, "label": m.label, "better": m.better, "unit": m.unit, "group": m.group} for m in METRICS
         ],
         "series": points,
+        "ratings": ratings(snap),
+        "reference": benchmarks.REFERENCE,
         "snapshot": snap,
         "files": run_files(run_dir),
         "analysis": markdown_to_html(analysis_md) if analysis_md else None,

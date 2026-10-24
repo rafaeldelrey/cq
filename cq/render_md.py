@@ -1,6 +1,6 @@
 """The trend report as Markdown: for the terminal, and for Claude to read and summarise."""
 
-from cq import findings
+from cq import benchmarks, findings
 from cq.metrics import Metric, Row, rows_for, verdict
 
 SPARK = "▁▂▃▄▅▆▇█"
@@ -228,18 +228,33 @@ def errors_section(errors: dict[str, str]) -> list[str]:
     return ["## Tool errors", "", *(f"- `{k}`: {v.splitlines()[0][:200]}" for k, v in errors.items()), ""]
 
 
-def metrics_table(name: str, rows: list[Row], window_days: int) -> list[str]:
-    """One target's metrics: now, the three deltas and the trend."""
+def grade_line(target: dict) -> list[str]:
+    """The target's overall grade against the published benchmarks, when it has one."""
+    found = benchmarks.grade(target)
+    if found is None:
+        return []
+    return [f"{found.text()}. Ratings: published benchmarks, see `{benchmarks.REFERENCE}`.", ""]
+
+
+def rating_cell(row: Row) -> str:
+    """The metric's rating at its current value, or blank where no published scale applies."""
+    rating = benchmarks.rate(row.metric, row.now)
+    return rating.text() if rating else ""
+
+
+def metrics_table(name: str, rows: list[Row], window_days: int, target: dict) -> list[str]:
+    """One target's metrics: now, its rating, the three deltas and the trend, under the target's grade."""
     lines = [
         f"## {name}",
         "",
-        f"| Metric | Now | Δ prev | Δ {window_days}d | Δ first | Trend |",
-        "|---|--:|--:|--:|--:|---|",
+        *grade_line(target),
+        f"| Metric | Now | Rating | Δ prev | Δ {window_days}d | Δ first | Trend |",
+        "|---|--:|---|--:|--:|--:|---|",
     ]
     for r in rows:
         spark = sparkline([v for _, v in r.points])
         lines.append(
-            f"| {r.metric.label} | {fmt(r.now, r.metric)} | {fmt_delta(r, r.prev)} | "
+            f"| {r.metric.label} | {fmt(r.now, r.metric)} | {rating_cell(r)} | {fmt_delta(r, r.prev)} | "
             f"{fmt_delta(r, r.window)} | {fmt_delta(r, r.first)} | {spark} |"
         )
     return [*lines, ""]
@@ -273,7 +288,7 @@ def target_section(
     """One target's part of the report: its metrics, its cut lists, its new findings and, with details,
     its worst offenders and the newer tools' findings."""
     mine = [f for f in found if f["target"] == name]
-    lines = metrics_table(name, rows, window_days)
+    lines = metrics_table(name, rows, window_days, latest["targets"][name])
     lines += cut_section([c for c in findings.cut_lists(latest) if c["target"] == name])
     lines += new_findings_section(mine)
     if details:

@@ -95,6 +95,10 @@ tr.group td { background: var(--surface-2); font-size: .72rem; text-transform: u
 .pill.better { background: var(--good-bg); color: var(--good); } .pill.worse { background: var(--bad-bg); color: var(--bad); }
 .pill.same { background: var(--surface-2); color: var(--muted); }
 .pill.warn { background: var(--warn-bg); color: var(--warn); }
+.rating { font-size: .7rem; white-space: nowrap; color: var(--faint); }
+.rating.good { color: var(--good); } .rating.fair { color: var(--warn); } .rating.poor { color: var(--bad); }
+.grade { display: block; font-size: .72rem; font-weight: 600; }
+.grade.good { color: var(--good); } .grade.fair { color: var(--warn); } .grade.poor { color: var(--bad); }
 pre.diff { font-family: var(--font-mono); font-size: .76rem; background: var(--surface-2); padding: 8px; border-radius: 6px; overflow-x: auto; margin: 6px 0 0; white-space: pre; }
 
 #chart { position: relative; min-height: 300px; }
@@ -283,6 +287,14 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
     const delta = before === undefined ? null : now - before;
     return { now, before, base, delta, v: verdict(m, delta) };
   }
+  // The published-benchmark labels, colored as the band reads: Excellent and Good, Fair, Poor and Critical.
+  const TONE = { Excellent: "good", Good: "good", Fair: "fair", Poor: "poor", Critical: "poor" };
+  const ratingOf = (t, path) => D.ratings?.[t]?.metrics?.[path];
+  function gradeHtml(t) {
+    const g = D.ratings?.[t]?.grade;
+    if (!g) return "";
+    return `<span class="grade ${TONE[g.label]}" title="Mean of ${g.rated} rated metrics; weakest: ${esc(g.weakest)}. See ${esc(D.reference)}.">Grade: ${esc(g.label)}</span>`;
+  }
   const cmpLabel = () => ({ prev: "the previous snapshot", first: "the first snapshot" })[state.cmp] || `${state.cmp} days earlier`;
 
   // ── header ────────────────────────────────────────────────────────────────────────────
@@ -333,7 +345,7 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
   // ── scorecard ──────────────────────────────────────────────────────────────────────────
   function renderScore() {
     const apps = TARGETS.filter((t) => state.apps.has(t));
-    let html = `<thead><tr><th>Metric</th>${apps.map((t) => `<th class="num"><span class="swatch" style="background:${colorOf(t)}"></span> ${esc(t)}</th>`).join("")}</tr></thead><tbody>`;
+    let html = `<thead><tr><th>Metric</th>${apps.map((t) => `<th class="num"><span class="swatch" style="background:${colorOf(t)}"></span> ${esc(t)}${gradeHtml(t)}</th>`).join("")}</tr></thead><tbody>`;
     let group = null;
     for (const m of METRICS) {
       if (!apps.some((t) => valueAt(NOW, t, m.path) !== undefined)) continue;
@@ -346,9 +358,12 @@ details > summary { cursor: pointer; color: var(--muted); font-size: .86rem; }
         const c = compare(t, m);
         if (!c) { html += `<td class="num">—</td>`; continue; }
         const cur = state.sel && state.sel.t === t && state.sel.p === m.path;
+        const r = ratingOf(t, m.path);
         html += `<td class="cell"><button type="button" data-t="${esc(t)}" data-p="${esc(m.path)}" aria-current="${cur}" ` +
           `title="${esc(t)} · ${esc(m.label)}"><span class="v">${esc(fmt(c.now, m))}</span>` +
-          `<span class="delta ${c.v}">${esc(fmtDelta(c.delta, m))}</span></button></td>`;
+          `<span class="delta ${c.v}">${esc(fmtDelta(c.delta, m))}</span>` +
+          (r ? `<span class="rating ${TONE[r.label]}" title="Published benchmark: ${esc(D.reference)}">${esc(r.label)} · ${esc(r.band)}</span>` : "") +
+          `</button></td>`;
       }
       html += `</tr>`;
     }

@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.14.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.15.0
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.14.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.15.0
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -227,6 +227,15 @@ Every run writes a folder under `.cq/runs/<UTC time>_<sha>/`:
 commit adds a point rather than replacing the first. `.cq/` ignores itself, so nothing cq writes
 ever shows up in `git status`.
 
+**Is that number good?** The report's **Rating** column and the dashboard rate the metrics that
+have a published standard in cq's own unit, from Excellent to Critical, with the band as its
+source names it: coverage (Google's 60/75/90), worst and mean cyclomatic complexity (radon's
+ranks), maintainability (radon and Visual Studio), duplicated lines (SIG's bands) and mutation
+score (Stryker's defaults). Each target gets a **Grade**: the mean of its ratings, as SIG's
+maintainability model averages, rounded to the nearest label, with its weakest metric named. A metric with no published
+standard is left unrated. The sources, and how to read each scale, are in
+[skills/cq/references/benchmarks.md](skills/cq/references/benchmarks.md).
+
 **When numbers jump without a code change.** If a tool version or a config file changed since the
 previous snapshot, the report and the dashboard say so above the numbers. Typical causes are a cq
 upgrade, an edit to `[tool.ruff]`, or a bumped lockfile.
@@ -258,7 +267,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.14.0"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.15.0"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -290,7 +299,8 @@ or, in Claude Code:
   first snapshot.
 - **`/cq`** (in full `/cq:cq`, plugin and skill) runs cq and explains the result. It traces each
   regression to the commit that caused it, writes an analysis onto the dashboard, and ranks what to
-  fix next.
+  fix next. The analysis rates each app against the published benchmarks, names its readiness
+  (cq's own classification, said as such) and sets measurable targets.
   `/cq report`, `/cq backfill <since>` and `/cq gate` work too.
 - **`/improve-code-quality`** improves the repo in rounds, on its own branch: measure with cq, fix,
   review the fixes, fix what the review finds, test, commit, until the stop rule you pick. It asks
@@ -434,7 +444,7 @@ version all of them use at once. Before you upgrade:
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.14.0    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.15.0    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

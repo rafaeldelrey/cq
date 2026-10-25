@@ -31,7 +31,11 @@ repo has never been set up, run `/setup-cq` first.
 4. **Write `runs/<run>/analysis.md`.** It is shown at the top of the dashboard. Keep to this shape, short and specific:
    ```markdown
    ## Verdict
-   One or two sentences: better, worse or flat since the previous snapshot and over 30 days, and the one thing that matters most.
+   One or two sentences: better, worse or flat since the previous snapshot and over 30 days, and the one thing that matters most. Then each target's grade and its weakest metric, as the report gives them.
+
+   ## Assessment
+   - **<target> <metric>** <value>: <label> (<band>, <source>). <where the repo's own bar sits against it>.
+   - **<target> readiness:** <class>, <the grade and any blocker that set it>. cq's own classification.
 
    ## Worse
    - **<target> <metric>** <before> → <after>: <cause, commit/PR>. <what would fix it>.
@@ -40,9 +44,16 @@ repo has never been set up, run `/setup-cq` first.
    - **<target> <metric>** <before> → <after>: <cause>.
 
    ## Next
-   1. <the highest-value fix, with the file or function>
+   1. **<High | Medium | Low>** <the highest-value fix, with the file or function>
    2. …  (three at most, ranked by value per effort)
+
+   ## Targets
+   - <metric>: <now> → <goal>, <why that goal: the next band's cut point and its source, or the repo's bar>.
    ```
+   - **Rate against published benchmarks** with [references/benchmarks.md](references/benchmarks.md). The report's Rating column and Grade line are cq's own computation of it: quote them, and name the source in the same sentence. A metric the report leaves unrated has no published standard: judge it by its trend and the repo's bar, never by an invented band.
+   - **Readiness** is one of Enterprise grade, Production ready, Development stage or Prototype, from the grade and the blockers in the reference. No published standard exists: say it is cq's classification.
+   - **Risk on Next:** High is production stability or security, Medium is velocity and maintainability, Low is polish.
+   - **Targets:** up to three, each measurable by a metric cq reports.
    - Size every change ("+3 functions over the CC limit", "−0.4 points of coverage"). Small deltas matter: don't call them noise unless the history shows that metric moves that much from run to run.
    - Dead code at 60% confidence is a candidate list, not a finding: check one before calling it dead (web routes, model fields and framework hooks are called by name).
    - A regression that would fail a gate the repo runs (a coverage floor, the CC limit) goes first.

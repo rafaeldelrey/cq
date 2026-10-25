@@ -4,6 +4,33 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.15.0] - 2026-10-24
+
+### Added
+
+- **Ratings against published benchmarks.** The report's metrics table has a **Rating** column,
+  and the dashboard a label on each rated metric: Excellent, Good, Fair, Poor or Critical, with
+  the band as its source names it ("Fair · radon C"). Only metrics with a published standard in
+  cq's own unit are rated:
+  - coverage, by the Google Testing Blog's 60 / 75 / 90 (2020), with SIG's lowest band under 20;
+  - worst and mean cyclomatic complexity, by radon's ranks;
+  - the maintainability index, by radon's ranks (Visual Studio's 20 / 10 on the same 0–100 scale);
+  - duplicated lines, by SIG's bands (3 / 5 / 10 / 20%);
+  - mutation score, by Stryker's default thresholds (80 / 60).
+- **A grade per target**: the mean of its ratings, as SIG's maintainability model averages, rounded
+  to the nearest label (half up), with the weakest rated metric named. A target with fewer than two rated metrics has
+  none.
+- **`skills/cq/references/benchmarks.md`:** every band with its primary source, the scales that
+  circulate in another unit (the original 0–171 maintainability index), the metrics with no
+  published standard, SIG's current risk-profile limits, and the ESA Python Coding Rules as a
+  stricter profile.
+- **`/cq`'s analysis** grades each app, rates its headline metrics with their sources, names a
+  readiness class (cq's own, said as such), tags each next step High, Medium or Low, and sets up
+  to three measurable targets.
+
+Ratings are computed when a report renders: the snapshot, the history files and the finding keys
+don't change, and older runs render with ratings too.
+
 ## [0.14.0] - 2026-10-24
 
 ### Added

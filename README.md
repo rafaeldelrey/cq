@@ -232,7 +232,7 @@ have a published standard in cq's own unit, from Excellent to Critical, with the
 source names it: coverage (Google's 60/75/90), worst and mean cyclomatic complexity (radon's
 ranks), maintainability (radon and Visual Studio), duplicated lines (SIG's bands) and mutation
 score (Stryker's defaults). Each target gets a **Grade**: the mean of its ratings, as SIG's
-maintainability model averages, rounded down, with its weakest metric named. A metric with no published
+maintainability model averages, rounded to the nearest label, with its weakest metric named. A metric with no published
 standard is left unrated. The sources, and how to read each scale, are in
 [skills/cq/references/benchmarks.md](skills/cq/references/benchmarks.md).
 

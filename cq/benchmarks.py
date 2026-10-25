@@ -146,8 +146,10 @@ class Grade:
 
 
 def grade(target: dict) -> Grade | None:
-    """One target's grade: the mean of its ratings, as SIG's model averages, rounded down so a grade
-    never reads better than its ratings do.
+    """One target's grade: the mean of its ratings, as SIG's model averages, rounded half up.
+
+    Not rounded down: maintainability's and mutation score's best band is Good, so a mean rounded
+    down could never reach Excellent (#77).
 
     It needs two rated metrics at least: one rating is that metric's, not a grade.
     """
@@ -156,4 +158,4 @@ def grade(target: dict) -> Grade | None:
         return None
     mean = sum(r.score for _, r in rated) / len(rated)
     weakest, weakest_rating = min(rated, key=lambda mr: mr[1].score)
-    return Grade(LABELS[int(mean) - 1], len(rated), weakest, weakest_rating)
+    return Grade(LABELS[int(mean + 0.5) - 1], len(rated), weakest, weakest_rating)

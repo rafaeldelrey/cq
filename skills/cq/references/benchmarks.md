@@ -102,7 +102,7 @@ cq's `mutation` collector reports the share of judged mutants the tests killed.
 
 ## The overall grade
 
-cq grades each target by averaging its ratings (Excellent 5 … Critical 1), as SIG's model averages its scores, and rounds the mean down to a whole label, so a grade never reads better than its ratings do (rounding down is cq's choice). The weakest rated metric is named with it. It needs two rated metrics at least. Each rated metric counts once, so worst and mean complexity count as two.
+cq grades each target by averaging its ratings (Excellent 5 … Critical 1), as SIG's model averages its scores, and rounds the mean to the nearest label, half up (4.5 is Excellent). Not down: maintainability's and mutation score's best band is Good, so a mean rounded down could never reach Excellent. The weakest rated metric is named with it. It needs two rated metrics at least. Each rated metric counts once, so worst and mean complexity count as two.
 
 Grades elsewhere, for context, not to be mixed with cq's:
 

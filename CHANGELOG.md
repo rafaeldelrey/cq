@@ -18,7 +18,7 @@ numbers, and the trend shows a step there.
   - duplicated lines, by SIG's bands (3 / 5 / 10 / 20%);
   - mutation score, by Stryker's default thresholds (80 / 60).
 - **A grade per target**: the mean of its ratings, as SIG's maintainability model averages, rounded
-  down, with the weakest rated metric named. A target with fewer than two rated metrics has
+  to the nearest label (half up), with the weakest rated metric named. A target with fewer than two rated metrics has
   none.
 - **`skills/cq/references/benchmarks.md`:** every band with its primary source, the scales that
   circulate in another unit (the original 0–171 maintainability index), the metrics with no

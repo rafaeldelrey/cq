@@ -136,7 +136,7 @@ def target(coverage: float | None = None, worst: float | None = None, mean: floa
     return out
 
 
-def test_the_grade_is_the_truncated_mean_and_names_the_weakest_metric() -> None:
+def test_the_grade_is_the_rounded_mean_and_names_the_weakest_metric() -> None:
     found = benchmarks.grade(target(coverage=97, worst=15, mean=4.2))  # 5, 3, 5: mean 4.33
     assert found is not None
     assert (found.label, found.rated) == ("Good", 3)
@@ -146,10 +146,21 @@ def test_the_grade_is_the_truncated_mean_and_names_the_weakest_metric() -> None:
     )
 
 
-def test_the_grade_truncates_rather_than_rounds() -> None:
+def test_the_grade_rounds_half_up() -> None:
     found = benchmarks.grade(target(coverage=97, worst=25))  # 5 and 2: mean 3.5
     assert found is not None
-    assert found.label == "Fair"
+    assert found.label == "Good"
+    below = benchmarks.grade(target(coverage=97, worst=25, mean=25))  # 5, 2, 2: mean 3
+    assert below is not None
+    assert below.label == "Fair"
+
+
+def test_a_best_band_of_good_still_reaches_excellent() -> None:
+    measured = target(coverage=97, worst=5, mean=4)  # 5, 5, 5
+    measured["maintainability"] = {"weighted_mean": 55.0}  # radon A, whose label is Good: 4
+    found = benchmarks.grade(measured)
+    assert found is not None
+    assert found.label == "Excellent"  # 4.75
 
 
 def test_one_rated_metric_is_no_grade() -> None:
@@ -218,7 +229,7 @@ def test_a_snapshot_without_the_newer_metrics_rates_what_it_has(tmp_path: Path) 
     text = render_md.render(history_of(tmp_path, snapshot("2026-09-01", "aaa", measured)))
     assert "| Coverage | 70.00% | Fair · Google: acceptable |" in text
     assert "| Maintainability index (line-weighted) | 55 | Good · radon A |" in text
-    assert "**Grade: Fair**, the mean of 2 rated metrics; weakest: Coverage, Fair" in text  # 3 and 4: 3.5, truncated
+    assert "**Grade: Good**, the mean of 2 rated metrics; weakest: Coverage, Fair" in text  # 3 and 4: 3.5
 
 
 def test_the_dashboard_carries_each_rating_and_the_grade(tmp_path: Path) -> None:

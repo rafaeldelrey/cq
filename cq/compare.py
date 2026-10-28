@@ -21,7 +21,8 @@ CROSS_FILE = {"pyscn", "fallow"}
 # the branch left unchanged (docstrings and comments aside) existed on the base, whatever its key says.
 # A docstring added at a clone's first line changes that line's fingerprint, so the key alone calls it new.
 TREE_ONLY = {"pyscn"}
-COPY_AT = re.compile(r"(\S+):(\d+)(?: and |$)")
+# pyscn's message names both copies: "8 lines 90% similar: <file>:<line> and <file>:<line>".
+COPIES = re.compile(r"similar: (.+):(\d+) and (.+):(\d+)$")
 
 
 def touches(f: Finding, changed: set[str]) -> bool:
@@ -74,7 +75,8 @@ def new_compared(
 def in_unchanged_code(f: Finding, changed: set[str], unchanged: dict[str, list[Span]]) -> bool:
     """Whether a tree-only finding's copies all sit in code the branch left as it was: in a file it
     didn't change, or inside a symbol whose tree is the same on both sides."""
-    copies = COPY_AT.findall(f["message"]) if f["tool"] in TREE_ONLY else []
+    m = COPIES.search(f["message"]) if f["tool"] in TREE_ONLY else None
+    copies = [(m[1], m[2]), (m[3], m[4])] if m else []
     return bool(copies) and all(
         path not in changed or inside(int(line), unchanged.get(path, [])) for path, line in copies
     )

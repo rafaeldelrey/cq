@@ -144,3 +144,13 @@ def test_a_clone_in_unchanged_code_is_old_even_with_a_new_key() -> None:
     assert compare.new_compared(head, base, changed, unchanged={"app/a.py": [(4, 12)]}) == []
     # a copy in changed code still counts
     assert len(compare.new_compared(head, base, changed, unchanged={"app/a.py": [(20, 30)]})) == 1
+
+
+def test_a_clone_path_with_spaces_is_read_whole() -> None:
+    clone = {"a": "my app/a.py:5", "b": "my app/b.py:40", "at": "x", "lines": 8, "similarity": 0.9, "type": 2}
+    head = {"targets": {"app": {"pyscn": {"items": [clone]}}}, "errors": {}}
+    base = {"targets": {"app": {"pyscn": {"items": []}}}, "errors": {}}
+    changed = {"my app/a.py", "my app/b.py"}
+    assert len(compare.new_compared(head, base, changed)) == 1  # not mistaken for untouched "app/a.py"
+    unchanged = {"my app/a.py": [(1, 9)], "my app/b.py": [(35, 50)]}
+    assert compare.new_compared(head, base, changed, unchanged=unchanged) == []

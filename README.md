@@ -399,8 +399,8 @@ app is measured, but its vulnerability audit is reported as skipped.
 | Source | How "new" is decided |
 |---|---|
 | `qlty check --upstream` (ruff, radarlint, bandit, shellcheck, hadolint, zizmor, osv-scanner) | changed lines only |
-| `qlty smells --upstream` | its span covers a changed line |
-| aislop, vale, pyscn, fallow, semgrep | run on the branch and the base; the finding's stable key isn't in the base's, in a changed file |
+| `qlty smells --upstream` | its span covers a changed line; lines inside a Python function or class whose syntax tree is unchanged (only docstrings or comments edited) don't count |
+| aislop, vale, pyscn, fallow, semgrep | run on the branch and the base; the finding's stable key isn't in the base's, in a changed file; a pyscn clone whose copies all sit in unchanged code isn't new |
 | interrogate (docstrings) | a function, class or module without a docstring that the branch adds or changes |
 | betterleaks | the branch's own commits |
 | ratchets | suppressions, cognitive complexity, import contracts, deptry, and critical/high vulnerabilities when a lockfile changed: worse than the base |

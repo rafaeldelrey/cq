@@ -4,6 +4,23 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.15.1] - 2026-10-28
+
+### Fixed
+
+- **The gate no longer calls a function's old findings new when only its docstring or comments
+  changed** (#79). It decided "changed" by line, so a docstring added inside a function overlapped
+  the function's whole span, and every smell, complexity count or clone it already had came back
+  as new and blocking. Now a Python function or class whose syntax tree is the same on the base
+  and on HEAD, docstrings aside (comments never reach the tree), is unchanged:
+  - `qlty smells`: its lines don't count for the overlap;
+  - pyscn clones: one whose copies all sit in unchanged code, or in files the branch didn't
+    change, isn't new, even when the docstring changed its first line's fingerprint and so its key.
+
+  A code change in the symbol, a new symbol, a file that doesn't parse on either side and every
+  other language keep the line rule. The docstrings rule is unchanged: adding the docstring removes
+  its own finding.
+
 ## [0.15.0] - 2026-10-24
 
 ### Added

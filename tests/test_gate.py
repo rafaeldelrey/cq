@@ -234,7 +234,7 @@ def fake_run(
     """run_gate over stubbed git, line level, secrets and snapshots; the settings write under tmp_path."""
     answers = {("merge-base",): "basesha1234", ("rev-parse",): "head123"}
     use_git(lambda *a: answers.get(a[:1], ""))
-    monkeypatch.setattr(gate, "line_level", lambda ctx, base: found)
+    monkeypatch.setattr(gate, "line_level", lambda ctx, base, unchanged: found)
     monkeypatch.setattr(gate, "branch_secrets", lambda settings, base: [])
     return replace(SETTINGS, repo_root=tmp_path, data_dir=tmp_path / ".cq")
 

@@ -9,6 +9,9 @@ Four sources of findings, each one new on the branch by construction:
   house rules) run on the branch and on its base. A finding is new when its stable key is not in
   the base's, the same key logic as ``findings.jsonl``, and it lies in a file the branch changed.
 - **Secrets.** betterleaks over the branch's commits (``<base>..HEAD``).
+- **Docstring and comment edits.** A Python function or class whose syntax tree is the same on both
+  sides once docstrings are set aside (cq/symbols.py) is unchanged: its lines don't count for the
+  smells' overlap, and a pyscn clone whose copies all sit in unchanged code isn't new.
 - **Ratchets**, which may not get worse than the base: suppressions, cognitive complexity (no new
   function over the limit, none over it growing), broken import contracts, deptry issues, and
   critical or high vulnerabilities when a lockfile changed.
@@ -34,11 +37,12 @@ from cq.collectors.vale import EXTENSIONS
 from cq.compare import COMPARED, base_errors, new_compared, partial_scans, ratchets, renamed
 from cq.config import GateSettings, Settings, Target, ensure_data_dir
 from cq.context import Context
-from cq.diff import changed_lines, diff_lines, diff_status, overlaps
+from cq.diff import changed_lines, diff_lines, diff_status, overlaps, unchanged_code
 from cq.finding import Finding, Source
 from cq.findings import write_jsonl
 from cq.proc import ToolError
 from cq.runner import git, snapshot
+from cq.symbols import Span, outside
 from cq.toolconfig import gitleaks_config
 
 RATCHETS = ("suppressions", "cognitive", "imports", "dependencies")
@@ -65,9 +69,11 @@ def lock_changed(targets: tuple[Target, ...], changed: list[str]) -> set[str]:
     return {t.name for t in targets if t.kind != "repo" and any(t.repo_path(lock) in changed for lock in LOCKFILES)}
 
 
-def line_level(ctx: Context, base_sha: str) -> list[Finding]:
-    """qlty check and qlty smells on the lines the branch changed."""
-    lines = changed_lines(base_sha)
+def line_level(ctx: Context, base_sha: str, unchanged: dict[str, list[Span]] | None = None) -> list[Finding]:
+    """qlty check and qlty smells on the lines the branch changed. A smell counts only on lines
+    outside the ``unchanged`` symbols: a docstring or a comment edited inside a function doesn't make
+    its old smells new."""
+    lines = outside(changed_lines(base_sha), unchanged or {})
     check = qlty.run_sarif(
         ctx, ["check", "--upstream", base_sha, "--skip", "trufflehog", "--no-fail", "--no-progress"], "gate-check"
     )
@@ -173,6 +179,7 @@ def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: 
     base_sha = git("merge-base", base, "HEAD")
     head_short = git("rev-parse", "--short", "HEAD")
     changed, touched, renames = diff_status(base_sha)
+    unchanged = unchanged_code(base_sha, changed, renames)
     names = affected(settings.targets, touched)  # a deletion can break a contract or a dependency
     locks = lock_changed(settings.targets, touched)  # a deleted lockfile is a change too
     out_dir = settings.runs_dir / f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}_gate_{head_short}"
@@ -182,7 +189,7 @@ def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: 
     ctx = Context(target=repo, checkout=settings.repo_root, raw_dir=out_dir, settings=settings)
 
     errors: dict[str, str] = {}
-    found = attempt("qlty", errors, line_level, ctx, base_sha) + attempt(
+    found = attempt("qlty", errors, line_level, ctx, base_sha, unchanged) + attempt(
         "betterleaks", errors, branch_secrets, settings, base_sha
     )
     if names:
@@ -192,7 +199,7 @@ def run_gate(settings: Settings, gate: GateSettings, base: str, *, report_only: 
         base_now = renamed(base_snap, renames)  # the base as if its renamed files already had their new paths
         added, removed = diff_lines(base_sha)
         removed = {renames.get(path, path): n for path, n in removed.items()}
-        found += new_compared(head, base_now, set(changed), lines=added, removed=removed)
+        found += new_compared(head, base_now, set(changed), lines=added, removed=removed, unchanged=unchanged)
         found += ratchets(head, base_now, locks)
         base_partial = {f"base: {k}": v for k, v in partial_scans(base_snap).items()}
         errors |= head["errors"] | partial_scans(head) | base_errors(base_snap) | base_partial

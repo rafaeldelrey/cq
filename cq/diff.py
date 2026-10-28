@@ -1,8 +1,11 @@
 """What a branch changed, from git: the files, the renames, and the lines on each side."""
 
 import re
+from pathlib import Path
 
+from cq.proc import run
 from cq.runner import git
+from cq.symbols import Span, unchanged_spans
 
 HUNK_SIDES = re.compile(r"^@@ -(?P<old>\d+)(?:,(?P<old_count>\d+))? \+(?P<new>\d+)(?:,(?P<new_count>\d+))? @@")
 
@@ -61,3 +64,23 @@ def overlaps(row: dict, lines: dict[str, set[int]]) -> bool:
     start = row.get("start_line") or row.get("line") or 0
     end = row.get("end_line") or start
     return any(n in lines.get(row["file"], set()) for n in range(start, end + 1))
+
+
+def unchanged_code(base_sha: str, changed: list[str], renames: dict[str, str]) -> dict[str, list[Span]]:
+    """For each Python file the branch changed, HEAD's spans of the functions and classes it left as
+    they were (the same tree, docstrings and comments aside). A file new on the branch has none."""
+    sources = {new: old for old, new in renames.items()}
+    spans: dict[str, list[Span]] = {}
+    for path in changed:
+        old = sources.get(path, path)
+        if not path.endswith(".py") or not git("ls-tree", "--name-only", base_sha, "--", old):
+            continue
+        found = unchanged_spans(git_text(base_sha, old), git_text("HEAD", path))
+        if found:
+            spans[path] = found
+    return spans
+
+
+def git_text(rev: str, path: str) -> str:
+    """A file's text at a revision, unstripped: its line numbers must match the diff's."""
+    return run(["git", "show", f"{rev}:{path}"], Path.cwd())

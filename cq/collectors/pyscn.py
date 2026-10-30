@@ -42,6 +42,7 @@ def collect(ctx: Context) -> dict:
                 "a": f"{ctx.rel(p['clone1']['location']['file_path'], ctx.checkout)}:{p['clone1']['location']['start_line']}",
                 "b": f"{ctx.rel(p['clone2']['location']['file_path'], ctx.checkout)}:{p['clone2']['location']['start_line']}",
                 "lines": p["clone1"].get("line_count"),
+                "b_lines": p["clone2"].get("line_count"),
                 "similarity": round(p.get("similarity", 0), 2),
                 "type": p.get("type"),
                 "at": "~".join(

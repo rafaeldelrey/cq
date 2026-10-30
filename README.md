@@ -32,7 +32,7 @@ analysis.
 **From the terminal:**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.15.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.15.1
 cq doctor                    # which measuring tools are missing
 cq setup                     # installs them, asking first
 cd my-repo && cq init        # settings, qlty's config, and the Claude Code plugin if you want it
@@ -71,7 +71,7 @@ You do this once per machine. It works on macOS and Linux.
 **Step 1: install cq.**
 
 ```bash
-uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.15.0
+uv tool install git+ssh://git@github.com/rafaeldelrey/cq@v0.15.1
 ```
 
 This puts the `cq` command on your PATH; check it with `cq --version`. Use the newest tag
@@ -267,7 +267,7 @@ quality-gate:
       env:
         GH_TOKEN: ${{ github.token }}      # qlty's release download and attestation check
       run: |
-        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.15.0"
+        uv tool install "git+https://x-access-token:${{ secrets.CQ_READ_TOKEN }}@github.com/rafaeldelrey/cq@v0.15.1"
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"   # Homebrew is preinstalled, off the PATH
         cq setup --yes
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -399,8 +399,8 @@ app is measured, but its vulnerability audit is reported as skipped.
 | Source | How "new" is decided |
 |---|---|
 | `qlty check --upstream` (ruff, radarlint, bandit, shellcheck, hadolint, zizmor, osv-scanner) | changed lines only |
-| `qlty smells --upstream` | its span covers a changed line |
-| aislop, vale, pyscn, fallow, semgrep | run on the branch and the base; the finding's stable key isn't in the base's, in a changed file |
+| `qlty smells --upstream` | its span covers a changed line; lines inside a Python function or class whose syntax tree is unchanged (only docstrings or comments edited) don't count |
+| aislop, vale, pyscn, fallow, semgrep | run on the branch and the base; the finding's stable key isn't in the base's, in a changed file; a pyscn clone whose copies all sit in unchanged code isn't new |
 | interrogate (docstrings) | a function, class or module without a docstring that the branch adds or changes |
 | betterleaks | the branch's own commits |
 | ratchets | suppressions, cognitive complexity, import contracts, deptry, and critical/high vulnerabilities when a lockfile changed: worse than the base |
@@ -444,7 +444,7 @@ version all of them use at once. Before you upgrade:
 
 ```bash
 cq --version                                                        # what you have
-uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.15.0    # move to the newest tag
+uv tool install --force git+ssh://git@github.com/rafaeldelrey/cq@v0.15.1    # move to the newest tag
 uv tool uninstall cq                                                # remove it
 ```
 

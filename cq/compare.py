@@ -6,6 +6,7 @@ import re
 from cq.diff import overlaps
 from cq.finding import Finding, Source
 from cq.findings import from_snapshot, mark_new
+from cq.symbols import Span, covered
 
 COMPARED = ("aislop", "vale", "pyscn", "fallow", "semgrep", "docstrings")
 # A symbol without a docstring counts when the branch adds it or changes a line in it; an untouched
@@ -16,6 +17,12 @@ VULN_GRADED = [("vulnerabilities", "critical"), ("vulnerabilities", "high")]
 # Clones name a second file in their message: a clone of changed code counts even when its first
 # file is the unchanged one.
 CROSS_FILE = {"pyscn", "fallow"}
+# Tools that read only the Python syntax tree: a finding of theirs whose code sits wholly in symbols
+# the branch left unchanged (docstrings and comments aside) existed on the base, whatever its key says.
+# A docstring added at a clone's first line changes that line's fingerprint, so the key alone calls it new.
+TREE_ONLY = {"pyscn"}
+# pyscn's message names both copies: "8 lines 90% similar: <file>:<line> and <file>:<line>".
+COPIES = re.compile(r"similar: (.+):(\d+) and (.+):(\d+)$")
 
 
 def touches(f: Finding, changed: set[str]) -> bool:
@@ -43,6 +50,7 @@ def new_compared(
     renames: dict[str, str] | None = None,
     lines: dict[str, set[int]] | None = None,
     removed: dict[str, set[int]] | None = None,
+    unchanged: dict[str, list[Span]] | None = None,
 ) -> list[Finding]:
     """Compared tools' findings whose key the base lacks, in changed files.
 
@@ -50,13 +58,32 @@ def new_compared(
     A tool that failed on the base is not compared at all: run_gate lists it as a base error.
     A symbol missing its docstring also counts when the branch changed a line inside it: a line it
     has on HEAD (``lines``), or one it had on the base and lost (``removed``, by base path, judged
-    against the symbol's span on the base).
+    against the symbol's span on the base). A tree-only finding wholly in ``unchanged`` code is old.
     """
     base_now = renamed(base, renames or {})
     marked = mark_new(from_snapshot(head), base_now)
     on_base = {f["key"]: f for f in from_snapshot(base_now)}
     removed_now = {(renames or {}).get(path, path): n for path, n in (removed or {}).items()}
-    return [f for f in marked if counted(f, base, changed, lines or {}, on_base, removed_now)]
+    return [
+        f
+        for f in marked
+        if counted(f, base, changed, lines or {}, on_base, removed_now)
+        and not in_unchanged_code(f, changed, unchanged or {})
+    ]
+
+
+def in_unchanged_code(f: Finding, changed: set[str], unchanged: dict[str, list[Span]]) -> bool:
+    """Whether a tree-only finding's copies all sit, every line of them, in code the branch left as
+    it was: in a file it didn't change, or inside one symbol whose tree is the same on both sides.
+    A finding whose copies' extent isn't known (no lengths) is never set aside."""
+    m = COPIES.search(f["message"]) if f["tool"] in TREE_ONLY else None
+    lengths = f.get("copy_lines")
+    if not m or not isinstance(lengths, list) or len(lengths) != 2 or not all(isinstance(n, int) for n in lengths):
+        return False
+    copies = [(m[1], int(m[2]), lengths[0]), (m[3], int(m[4]), lengths[1])]
+    return all(
+        path not in changed or covered(start, start + n - 1, unchanged.get(path, [])) for path, start, n in copies
+    )
 
 
 def counted(

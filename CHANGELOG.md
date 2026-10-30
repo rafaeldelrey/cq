@@ -4,6 +4,23 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.15.2] - 2026-10-30
+
+### Changed
+
+- **mutmut 3.8.0 → 3.8.1** (#81). 3.8.0's pytest harness reads `Item._nodeid`, which pytest 9.2
+  removed, so on pytest 9.2 its stats step crashed and no mutant was checked. 3.8.1 reads
+  `Item.nodeid`. Mutation scores move back from nothing to a real number on such projects.
+
+### Fixed
+
+- **A mutation run that checked none of its mutants is a tool error, not a score** (#81). When
+  mutmut generated mutants but every one stayed "not checked" (its stats step failed), cq recorded
+  killed 0, survived 0 and no score, which the report showed as zero surviving mutants. It now
+  records the mutation tool under the snapshot's errors, with the tail of mutmut's output, so the
+  gate and a nightly run see a tool that didn't run. A run with some unchecked mutants still
+  scores the ones it judged.
+
 ## [0.15.1] - 2026-10-28
 
 ### Fixed

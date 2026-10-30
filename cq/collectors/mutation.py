@@ -15,7 +15,7 @@ from pathlib import Path
 
 from cq.config import PINS
 from cq.context import Context
-from cq.proc import run, uv_app
+from cq.proc import ToolError, run, uv_app
 from cq.tally import ranked
 
 KINDS = ("python",)
@@ -25,6 +25,8 @@ COPY_IGNORE = shutil.ignore_patterns(
 )
 RESULT = re.compile(r"^\s*(?P<name>\S+__mutmut_\d+): (?P<status>.+)$")
 SHOW_LIMIT = 25
+UNCHECKED = "not checked"
+TAIL = 1500  # characters of mutmut's run output carried in the error
 
 
 def mutmut(workspace: Path, *args: str) -> list[str]:
@@ -49,6 +51,17 @@ def function_of(name: str) -> str:
     return f"{module}.{func.removeprefix('x_').replace('ǁ', '.')}"
 
 
+def check_ran(statuses: dict[str, str], log: str) -> None:
+    """Refuse a run that generated mutants but checked none of them.
+
+    That is mutmut failing, not a result: its stats step crashed (a pytest it doesn't support, a
+    test collection error) and every mutant stayed "not checked". Reported as a score it would read
+    as zero survivors.
+    """
+    if statuses and all(status == UNCHECKED for status in statuses.values()):
+        raise ToolError(f"mutmut checked none of its {len(statuses)} mutants: {log[-TAIL:].strip()}")
+
+
 def collect(ctx: Context) -> dict:
     """Mutate the configured files, run the tests, count killed and surviving mutants."""
     paths = list(ctx.target.mutation_paths)
@@ -63,6 +76,7 @@ def collect(ctx: Context) -> dict:
         results = run(mutmut(workspace, "results", "--all", "true"), workspace)
         (ctx.raw_dir / "mutmut-results.txt").write_text(results)
         statuses = {m["name"]: m["status"].strip() for m in map(RESULT.match, results.splitlines()) if m}
+        check_ran(statuses, log)
         survivors = [n for n, s in statuses.items() if s == "survived"]
         diffs = {n: run(mutmut(workspace, "show", n), workspace).strip() for n in survivors[:SHOW_LIMIT]}
     counts: dict[str, int] = {}  # in the order mutmut reports them, unlike the ranked by_function

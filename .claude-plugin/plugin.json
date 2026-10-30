@@ -1,6 +1,6 @@
 {
   "name": "cq",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "Code-quality snapshots, trends and a PR gate for a repository: /cq measures and writes the analysis, /setup-cq sets a repo up for cq, /improve-code-quality improves a repo in measured rounds up to a ready PR.",
   "author": {
     "name": "Rafael Del Rey"

@@ -451,6 +451,45 @@ def test_mutation_counts_survivors_by_function(tmp_path: Path, monkeypatch: pyte
     assert result["items"][0]["diff"] == "- return 1\n+ return 2"
 
 
+def _mutation_ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run_log: str, results: str) -> Context:
+    """A target with one mutated file, mutmut's run and results outputs stubbed."""
+    (tmp_path / "apps/demo/pkg").mkdir(parents=True)
+    (tmp_path / "apps/demo/pkg/mod.py").write_text("def f():\n    return 1\n")
+    (tmp_path / "apps/demo/pyproject.toml").write_text("[project]\nname = 'demo'\n")
+
+    def fake_run(cmd: list[str], cwd: Path, ok_codes: tuple[int, ...] = (0,)) -> str:
+        if "results" in cmd:
+            return results
+        return run_log if "run" in cmd else ""
+
+    monkeypatch.setattr(mutation, "run", fake_run)
+    ctx = make_ctx(tmp_path)
+    return replace(ctx, target=replace(ctx.target, mutation_paths=("pkg/mod.py",)))
+
+
+def test_a_mutation_run_that_checked_nothing_is_a_tool_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    log = "AttributeError: 'Function' object has no attribute '_nodeid'\nfailed to collect stats. runner returned 1\n"
+    results = "    pkg.mod.x_f__mutmut_1: not checked\n    pkg.mod.x_f__mutmut_2: not checked\n"
+    ctx = _mutation_ctx(tmp_path, monkeypatch, log, results)
+    with pytest.raises(ToolError, match=r"(?s)checked none of its 2 mutants: .*failed to collect stats") as err:
+        mutation.collect(ctx)
+    assert "_nodeid" in str(err.value)
+
+
+def test_a_mutation_run_with_some_unchecked_mutants_still_scores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    results = "    pkg.mod.x_f__mutmut_1: killed\n    pkg.mod.x_f__mutmut_2: not checked\n"
+    result = mutation.collect(_mutation_ctx(tmp_path, monkeypatch, "", results))
+    assert (result["mutants"], result["killed"], result["score"]) == (2, 1, 100.0)
+    assert result["by_status"] == {"killed": 1, "not checked": 1}
+
+
+def test_a_mutation_run_with_no_mutants_is_not_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    result = mutation.collect(_mutation_ctx(tmp_path, monkeypatch, "", ""))
+    assert (result["mutants"], result["score"]) == (0, None)
+
+
 def test_workflow_linters_skip_a_repo_without_workflows(tmp_path: Path) -> None:
     ctx = make_ctx(tmp_path, kind="repo")
     assert scripts.actionlint(ctx) == {"skipped": "no workflows"}

@@ -14,11 +14,12 @@ numbers, and the trend shows a step there.
   as new and blocking. Now a Python function or class whose syntax tree is the same on the base
   and on HEAD, docstrings aside (comments never reach the tree), is unchanged:
   - `qlty smells`: its lines don't count for the overlap;
-  - pyscn clones: one whose copies all sit in unchanged code, or in files the branch didn't
-    change, isn't new, even when the docstring changed its first line's fingerprint and so its key.
+  - pyscn clones: one whose copies lie, every line of both, in unchanged code (or in files the
+    branch didn't change) isn't new, even when the docstring changed its first line's fingerprint
+    and so its key. A clone from a snapshot without both copies' lengths is never set aside.
 
-  A code change in the symbol, a new symbol, a file that doesn't parse on either side and every
-  other language keep the line rule. The docstrings rule is unchanged: adding the docstring removes
+  A code change in the symbol, a new symbol, a file that doesn't parse or decode on either side
+  (sources are read in their declared encoding) and every other language keep the line rule. The docstrings rule is unchanged: adding the docstring removes
   its own finding.
 
 ## [0.15.0] - 2026-10-24

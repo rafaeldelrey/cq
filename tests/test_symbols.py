@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from cq import compare, diff, gate, qlty, symbols
+from cq.proc import ToolError
 
 BASE = '''\
 import os
@@ -109,6 +110,37 @@ def test_a_file_that_does_not_parse_keeps_the_line_rule(repo: Path) -> None:
     assert symbols.outside(lines, unchanged) == lines
 
 
+LATIN1 = '# -*- coding: latin-1 -*-\n\n\ndef greet():\n    """Say it."""\n    return "olá"\n'.encode("latin-1")
+
+
+def test_a_source_in_its_declared_encoding_is_compared(repo: Path) -> None:
+    (repo / "l.py").write_bytes(LATIN1)
+    commit(repo, {}, "latin-1 file")
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True,
+                         text=True).stdout.strip()  # fmt: skip
+    (repo / "l.py").write_bytes(LATIN1.replace(b"Say it.", b"Say it in Portuguese."))
+    commit(repo, {}, "docstring")
+    changed, _, renames = diff.diff_status(sha)
+    assert diff.unchanged_code(sha, changed, renames) == {"l.py": [(4, 6)]}
+
+
+def test_a_source_that_does_not_decode_keeps_the_line_rule(repo: Path) -> None:
+    undecodable = b'def f():\n    """Doc."""\n    return "\xff\xfe"\n'  # no encoding declared, not UTF-8
+    (repo / "u.py").write_bytes(undecodable)
+    commit(repo, {}, "undecodable file")
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True,
+                         text=True).stdout.strip()  # fmt: skip
+    (repo / "u.py").write_bytes(undecodable.replace(b"Doc.", b"Docs."))
+    commit(repo, {}, "docstring")
+    changed, _, renames = diff.diff_status(sha)
+    assert diff.unchanged_code(sha, changed, renames) == {}  # no tree to compare: the line rule stands
+
+
+def test_a_missing_file_is_a_tool_error(repo: Path) -> None:
+    with pytest.raises(ToolError, match=r"git show HEAD:nope\.py exited"):
+        diff.git_text("HEAD", "nope.py")
+
+
 def test_a_name_defined_twice_is_never_unchanged() -> None:
     source = "def f():\n    return 1\n\n\ndef f():\n    return 2\n"
     assert symbols.unchanged_spans(source, source) == []
@@ -135,7 +167,8 @@ def test_a_docstring_edit_does_not_make_the_functions_old_smells_new(
 
 def test_a_clone_in_unchanged_code_is_old_even_with_a_new_key() -> None:
     def clone(at: str) -> dict:
-        return {"a": "app/a.py:5", "b": "app/b.py:40", "at": at, "lines": 8, "similarity": 0.9, "type": 2}
+        return {"a": "app/a.py:5", "b": "app/b.py:40", "at": at, "lines": 8, "b_lines": 8, "similarity": 0.9,
+                "type": 2}  # fmt: skip
 
     head = {"targets": {"app": {"pyscn": {"items": [clone("new-fingerprint")]}}}, "errors": {}}
     base = {"targets": {"app": {"pyscn": {"items": [clone("old-fingerprint")]}}}, "errors": {}}
@@ -146,11 +179,29 @@ def test_a_clone_in_unchanged_code_is_old_even_with_a_new_key() -> None:
     assert len(compare.new_compared(head, base, changed, unchanged={"app/a.py": [(20, 30)]})) == 1
 
 
+def test_a_clone_that_runs_past_the_unchanged_symbol_is_new() -> None:
+    clone = {"a": "app/a.py:5", "b": "app/b.py:40", "at": "x", "lines": 12, "b_lines": 12, "similarity": 0.9,
+             "type": 2}  # fmt: skip
+    head = {"targets": {"app": {"pyscn": {"items": [clone]}}}, "errors": {}}
+    base = {"targets": {"app": {"pyscn": {"items": []}}}, "errors": {}}
+    # it starts in the unchanged symbol (4, 8) but its lines 9 to 16 are outside it
+    assert len(compare.new_compared(head, base, {"app/a.py"}, unchanged={"app/a.py": [(4, 8)]})) == 1
+    assert compare.new_compared(head, base, {"app/a.py"}, unchanged={"app/a.py": [(4, 20)]}) == []
+
+
+def test_a_clone_without_both_lengths_is_never_set_aside() -> None:
+    clone = {"a": "app/a.py:5", "b": "app/b.py:40", "at": "x", "lines": 8, "similarity": 0.9, "type": 2}
+    head = {"targets": {"app": {"pyscn": {"items": [clone]}}}, "errors": {}}  # an older snapshot: no b_lines
+    base = {"targets": {"app": {"pyscn": {"items": []}}}, "errors": {}}
+    assert len(compare.new_compared(head, base, {"app/a.py"}, unchanged={"app/a.py": [(1, 50)]})) == 1
+
+
 def test_a_clone_path_with_spaces_is_read_whole() -> None:
-    clone = {"a": "my app/a.py:5", "b": "my app/b.py:40", "at": "x", "lines": 8, "similarity": 0.9, "type": 2}
+    clone = {"a": "my app/a.py:5", "b": "my app/b.py:40", "at": "x", "lines": 8, "b_lines": 8, "similarity": 0.9,
+             "type": 2}  # fmt: skip
     head = {"targets": {"app": {"pyscn": {"items": [clone]}}}, "errors": {}}
     base = {"targets": {"app": {"pyscn": {"items": []}}}, "errors": {}}
     changed = {"my app/a.py", "my app/b.py"}
     assert len(compare.new_compared(head, base, changed)) == 1  # not mistaken for untouched "app/a.py"
-    unchanged = {"my app/a.py": [(1, 9)], "my app/b.py": [(35, 50)]}
+    unchanged = {"my app/a.py": [(1, 13)], "my app/b.py": [(35, 50)]}
     assert compare.new_compared(head, base, changed, unchanged=unchanged) == []

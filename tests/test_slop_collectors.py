@@ -219,7 +219,7 @@ def test_pyscn_keeps_long_production_clones(tmp_path: Path, monkeypatch: pytest.
             "type": 2,
             "similarity": sim,
             "clone1": {"location": {"file_path": a, "start_line": 10}, "line_count": lines},
-            "clone2": {"location": {"file_path": b, "start_line": 40}},
+            "clone2": {"location": {"file_path": b, "start_line": 40}, "line_count": lines + 1},
         }
 
     out = {
@@ -236,6 +236,7 @@ def test_pyscn_keeps_long_production_clones(tmp_path: Path, monkeypatch: pytest.
     result = pyscn.collect(ctx)
     assert (result["clone_pairs"], result["duplication_percent"], result["low_cohesion_classes"]) == (1, 9.12, 1)
     assert result["items"][0]["a"] == "apps/demo/pkg/triage_a.py:10"
+    assert (result["items"][0]["lines"], result["items"][0]["b_lines"]) == (30, 31)
 
 
 def test_fallow_reads_dupes_and_health(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -580,6 +581,15 @@ def test_two_clone_pairs_between_the_same_files_get_distinct_keys() -> None:
     pair = {"b": "y.py:30", "lines": 8, "similarity": 0.9, "type": 2}
     items = [pair | {"a": "x.py:5", "at": "1~2"}, pair | {"a": "x.py:50", "at": "3~4"}]
     assert len({f["key"] for f in findings.extract("repo", "pyscn", {"items": items})}) == 2
+
+
+def test_a_clone_finding_carries_both_copies_lengths_when_known() -> None:
+    pair = {"a": "x.py:5", "b": "y.py:30", "at": "1~2", "lines": 8, "similarity": 0.9, "type": 2}
+    (old,) = findings.extract("repo", "pyscn", {"items": [pair]})
+    (new,) = findings.extract("repo", "pyscn", {"items": [pair | {"b_lines": 9}]})
+    assert "copy_lines" not in old
+    assert new["copy_lines"] == [8, 9]
+    assert new["key"] == old["key"]  # the key doesn't move
 
 
 def test_trufflehog_identity_is_a_hash_not_the_secret() -> None:

@@ -1,9 +1,10 @@
 """What a branch changed, from git: the files, the renames, and the lines on each side."""
 
 import re
+import subprocess
 from pathlib import Path
 
-from cq.proc import run
+from cq.proc import ToolError
 from cq.runner import git
 from cq.symbols import Span, unchanged_spans
 
@@ -81,6 +82,12 @@ def unchanged_code(base_sha: str, changed: list[str], renames: dict[str, str]) -
     return spans
 
 
-def git_text(rev: str, path: str) -> str:
-    """A file's text at a revision, unstripped: its line numbers must match the diff's."""
-    return run(["git", "show", f"{rev}:{path}"], Path.cwd())
+def git_text(rev: str, path: str) -> bytes:
+    """A file's bytes at a revision, undecoded: the parser reads the source's own encoding
+    declaration (PEP 263), and unstripped, so its line numbers match the diff's."""
+    proc = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=Path.cwd(), capture_output=True, check=False)
+    if proc.returncode:
+        raise ToolError(
+            f"git show {rev}:{path} exited {proc.returncode}: {proc.stderr.decode(errors='replace')[-1500:]}"
+        )
+    return proc.stdout

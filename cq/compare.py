@@ -6,7 +6,7 @@ import re
 from cq.diff import overlaps
 from cq.finding import Finding, Source
 from cq.findings import from_snapshot, mark_new
-from cq.symbols import Span, inside
+from cq.symbols import Span, covered
 
 COMPARED = ("aislop", "vale", "pyscn", "fallow", "semgrep", "docstrings")
 # A symbol without a docstring counts when the branch adds it or changes a line in it; an untouched
@@ -73,12 +73,16 @@ def new_compared(
 
 
 def in_unchanged_code(f: Finding, changed: set[str], unchanged: dict[str, list[Span]]) -> bool:
-    """Whether a tree-only finding's copies all sit in code the branch left as it was: in a file it
-    didn't change, or inside a symbol whose tree is the same on both sides."""
+    """Whether a tree-only finding's copies all sit, every line of them, in code the branch left as
+    it was: in a file it didn't change, or inside one symbol whose tree is the same on both sides.
+    A finding whose copies' extent isn't known (no lengths) is never set aside."""
     m = COPIES.search(f["message"]) if f["tool"] in TREE_ONLY else None
-    copies = [(m[1], m[2]), (m[3], m[4])] if m else []
-    return bool(copies) and all(
-        path not in changed or inside(int(line), unchanged.get(path, [])) for path, line in copies
+    lengths = f.get("copy_lines")
+    if not m or not isinstance(lengths, list) or len(lengths) != 2 or not all(isinstance(n, int) for n in lengths):
+        return False
+    copies = [(m[1], int(m[2]), lengths[0]), (m[3], int(m[4]), lengths[1])]
+    return all(
+        path not in changed or covered(start, start + n - 1, unchanged.get(path, [])) for path, start, n in copies
     )
 
 

@@ -153,7 +153,7 @@ def test_a_clone_partner_is_matched_by_path_not_substring() -> None:
 
 
 def test_a_clone_of_changed_code_counts_from_its_unchanged_side() -> None:
-    clone = {"a": "apps/app/app/old.py:3", "b": "apps/app/app/a.py:40", "at": "1~2", "lines": 8,
+    clone = {"a": "apps/app/app/old.py:3", "b": "apps/app/app/a.py:40", "at": "1~2", "lines": 8, "b_lines": 8,
              "similarity": 0.9, "type": 2}  # fmt: skip
     head = snap({"app": {"pyscn": {"items": [clone]}}})
     base = snap({"app": {"pyscn": {"items": []}}})

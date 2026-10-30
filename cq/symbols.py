@@ -11,7 +11,7 @@ Def = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
 Span = tuple[int, int]
 
 
-def unchanged_spans(base: str, head: str) -> list[Span]:
+def unchanged_spans(base: str | bytes, head: str | bytes) -> list[Span]:
     """HEAD's line spans of the symbols whose tree, docstrings aside, is the same in both sources.
 
     A source that doesn't parse on either side has none: its lines keep the plain line rule.
@@ -22,10 +22,11 @@ def unchanged_spans(base: str, head: str) -> list[Span]:
     return sorted(after[name][0] for name in after.keys() & before.keys() if after[name][1] == before[name][1])
 
 
-def symbols(source: str) -> dict[str, tuple[Span, str]] | None:
+def symbols(source: str | bytes) -> dict[str, tuple[Span, str]] | None:
     """Each function, method and class by qualified name: its span (decorators included) and its
-    tree without docstrings. None when the source doesn't parse. A name defined twice is left out:
-    nothing says which of its definitions is which."""
+    tree without docstrings. None when the source doesn't parse, its declared encoding included
+    (bytes are decoded the way Python would). A name defined twice is left out: nothing says which
+    of its definitions is which."""
     try:
         tree = ast.parse(source)
     except (SyntaxError, ValueError):  # ValueError: a null byte. Either way there is no tree to compare
@@ -81,3 +82,8 @@ def outside(lines: dict[str, set[int]], spans: dict[str, list[Span]]) -> dict[st
 def inside(line: int, spans: list[Span]) -> bool:
     """Whether a line falls in one of the spans."""
     return any(start <= line <= end for start, end in spans)
+
+
+def covered(first: int, last: int, spans: list[Span]) -> bool:
+    """Whether the lines ``first`` to ``last`` all fall in one of the spans."""
+    return any(start <= first and last <= end for start, end in spans)

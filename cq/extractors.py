@@ -306,7 +306,10 @@ def pyscn(src: Source, d: dict) -> Iterator[Finding]:
     pairs = [i | {"file": file_of(i["a"])} for i in d.get("items", [])]
     for i, symbol in numbered(pairs, lambda i: file_of(i["b"])):
         message = f"{i['lines']} lines {round(100 * i['similarity'])}% similar: {i['a']} and {i['b']}"
-        yield src.finding(f"clone-type-{i['type']}", "info", message, i["file"], symbol=symbol)
+        finding = src.finding(f"clone-type-{i['type']}", "info", message, i["file"], symbol=symbol)
+        if i.get("b_lines"):  # both copies' lengths, for the gate's unchanged-code check (older snapshots lack it)
+            finding["copy_lines"] = [i["lines"], i["b_lines"]]
+        yield finding
 
 
 def fallow(src: Source, d: dict) -> Iterator[Finding]:

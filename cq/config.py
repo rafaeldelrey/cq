@@ -36,7 +36,7 @@ PINS = {
     "pyscn": "pyscn==1.32.4",
     "fallow": "fallow@3.33.1",
     "cspell": "cspell@10.3.6",
-    "mutmut": "mutmut==3.8.0",
+    "mutmut": "mutmut==3.8.1",
     "deptry": "deptry==0.25.1",
 }
 

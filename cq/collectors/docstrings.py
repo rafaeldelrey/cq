@@ -40,6 +40,51 @@ def syntax_ends(path: Path) -> dict[int, tuple[int, int]]:
     }
 
 
+def decorator_name(node: ast.expr) -> str:
+    """A decorator's name, its last dotted part, bare or called: ``tool`` for ``@tool``,
+    ``@tool(...)`` and ``@pkg.tool(...)``; empty for anything else (a subscript, a lambda)."""
+    if isinstance(node, ast.Call):
+        node = node.func
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.Name):
+        return node.id
+    return ""
+
+
+def decorated(path: Path, names: tuple[str, ...]) -> set[int]:
+    """The ``def``/``class`` lines (interrogate's) of the symbols in a file that carry one of the
+    named decorators. Empty when no names are given, or the file can't be read or parsed."""
+    if not names:
+        return set()
+    try:
+        tree = ast.parse(path.read_text(errors="replace"))
+    except (OSError, SyntaxError, ValueError):  # degraded mode: the symbols stay listed, as without
+        # the setting, so an unparsable file never hides a gap.
+        return set()
+    kinds = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+    return {
+        n.lineno
+        for n in ast.walk(tree)
+        if isinstance(n, kinds) and any(decorator_name(d) in names for d in n.decorator_list)
+    }
+
+
+def without_decorated(items: list[dict], lines: Callable[[str], set[int]]) -> list[dict]:
+    """The items whose symbol carries none of the ignored decorators (``lines``: file → the def
+    lines that do). A module is never left out."""
+    skip: dict[str, set[int]] = {}
+    kept = []
+    for item in items:
+        if item["symbol"] != "(module)":
+            if item["file"] not in skip:
+                skip[item["file"]] = lines(item["file"])
+            if item["line"] in skip[item["file"]]:
+                continue
+        kept.append(item)
+    return kept
+
+
 def missing(out: str, full: Callable[[str], str], ends: Callable[[str], dict[int, tuple[int, int]]]) -> list[dict]:
     """The symbols interrogate marks MISSED, each with its file and the lines it spans, from the
     syntax tree (``ends``: def line → first decorator line, last line). A module has no span
@@ -112,11 +157,17 @@ def collect(ctx: Context) -> dict:
         if int(miss) > 0
     ]
     files.sort(key=lambda f: -f["missing"])
+    items = missing(out, full, lambda f: syntax_ends(ctx.checkout / f))
+    names = ctx.settings.docstring_ignore_decorators
+
+    def ignored(file: str) -> set[int]:
+        return decorated(ctx.checkout / file, names)
+
     return {
         "percent": percent,
         "total": total,
         "missing": missed,
         "covered": covered,
         "worst_files": ctx.cap(files, 15, "worst_files"),
-        "items": ctx.cap(worst_first(missing(out, full, lambda f: syntax_ends(ctx.checkout / f))), 200),
+        "items": ctx.cap(worst_first(without_decorated(items, ignored)), 200),
     }

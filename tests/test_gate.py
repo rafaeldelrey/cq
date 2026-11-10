@@ -466,3 +466,48 @@ def test_docstring_items_list_the_worst_files_first() -> None:
     items = [symbol("a1", 1, 2, "apps/app/app/a.py"), symbol("z1", 5, 6, "apps/app/app/z.py"),
              symbol("z2", 1, 2, "apps/app/app/z.py")]  # fmt: skip
     assert [i["symbol"] for i in docstrings.worst_first(items)] == ["z2", "z1", "a1"]
+
+
+def test_symbols_with_an_ignored_decorator_stay_out_of_the_list(tmp_path: Path) -> None:
+    pkg = tmp_path / "apps" / "app" / "app"
+    pkg.mkdir(parents=True)
+    (pkg / "m.py").write_text(
+        '"""Module."""\nimport pkg\nfrom pkg import tool\n\n\n'
+        "@tool\ndef bare():\n    return 1\n\n\n"
+        '@tool(description="d")\ndef called():\n    return 1\n\n\n'
+        "@pkg.tool()\ndef dotted():\n    return 1\n\n\n"
+        "@tool\nclass Decorated:\n    pass\n\n\n"
+        "@other\ndef other_decorator():\n    return 1\n\n\n"
+        "def plain():\n    return 1\n"
+    )
+    settings = replace(SETTINGS, docstring_ignore_decorators=("tool",))
+    ctx = Context(target=APP, checkout=tmp_path, raw_dir=tmp_path, settings=settings, full=True)
+    result = docstrings.collect(ctx)
+    assert sorted(i["symbol"] for i in result["items"]) == ["other_decorator", "plain"]
+    assert result["missing"] == 6  # the coverage count stays interrogate's own
+    default = Context(target=APP, checkout=tmp_path, raw_dir=tmp_path, settings=SETTINGS, full=True)
+    assert len(docstrings.collect(default)["items"]) == 6
+
+
+def test_decorator_names_and_unreadable_files(tmp_path: Path) -> None:
+    src = tmp_path / "m.py"
+    src.write_text("@a.b.tool(x=1)\ndef f():\n    pass\n\n\n@registry[0]\ndef g():\n    pass\n")
+    assert docstrings.decorated(src, ("tool",)) == {2}
+    assert docstrings.decorated(src, ()) == set()
+    src.write_text("def broken(:\n")
+    assert docstrings.decorated(src, ("tool",)) == set()
+
+
+def test_a_module_gap_is_never_left_out() -> None:
+    items = [
+        {"file": "a.py", "symbol": "(module)", "line": 1},
+        {"file": "a.py", "symbol": "f", "line": 1},
+        {"file": "a.py", "symbol": "g", "line": 5},
+    ]
+    kept = docstrings.without_decorated(items, lambda file: {1})
+    assert [i["symbol"] for i in kept] == ["(module)", "g"]
+
+
+def test_the_setting_loads_from_the_settings_file(tmp_path: Path) -> None:
+    (tmp_path / "cq.toml").write_text('docstring_ignore_decorators = ["tool", "route"]\n')
+    assert load_settings(tmp_path).docstring_ignore_decorators == ("tool", "route")

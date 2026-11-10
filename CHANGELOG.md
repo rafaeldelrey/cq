@@ -4,6 +4,18 @@ All notable changes to cq. Format: [Keep a Changelog](https://keepachangelog.com
 versions follow SemVer. A bump of a pinned measuring tool is listed under **Changed**: it moves the
 numbers, and the trend shows a step there.
 
+## [0.16.0] - 2026-11-10
+
+### Added
+
+- **`docstring_ignore_decorators`: functions whose decorator supplies their documentation stay out
+  of `missing-docstring`** (#84). Some decorators take a function's documentation as an argument,
+  and a docstring there would be read by something else, so the gate blocked every body-only
+  change to such a function. A function or class carrying one of the named decorators (matched by
+  the decorator's last dotted part, bare or called: `tool` matches `@tool`, `@tool(...)` and
+  `@pkg.tool(...)`) is left out of the per-symbol list the gate reads. Empty by default: nothing
+  changes until a repo sets it. The docstring coverage percentage stays interrogate's own.
+
 ## [0.15.2] - 2026-10-30
 
 ### Changed

@@ -114,6 +114,9 @@ class Settings:
     gitleaks_config: str = ""
     vulture_config: str = ""  # a toml holding [tool.vulture], for every Python app
     interrogate_config: str = ""  # a toml holding [tool.interrogate], for every Python app
+    # Decorators that supply their function's documentation: a function or class carrying one is
+    # left out of the missing-docstring list (the coverage figure stays interrogate's own).
+    docstring_ignore_decorators: tuple[str, ...] = ()
     complexity_baseline: str = ".complexity-baseline.json"  # relative to the repo root
     name: str = ""  # the dashboard's title: "<name> code quality"; the repo folder's name by default
 
@@ -263,6 +266,7 @@ def load_settings(repo_root: Path | None = None, config: Path | None = None) -> 
         gitleaks_config=str(table.get("gitleaks_config", "")),
         vulture_config=str(table.get("vulture_config", "")),
         interrogate_config=str(table.get("interrogate_config", "")),
+        docstring_ignore_decorators=tuple(table.get("docstring_ignore_decorators", [])),
         complexity_baseline=str(table.get("complexity_baseline", ".complexity-baseline.json")),
         name=str(table.get("name", root.name)),
     )

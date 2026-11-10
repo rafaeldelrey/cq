@@ -13,8 +13,10 @@ numbers, and the trend shows a step there.
   and a docstring there would be read by something else, so the gate blocked every body-only
   change to such a function. A function or class carrying one of the named decorators (matched by
   the decorator's last dotted part, bare or called: `tool` matches `@tool`, `@tool(...)` and
-  `@pkg.tool(...)`) is left out of the per-symbol list the gate reads. Empty by default: nothing
-  changes until a repo sets it. The docstring coverage percentage stays interrogate's own.
+  `@pkg.tool(...)`) is left out of the per-symbol list the gate reads (a class's own row only;
+  its methods stay listed). Empty by default: nothing changes until a repo sets it. The docstring
+  coverage percentage stays interrogate's own. A value that isn't a list of strings is a
+  configuration error.
 
 ## [0.15.2] - 2026-10-30
 

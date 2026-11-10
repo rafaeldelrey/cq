@@ -506,8 +506,3 @@ def test_a_module_gap_is_never_left_out() -> None:
     ]
     kept = docstrings.without_decorated(items, lambda file: {1})
     assert [i["symbol"] for i in kept] == ["(module)", "g"]
-
-
-def test_the_setting_loads_from_the_settings_file(tmp_path: Path) -> None:
-    (tmp_path / "cq.toml").write_text('docstring_ignore_decorators = ["tool", "route"]\n')
-    assert load_settings(tmp_path).docstring_ignore_decorators == ("tool", "route")

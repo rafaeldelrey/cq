@@ -235,6 +235,15 @@ def default_docs(repo_root: Path) -> list[str]:
     return [p for p in ("README.md", "docs") if (repo_root / p).exists()]
 
 
+def string_list(table: dict, key: str) -> tuple[str, ...]:
+    """A setting that is a list of strings; a bare string or anything else is a configuration
+    error, so ``"tool"`` can't turn into four one-letter names."""
+    value = table.get(key, [])
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise ValueError(f"{key} must be a list of strings, not {value!r}")
+    return tuple(value)
+
+
 def load_settings(repo_root: Path | None = None, config: Path | None = None) -> Settings:
     """The measured repo's settings, with its targets listed or detected."""
     root = (repo_root or Path.cwd()).resolve()
@@ -266,7 +275,7 @@ def load_settings(repo_root: Path | None = None, config: Path | None = None) -> 
         gitleaks_config=str(table.get("gitleaks_config", "")),
         vulture_config=str(table.get("vulture_config", "")),
         interrogate_config=str(table.get("interrogate_config", "")),
-        docstring_ignore_decorators=tuple(table.get("docstring_ignore_decorators", [])),
+        docstring_ignore_decorators=string_list(table, "docstring_ignore_decorators"),
         complexity_baseline=str(table.get("complexity_baseline", ".complexity-baseline.json")),
         name=str(table.get("name", root.name)),
     )

@@ -24,20 +24,28 @@ DETAIL_ROW = re.compile(r"^\|\s*(?P<name>.+?)\s+\((?:module|L(?P<line>\d+))\)\s*
 FILE_ROW = re.compile(r"\|\s*(\S+\.py)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([\d.]+)%")
 
 
+DEFS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def definitions(path: Path) -> list[ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef]:
+    """Every def and class in a file, nested ones included; none when the file can't be read or
+    parsed."""
+    try:
+        tree = ast.parse(path.read_text(errors="replace"))
+    except (OSError, SyntaxError, ValueError):  # degraded mode: a file that can't be read or parsed
+        # gives its symbols a one-line span (their own line), and keeps them all listed, so an
+        # unparsable file never hides a gap.
+        return []
+    return [n for n in ast.walk(tree) if isinstance(n, DEFS)]
+
+
 def syntax_ends(path: Path) -> dict[int, tuple[int, int]]:
     """Each def and class in a file, by its ``def``/``class`` line (interrogate's), mapped to the
     lines it spans: from its first decorator to its last line (Python's own syntax boundaries,
     nested symbols included)."""
-    try:
-        tree = ast.parse(path.read_text(errors="replace"))
-    except (OSError, SyntaxError, ValueError):  # degraded mode: a file that can't be read or parsed
-        # gives its symbols a one-line span (their own line), so only an edit on that line counts.
-        return {}
-    kinds = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
     return {
         n.lineno: (min([d.lineno for d in n.decorator_list] + [n.lineno]), n.end_lineno or n.lineno)
-        for n in ast.walk(tree)
-        if isinstance(n, kinds)
+        for n in definitions(path)
     }
 
 
@@ -55,35 +63,17 @@ def decorator_name(node: ast.expr) -> str:
 
 def decorated(path: Path, names: tuple[str, ...]) -> set[int]:
     """The ``def``/``class`` lines (interrogate's) of the symbols in a file that carry one of the
-    named decorators. Empty when no names are given, or the file can't be read or parsed."""
+    named decorators. Empty when no names are given: the file isn't read again."""
     if not names:
         return set()
-    try:
-        tree = ast.parse(path.read_text(errors="replace"))
-    except (OSError, SyntaxError, ValueError):  # degraded mode: the symbols stay listed, as without
-        # the setting, so an unparsable file never hides a gap.
-        return set()
-    kinds = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-    return {
-        n.lineno
-        for n in ast.walk(tree)
-        if isinstance(n, kinds) and any(decorator_name(d) in names for d in n.decorator_list)
-    }
+    return {n.lineno for n in definitions(path) if any(decorator_name(d) in names for d in n.decorator_list)}
 
 
 def without_decorated(items: list[dict], lines: Callable[[str], set[int]]) -> list[dict]:
     """The items whose symbol carries none of the ignored decorators (``lines``: file → the def
-    lines that do). A module is never left out."""
-    skip: dict[str, set[int]] = {}
-    kept = []
-    for item in items:
-        if item["symbol"] != MODULE:
-            if item["file"] not in skip:
-                skip[item["file"]] = lines(item["file"])
-            if item["line"] in skip[item["file"]]:
-                continue
-        kept.append(item)
-    return kept
+    lines that do). A module is never left out. Only a class's own row is: its methods stay."""
+    skip = {f: lines(f) for f in {i["file"] for i in items if i["symbol"] != MODULE}}
+    return [i for i in items if i["symbol"] == MODULE or i["line"] not in skip[i["file"]]]
 
 
 def missing(out: str, full: Callable[[str], str], ends: Callable[[str], dict[int, tuple[int, int]]]) -> list[dict]:
@@ -160,15 +150,11 @@ def collect(ctx: Context) -> dict:
     files.sort(key=lambda f: -f["missing"])
     items = missing(out, full, lambda f: syntax_ends(ctx.checkout / f))
     names = ctx.settings.docstring_ignore_decorators
-
-    def ignored(file: str) -> set[int]:
-        return decorated(ctx.checkout / file, names)
-
     return {
         "percent": percent,
         "total": total,
         "missing": missed,
         "covered": covered,
         "worst_files": ctx.cap(files, 15, "worst_files"),
-        "items": ctx.cap(worst_first(without_decorated(items, ignored)), 200),
+        "items": ctx.cap(worst_first(without_decorated(items, lambda f: decorated(ctx.checkout / f, names))), 200),
     }

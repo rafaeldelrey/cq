@@ -16,6 +16,7 @@ from cq.proc import ToolError, own, run
 from cq.toolconfig import interrogate_config
 
 KINDS = ("python",)
+MODULE = "(module)"  # interrogate's name for a module's own docstring row
 
 TOTAL = re.compile(r"\|\s*TOTAL\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([\d.]+)%")
 # The detailed table: "| path.py (module) |  MISSED |", then "| Class.method (L12) | COVERED |".
@@ -76,7 +77,7 @@ def without_decorated(items: list[dict], lines: Callable[[str], set[int]]) -> li
     skip: dict[str, set[int]] = {}
     kept = []
     for item in items:
-        if item["symbol"] != "(module)":
+        if item["symbol"] != MODULE:
             if item["file"] not in skip:
                 skip[item["file"]] = lines(item["file"])
             if item["line"] in skip[item["file"]]:
@@ -97,7 +98,7 @@ def missing(out: str, full: Callable[[str], str], ends: Callable[[str], dict[int
             continue
         if m["line"] is None:  # "(module)": a new file section
             file = full(m["name"])
-            rows.append({"file": file, "symbol": "(module)", "line": 1, "missed": m["status"] == "MISSED"})
+            rows.append({"file": file, "symbol": MODULE, "line": 1, "missed": m["status"] == "MISSED"})
         else:
             rows.append({"file": file, "symbol": m["name"], "line": int(m["line"]), "missed": m["status"] == "MISSED"})
     items = []
@@ -106,7 +107,7 @@ def missing(out: str, full: Callable[[str], str], ends: Callable[[str], dict[int
         if not row["missed"]:
             continue
         start, end = row["line"], None
-        if row["symbol"] != "(module)":
+        if row["symbol"] != MODULE:
             if row["file"] not in spans:
                 spans[row["file"]] = ends(row["file"])
             start, end = spans[row["file"]].get(row["line"], (row["line"], row["line"]))

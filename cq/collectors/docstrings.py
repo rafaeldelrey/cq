@@ -16,6 +16,7 @@ from cq.proc import ToolError, own, run
 from cq.toolconfig import interrogate_config
 
 KINDS = ("python",)
+MODULE = "(module)"  # interrogate's name for a module's own docstring row
 
 TOTAL = re.compile(r"\|\s*TOTAL\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([\d.]+)%")
 # The detailed table: "| path.py (module) |  MISSED |", then "| Class.method (L12) | COVERED |".
@@ -23,21 +24,56 @@ DETAIL_ROW = re.compile(r"^\|\s*(?P<name>.+?)\s+\((?:module|L(?P<line>\d+))\)\s*
 FILE_ROW = re.compile(r"\|\s*(\S+\.py)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([\d.]+)%")
 
 
+DEFS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def definitions(path: Path) -> list[ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef]:
+    """Every def and class in a file, nested ones included; none when the file can't be read or
+    parsed."""
+    try:
+        tree = ast.parse(path.read_text(errors="replace"))
+    except (OSError, SyntaxError, ValueError):  # degraded mode: a file that can't be read or parsed
+        # gives its symbols a one-line span (their own line), and keeps them all listed, so an
+        # unparsable file never hides a gap.
+        return []
+    return [n for n in ast.walk(tree) if isinstance(n, DEFS)]
+
+
 def syntax_ends(path: Path) -> dict[int, tuple[int, int]]:
     """Each def and class in a file, by its ``def``/``class`` line (interrogate's), mapped to the
     lines it spans: from its first decorator to its last line (Python's own syntax boundaries,
     nested symbols included)."""
-    try:
-        tree = ast.parse(path.read_text(errors="replace"))
-    except (OSError, SyntaxError, ValueError):  # degraded mode: a file that can't be read or parsed
-        # gives its symbols a one-line span (their own line), so only an edit on that line counts.
-        return {}
-    kinds = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
     return {
         n.lineno: (min([d.lineno for d in n.decorator_list] + [n.lineno]), n.end_lineno or n.lineno)
-        for n in ast.walk(tree)
-        if isinstance(n, kinds)
+        for n in definitions(path)
     }
+
+
+def decorator_name(node: ast.expr) -> str:
+    """A decorator's name, its last dotted part, bare or called: ``tool`` for ``@tool``,
+    ``@tool(...)`` and ``@pkg.tool(...)``; empty for anything else (a subscript, a lambda)."""
+    if isinstance(node, ast.Call):
+        node = node.func
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.Name):
+        return node.id
+    return ""
+
+
+def decorated(path: Path, names: tuple[str, ...]) -> set[int]:
+    """The ``def``/``class`` lines (interrogate's) of the symbols in a file that carry one of the
+    named decorators. Empty when no names are given: the file isn't read again."""
+    if not names:
+        return set()
+    return {n.lineno for n in definitions(path) if any(decorator_name(d) in names for d in n.decorator_list)}
+
+
+def without_decorated(items: list[dict], lines: Callable[[str], set[int]]) -> list[dict]:
+    """The items whose symbol carries none of the ignored decorators (``lines``: file → the def
+    lines that do). A module is never left out. Only a class's own row is: its methods stay."""
+    skip = {f: lines(f) for f in {i["file"] for i in items if i["symbol"] != MODULE}}
+    return [i for i in items if i["symbol"] == MODULE or i["line"] not in skip[i["file"]]]
 
 
 def missing(out: str, full: Callable[[str], str], ends: Callable[[str], dict[int, tuple[int, int]]]) -> list[dict]:
@@ -52,7 +88,7 @@ def missing(out: str, full: Callable[[str], str], ends: Callable[[str], dict[int
             continue
         if m["line"] is None:  # "(module)": a new file section
             file = full(m["name"])
-            rows.append({"file": file, "symbol": "(module)", "line": 1, "missed": m["status"] == "MISSED"})
+            rows.append({"file": file, "symbol": MODULE, "line": 1, "missed": m["status"] == "MISSED"})
         else:
             rows.append({"file": file, "symbol": m["name"], "line": int(m["line"]), "missed": m["status"] == "MISSED"})
     items = []
@@ -61,7 +97,7 @@ def missing(out: str, full: Callable[[str], str], ends: Callable[[str], dict[int
         if not row["missed"]:
             continue
         start, end = row["line"], None
-        if row["symbol"] != "(module)":
+        if row["symbol"] != MODULE:
             if row["file"] not in spans:
                 spans[row["file"]] = ends(row["file"])
             start, end = spans[row["file"]].get(row["line"], (row["line"], row["line"]))
@@ -112,11 +148,13 @@ def collect(ctx: Context) -> dict:
         if int(miss) > 0
     ]
     files.sort(key=lambda f: -f["missing"])
+    items = missing(out, full, lambda f: syntax_ends(ctx.checkout / f))
+    names = ctx.settings.docstring_ignore_decorators
     return {
         "percent": percent,
         "total": total,
         "missing": missed,
         "covered": covered,
         "worst_files": ctx.cap(files, 15, "worst_files"),
-        "items": ctx.cap(worst_first(missing(out, full, lambda f: syntax_ends(ctx.checkout / f))), 200),
+        "items": ctx.cap(worst_first(without_decorated(items, lambda f: decorated(ctx.checkout / f, names))), 200),
     }

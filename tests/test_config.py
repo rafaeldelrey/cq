@@ -307,3 +307,11 @@ def test_used_configs_cover_each_apps_own_configs_and_lockfile(repo: Path) -> No
     assert before["api.app:uv.lock"]["file"] == "apps/api/uv.lock"
     lock.write_text("ruff 0.13.0\n")  # the app's own ruff moved: a measurement change
     assert toolconfig.used_configs(load_settings(repo))["api.app:uv.lock"]["hash"] != before["api.app:uv.lock"]["hash"]
+
+
+def test_docstring_ignore_decorators_is_a_list_of_strings(tmp_path: Path) -> None:
+    (tmp_path / "cq.toml").write_text('docstring_ignore_decorators = ["tool", "route"]\n')
+    assert load_settings(tmp_path).docstring_ignore_decorators == ("tool", "route")
+    (tmp_path / "cq.toml").write_text('docstring_ignore_decorators = "tool"\n')
+    with pytest.raises(ValueError, match="must be a list of strings"):
+        load_settings(tmp_path)

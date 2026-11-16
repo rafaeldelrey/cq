@@ -2,7 +2,7 @@
 
 Code-quality snapshots of a repository, kept as history and reported as trends, plus a PR gate
 that judges only what a branch adds. About thirty tools, run with pinned versions so two snapshots
-are always comparable:
+are always comparable ([the full list](#the-tools-it-runs)):
 
 - **Correctness and tests:** coverage, pytest results, pyright, ruff.
 - **Complexity:** cyclomatic and cognitive complexity, maintainability.
@@ -51,6 +51,8 @@ The steps below explain each of these.
 7. [Configure it](#7-configure-it)
 8. [Troubleshooting](#8-troubleshooting)
 9. [Upgrade or uninstall](#9-upgrade-or-uninstall)
+
+And for reference: [the tools it runs](#the-tools-it-runs).
 
 ---
 
@@ -454,6 +456,76 @@ uv tool uninstall cq                                                # remove it
 `install --force` at the new tag. A new version can pin newer measuring tools. The first snapshot
 after an upgrade then flags the change ("cq: 0.2.0 → 0.3.0"), and [CHANGELOG.md](CHANGELOG.md)
 says which numbers can move. To remove a repo's data, delete its `.cq/` folder.
+
+---
+
+## The tools it runs
+
+Each tool feeds one collector. A collector runs on the targets of its kind: a Python app, a
+TypeScript app, or the whole repo. Versions are pinned by the cq release (`cq/config.py` `PINS`,
+`pyproject.toml`), except where a tool runs in the app's own environment.
+
+**Python apps**
+
+| Tool | What it measures |
+|---|---|
+| pytest + coverage | test results and branch coverage, in the app's own uv environment |
+| ruff | lint findings and unformatted files, with the app's config |
+| pyright | type errors in the app and its tests |
+| radon | cyclomatic complexity per function, maintainability index per file, code size |
+| complexipy | cognitive complexity per function (nesting costs more than flat branches) |
+| vulture | dead code: unused imports, variables, functions, unreachable code |
+| interrogate | docstring coverage, and each function, class or module without one |
+| import-linter | the app's architecture contracts (who may import whom) |
+| deptry | dependencies imported but not declared, or declared but never imported |
+| pip-audit | known vulnerabilities in the locked dependencies |
+| uv | dependency freshness (`uv tree --outdated`): outdated, majors behind, libyear |
+| mutmut | mutation testing: mutants the tests don't notice |
+| pyscn | renamed copy-paste, import cycles, coupling and cohesion |
+| git | hotspots: churn × complexity per file |
+
+**TypeScript apps**
+
+| Tool | What it measures |
+|---|---|
+| vitest | test results and coverage |
+| eslint | lint findings, with the app's config |
+| tsc | type errors, through the app's `typecheck` script |
+| knip | unused files, exports and dependencies |
+| npm audit | known vulnerabilities in production dependencies |
+| npm outdated | dependency freshness |
+| fallow | near-duplicates and function health (complexity × coverage risk) |
+
+**Both kinds of app**
+
+| Tool | What it measures |
+|---|---|
+| jscpd | copy-pasted code: the share of lines in a clone |
+| semgrep | the house rules (`.semgrep/` or cq's), the registry rulesets, and tests that only assert mocks were called |
+| qlty radarlint | SonarSource's SonarLint rules for Python and JS/TS, without a SonarQube server |
+| qlty smells | structure smells (many parameters or returns, deep nesting, complex booleans) and near-duplicates |
+| aislop | what AI coding agents leave behind: swallowed errors, narrating comments, TODO stubs |
+| cspell | unknown words in production code: typos and hardcoded names |
+| hadolint | Dockerfile findings (optional) |
+| trivy | vulnerabilities in the published image, OS packages included (optional) |
+
+cq also counts lint suppressions (`noqa`, `type: ignore`, `eslint-disable` and the like) itself,
+with no outside tool.
+
+**The whole repo**
+
+| Tool | What it measures |
+|---|---|
+| betterleaks | secrets in the tracked tree and every commit |
+| trufflehog | which of those keys still work |
+| shellcheck | bugs in the tracked shell scripts |
+| actionlint | GitHub workflow syntax |
+| zizmor (through qlty) | GitHub workflow security |
+| lychee | broken links to files and anchors in the docs (offline) |
+| vale | AI-written prose and stub language in the docs, with cq's AISlop style |
+
+The PR gate (`cq gate`) reuses these, and adds `qlty check` on the changed lines, which also runs
+bandit and osv-scanner (see [The gate in detail](#the-gate-in-detail)).
 
 ---
 
